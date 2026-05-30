@@ -867,7 +867,7 @@ export default function Home() {
           <span className="inline-flex items-center gap-1.5 bg-rose-500/10 px-2.5 py-1 rounded-full text-rose-300">
             ⚠️
           </span>{' '}
-          The tool seems simple but it do such things which are problamatic for cheaters.
+          The tool seems simple but it does such things which are problamatic for fakers.
         </div>
       </div>
 
