@@ -301,15 +301,4 @@ export async function generateFinalQuestions(
   const userPrompt = buildFinalPrompt(readme, projectName, hasReadme);
   const finalSystem = `You are an expert technical interviewer generating final-slide interview questions. Follow the user's format strictly.`;
   return await callGroq(finalSystem, userPrompt, model);
-}
-
-/**
- * Final slide questions
- */
-export async function generateFinalQuestions(readme: string, projectName?: string): Promise<any[]> {
-  const userPrompt = buildFinalPrompt(readme, projectName);
-  const finalSystem = `You are an expert interviewer. Generate final slide questions as JSON only. Output ONLY JSON.`;
-  const response = await callGroq(finalSystem, userPrompt);
-  const parsed = extractJSON(response);
-  return parsed?.questions || [];
-}
+}

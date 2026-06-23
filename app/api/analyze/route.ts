@@ -294,18 +294,15 @@
 //   });
 // }
 import { NextRequest, NextResponse } from 'next/server';
-import { Queue } from 'bullmq';
-import { createClient } from '@supabase/supabase-js';
-import { v4 as uuidv4 } from 'uuid';
-import { extractRepoInfo } from '@/app/lib/github';
+import { extractRepoInfo, fetchRepoContents, fetchFileContent, isCodeFile, getReadme } from '@/app/lib/github';
+import { smartTruncate, getFilePriority, extractLineNumber } from '@/app/lib/utils';
+import { generateQuestionsRaw, generateFinalQuestions } from '@/app/lib/gemini';
 
-const REDIS_URL = process.env.REDIS_URL!;
-const analysisQueue = new Queue('code-analysis', { connection: { url: REDIS_URL } });
+export const runtime = 'nodejs';
+export const maxDuration = 60;
 
-// Test user ID (must exist in auth.users or RLS disabled)
-const TEST_USER_ID = '00000000-0000-0000-0000-000000000000';
-const TEST_USER_EMAIL = 'test@example.com';
-const TEST_USER_NAME = 'Test User';
+const GITHUB_URL_REGEX =
+  /^https?:\/\/(?:www\.)?github\.com\/[^/\s]+\/[^/\s?#]+\/?$/i;
 
 interface CodeSnapshot {
   lineNumber: number;
@@ -327,9 +324,6 @@ function buildSnippet(code: string, lineNumber: number): string {
   return lines.slice(start, end).join('\n');
 }
 
-/**
- * Walk the repo (1 level deep beyond root) and collect candidate code files.
- */
 async function collectCodeFiles(
   owner: string,
   repo: string,
@@ -343,7 +337,6 @@ async function collectCodeFiles(
     if (item.type === 'file' && isCodeFile(item.name)) {
       collected.push(item);
     } else if (item.type === 'dir') {
-      // Skip noisy directories
       const skip = ['node_modules', 'dist', 'build', '.next', 'vendor', '__pycache__', '.git', 'public', 'static'];
       if (skip.includes(item.name)) continue;
       try {
@@ -362,38 +355,9 @@ async function collectCodeFiles(
 }
 
 export async function POST(request: NextRequest) {
-  const body = await request.json().catch(() => null);
-  if (!body || typeof body.repoUrl !== 'string') {
-    return NextResponse.json({ error: 'Missing or invalid repoUrl' }, { status: 400 });
-  }
+  const t0 = Date.now();
+  const warnings: string[] = [];
 
-  const repoUrl = body.repoUrl.trim();
-  const GITHUB_URL_REGEX = /^https?:\/\/(?:www\.)?github\.com\/[^/\s]+\/[^/\s?#]+\/?$/i;
-  if (!GITHUB_URL_REGEX.test(repoUrl)) {
-    return NextResponse.json({ error: 'Invalid GitHub URL' }, { status: 400 });
-  }
-
-  const jobId = uuidv4();
-
-  // Insert job using admin client (bypasses RLS)
-  const { error: insertError } = await supabaseAdmin.from('jobs').insert({
-    id: jobId,
-    user_id: TEST_USER_ID,
-    repo_url: repoUrl,
-    status: 'queued',
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  });
-
-  if (insertError) {
-    console.error('Insert job error:', insertError);
-    return NextResponse.json({ error: 'Failed to create job' }, { status: 500 });
-  }
-
-  // Push to BullMQ queue
-  await analysisQueue.add('analyze-repo', { repoUrl, jobId });
-
-  // Optional: insert into submissions (also using admin client)
   try {
     const body = await request.json().catch(() => null);
     if (!body || typeof body.repoUrl !== 'string') {
@@ -571,8 +535,22 @@ export async function POST(request: NextRequest) {
       timing: { totalMs },
     });
   } catch (err) {
-    console.warn('Failed to insert submission (non-critical):', err);
+    const msg = err instanceof Error ? err.message : 'Unknown server error';
+    console.error('[analyze] Fatal:', msg);
+    return NextResponse.json(
+      { success: false, error: msg, warnings: warnings.length ? warnings : undefined },
+      { status: 500 }
+    );
   }
-
-  return NextResponse.json({ jobId, status: 'queued' });
 }
+
+export async function GET() {
+  return NextResponse.json({
+    name: 'CodeWalk Analyze API',
+    method: 'POST',
+    body: { repoUrl: 'https://github.com/owner/repo' },
+    githubToken: !!process.env.GITHUB_TOKEN,
+    groqKey: !!process.env.GROQ_API_KEY,
+    model: 'llama-3.3-70b-versatile',
+  });
+}
