@@ -517,21 +517,13 @@ interface FileResult {
   codeSnapshots: CodeSnapshot[];
 }
 
-/**
- * Extract a 5-lines-before / 5-lines-after snippet around the given line.
- */
 function buildSnippet(code: string, lineNumber: number): string {
   const lines = code.split('\n');
   const idx = lineNumber - 1;
   if (idx < 0 || idx >= lines.length) return '';
   const start = Math.max(0, idx - 5);
   const end = Math.min(lines.length, idx + 6);
-  const out: string[] = [];
-  for (let i = start; i < end; i++) {
-    const marker = i === idx ? '→ ►' : '  ';
-    out.push(`${marker} ${i + 1}: ${lines[i]}`);
-  }
-  return out.join('\n');
+  return lines.slice(start, end).join('\n');
 }
 
 /**
@@ -539,9 +531,11 @@ function buildSnippet(code: string, lineNumber: number): string {
  */
 async function collectCodeFiles(
   owner: string,
-  repo: string
+  repo: string,
+  branch?: string,
+  token?: string
 ): Promise<Array<{ name: string; path: string; download_url: string | null; size: number }>> {
-  const root = await fetchRepoContents(owner, repo, '');
+  const root = await fetchRepoContents(owner, repo, '', branch, token);
   const collected: Array<{ name: string; path: string; download_url: string | null; size: number }> = [];
 
   for (const item of root) {
@@ -552,7 +546,7 @@ async function collectCodeFiles(
       const skip = ['node_modules', 'dist', 'build', '.next', 'vendor', '__pycache__', '.git', 'public', 'static'];
       if (skip.includes(item.name)) continue;
       try {
-        const sub = await fetchRepoContents(owner, repo, item.path);
+        const sub = await fetchRepoContents(owner, repo, item.path, branch, token);
         for (const s of sub) {
           if (s.type === 'file' && isCodeFile(s.name)) {
             collected.push(s);
@@ -579,19 +573,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const repoUrl: string = body.repoUrl.trim();
-    if (!GITHUB_URL_REGEX.test(repoUrl)) {
+    const { repoUrl, branch, token, model } = body;
+    const finalRepoUrl = repoUrl.trim();
+
+    if (!GITHUB_URL_REGEX.test(finalRepoUrl)) {
       return NextResponse.json(
         { success: false, error: 'Invalid GitHub URL format' },
         { status: 400 }
       );
     }
 
-    console.log('[analyze] Start →', repoUrl);
+    console.log('[analyze] Start →', finalRepoUrl, 'branch:', branch, 'model:', model);
 
     let owner: string, repo: string;
     try {
-      ({ owner, repo } = extractRepoInfo(repoUrl));
+      ({ owner, repo } = extractRepoInfo(finalRepoUrl));
     } catch (err) {
       return NextResponse.json(
         { success: false, error: err instanceof Error ? err.message : 'Invalid URL' },
@@ -603,8 +599,8 @@ export async function POST(request: NextRequest) {
     let allFiles, readme: string | null;
     try {
       [allFiles, readme] = await Promise.all([
-        collectCodeFiles(owner, repo),
-        getReadme(owner, repo),
+        collectCodeFiles(owner, repo, branch, token),
+        getReadme(owner, repo, branch, token),
       ]);
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'GitHub fetch failed';
@@ -646,7 +642,7 @@ export async function POST(request: NextRequest) {
           continue;
         }
 
-        const content = await fetchFileContent(file.download_url);
+        const content = await fetchFileContent(file.download_url, token);
         if (!content || content.trim().length === 0) {
           warnings.push(`Empty file: ${file.path}`);
           continue;
@@ -659,7 +655,8 @@ export async function POST(request: NextRequest) {
           truncatedCode,
           file.path,
           readme || undefined,
-          repo
+          repo,
+          model
         );
 
         // Extract referenced line numbers and build snapshots
@@ -707,11 +704,17 @@ export async function POST(request: NextRequest) {
     let readmeQuestions = '';
     let genericQuestions = '';
     try {
-      const finalRaw = await generateFinalQuestions(readme || `Project: ${repo}`, repo);
+      const hasReadme = !!(readme && readme.trim().length > 0);
+      const finalRaw = await generateFinalQuestions(
+        readme || '',
+        repo,
+        model,
+        hasReadme
+      );
       // Split into [D] vs [G] sections
       const dMatch = finalRaw.match(/\[D\][\s\S]*?(?=\[G1\]|$)/);
       const gMatch = finalRaw.match(/\[G1\][\s\S]*$/);
-      readmeQuestions = dMatch ? dMatch[0].trim() : '';
+      readmeQuestions = dMatch && hasReadme ? dMatch[0].trim() : '';
       genericQuestions = gMatch ? gMatch[0].trim() : '';
       const finalCount = (finalRaw.match(/^\[(D|G\d?)/gm) || []).length;
       totalQuestions += finalCount;
@@ -728,6 +731,7 @@ export async function POST(request: NextRequest) {
       files: fileResults,
       readmeQuestions,
       genericQuestions,
+      readme: readme || '',
       warnings,
       summary: {
         successfulFiles: fileResults.length,

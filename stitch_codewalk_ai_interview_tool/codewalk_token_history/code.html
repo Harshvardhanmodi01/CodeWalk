@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>CodeWalk — Token History Log</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&amp;family=Geist:wght@400;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+            line-height: 1;
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 4px;
+            height: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #0d1515;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #3b494b;
+            border-radius: 2px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #849495;
+        }
+        .active-glow {
+            box-shadow: 0px 0px 12px rgba(0, 219, 233, 0.2);
+        }
+        tr:hover td {
+            background-color: #232b2c !important;
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "secondary": "#e0b6ff",
+                      "surface-container-lowest": "#080f10",
+                      "surface-tint": "#00dbe9",
+                      "secondary-fixed": "#f2daff",
+                      "on-secondary": "#4c007d",
+                      "primary-container": "#00f0ff",
+                      "on-error": "#690005",
+                      "inverse-surface": "#dce4e5",
+                      "surface-container-high": "#232b2c",
+                      "primary": "#dbfcff",
+                      "on-tertiary-fixed-variant": "#554500",
+                      "on-tertiary": "#3b2f00",
+                      "on-primary-fixed": "#002022",
+                      "tertiary-fixed-dim": "#eac324",
+                      "surface": "#0d1515",
+                      "tertiary-fixed": "#ffe179",
+                      "on-tertiary-container": "#715d00",
+                      "error": "#ffb4ab",
+                      "on-secondary-fixed": "#2e004e",
+                      "on-tertiary-fixed": "#231b00",
+                      "on-surface": "#dce4e5",
+                      "surface-bright": "#333b3b",
+                      "surface-dim": "#0d1515",
+                      "on-primary": "#00363a",
+                      "tertiary-container": "#fed639",
+                      "outline": "#849495",
+                      "on-background": "#dce4e5",
+                      "secondary-fixed-dim": "#e0b6ff",
+                      "outline-variant": "#3b494b",
+                      "on-primary-container": "#006970",
+                      "surface-container-highest": "#2e3637",
+                      "surface-container": "#192122",
+                      "inverse-primary": "#006970",
+                      "primary-fixed-dim": "#00dbe9",
+                      "on-error-container": "#ffdad6",
+                      "inverse-on-surface": "#2a3233",
+                      "surface-variant": "#2e3637",
+                      "on-primary-fixed-variant": "#004f54",
+                      "primary-fixed": "#7df4ff",
+                      "tertiary": "#fff5de",
+                      "secondary-container": "#6d11ad",
+                      "on-secondary-container": "#d7a4ff",
+                      "background": "#0d1515",
+                      "on-secondary-fixed-variant": "#6a0baa",
+                      "on-surface-variant": "#b9cacb",
+                      "surface-container-low": "#151d1e",
+                      "error-container": "#93000a"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.125rem",
+                      "lg": "0.25rem",
+                      "xl": "0.5rem",
+                      "full": "0.75rem"
+              },
+              "spacing": {
+                      "margin-desktop": "32px",
+                      "sidebar-width": "280px",
+                      "gutter": "16px",
+                      "unit": "4px",
+                      "margin-mobile": "16px",
+                      "container-max": "1440px"
+              },
+              "fontFamily": {
+                      "code-md": ["JetBrains Mono"],
+                      "label-sm": ["Geist"],
+                      "headline-md": ["Geist"],
+                      "code-sm": ["JetBrains Mono"],
+                      "body-md": ["Geist"],
+                      "headline-lg": ["Geist"]
+              },
+              "fontSize": {
+                      "code-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                      "label-sm": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600"}],
+                      "headline-md": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                      "code-sm": ["12px", {"lineHeight": "18px", "fontWeight": "400"}],
+                      "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                      "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700"}]
+              }
+            },
+          },
+        }
+    </script>
+</head>
+<body class="bg-background text-on-background font-body-md selection:bg-primary-container selection:text-on-primary-container min-h-screen">
+<!-- Sidebar Navigation -->
+<aside class="flex flex-col h-screen fixed left-0 top-0 bg-surface-container w-[280px] border-r border-outline-variant z-50">
+<div class="p-6">
+<h1 class="font-headline-md text-headline-md text-primary font-bold tracking-tight">CodeWalk</h1>
+<p class="font-label-sm text-label-sm text-on-surface-variant">v1.0.4-alpha</p>
+</div>
+<nav class="flex-1 px-4 space-y-1">
+<div class="flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-all duration-150 cursor-pointer rounded">
+<span class="material-symbols-outlined">folder</span>
+<span class="font-label-sm text-label-sm">Explorer</span>
+</div>
+<div class="flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-all duration-150 cursor-pointer rounded">
+<span class="material-symbols-outlined">search</span>
+<span class="font-label-sm text-label-sm">Search</span>
+</div>
+<div class="flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-all duration-150 cursor-pointer rounded">
+<span class="material-symbols-outlined">account_tree</span>
+<span class="font-label-sm text-label-sm">Source Control</span>
+</div>
+<div class="flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-all duration-150 cursor-pointer rounded">
+<span class="material-symbols-outlined">extension</span>
+<span class="font-label-sm text-label-sm">Extensions</span>
+</div>
+<div class="flex items-center gap-3 px-3 py-2 text-primary bg-surface-container-highest border-l-2 border-primary transition-all duration-150 cursor-pointer rounded-r">
+<span class="material-symbols-outlined">analytics</span>
+<span class="font-label-sm text-label-sm">Usage Metrics</span>
+</div>
+<div class="flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-all duration-150 cursor-pointer rounded">
+<span class="material-symbols-outlined">smart_toy</span>
+<span class="font-label-sm text-label-sm">AI Debugger</span>
+</div>
+</nav>
+<div class="p-4 border-t border-outline-variant">
+<button class="w-full py-2 bg-primary-container text-on-primary-container font-label-sm text-label-sm rounded-lg hover:brightness-110 active-glow transition-all mb-4">
+                New Workspace
+            </button>
+<div class="space-y-1">
+<div class="flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-all duration-150 cursor-pointer rounded">
+<span class="material-symbols-outlined">person</span>
+<span class="font-label-sm text-label-sm">Account</span>
+</div>
+</div>
+</div>
+</aside>
+<!-- Main Canvas -->
+<main class="ml-[280px] min-h-screen flex flex-col relative overflow-x-hidden">
+<!-- Header -->
+<header class="flex justify-between items-center px-8 h-16 w-full border-b border-outline-variant bg-surface sticky top-0 z-40">
+<div class="flex items-center gap-4">
+<h2 class="font-headline-md text-headline-md font-bold text-primary">Token History</h2>
+<span class="px-2 py-0.5 rounded-full bg-surface-container-highest text-on-surface-variant font-label-sm text-[10px] uppercase tracking-widest border border-outline-variant">Live Logs</span>
+</div>
+<div class="flex items-center gap-4">
+<button class="flex items-center gap-2 px-4 py-2 bg-surface-container-high border border-outline-variant text-primary font-label-sm text-label-sm rounded hover:bg-surface-container-highest transition-colors">
+<span class="material-symbols-outlined !text-[18px]">download</span>
+                    Export as CSV
+                </button>
+<div class="w-8 h-8 rounded-full overflow-hidden border border-outline-variant">
+<img class="w-full h-full object-cover" data-alt="A professional studio portrait of a senior software architect with short dark hair and modern glasses, dressed in a sleek charcoal turtleneck, set against a dark industrial background with soft teal accent lighting. The mood is focused and authoritative." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDXxCTO6xP8J12evgfDxdwQ5c5oj3zVRDNYdWJ5OBW5lyI0M3_z_bqW8vxUKtKSgv2dcgE6l2uWJIy9T-iHHnR_ugjxojc-8crvVHDDI-H6Ot7VqdbZOwYsTYu6jOnjm4WiDwMYli3Buel5mPwGPQt9yIwARCfitwjYRgu22ONf1r3InOI7XpZcvlEbozj6ochoL8zi5T7_67rrK0hJsk8o0s2fq3YYYmMCuW8HBW-HT1sMZ9gm7E3Htnx6XUKKvyNnRHXp6yWL9pQ"/>
+</div>
+</div>
+</header>
+<!-- Content Area -->
+<div class="p-8 space-y-8 max-w-7xl mx-auto w-full">
+<!-- Summary Grid -->
+<section class="grid grid-cols-1 md:grid-cols-3 gap-6">
+<!-- Card 1 -->
+<div class="bg-surface-container p-6 border border-outline-variant rounded-lg relative overflow-hidden group">
+<div class="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-20 transition-opacity">
+<span class="material-symbols-outlined !text-[64px]">token</span>
+</div>
+<p class="font-label-sm text-label-sm text-on-surface-variant mb-1">Total Tokens (June)</p>
+<div class="flex items-baseline gap-2">
+<h3 class="font-headline-lg text-headline-lg text-primary">1.24M</h3>
+<span class="text-xs text-primary/60 font-code-sm">+12% vs May</span>
+</div>
+<div class="mt-4 h-1 w-full bg-surface-container-highest rounded-full">
+<div class="h-full bg-primary-fixed-dim w-[65%]" style="box-shadow: 0 0 8px rgba(0, 219, 233, 0.4)"></div>
+</div>
+</div>
+<!-- Card 2 -->
+<div class="bg-surface-container p-6 border border-outline-variant rounded-lg relative overflow-hidden group">
+<div class="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-20 transition-opacity">
+<span class="material-symbols-outlined !text-[64px]">query_stats</span>
+</div>
+<p class="font-label-sm text-label-sm text-on-surface-variant mb-1">Avg. Tokens / Analysis</p>
+<div class="flex items-baseline gap-2">
+<h3 class="font-headline-lg text-headline-lg text-secondary">42.8k</h3>
+<span class="text-xs text-secondary/60 font-code-sm">Stable</span>
+</div>
+<div class="mt-4 h-1 w-full bg-surface-container-highest rounded-full overflow-hidden">
+<div class="h-full bg-secondary w-[45%]" style="box-shadow: 0 0 8px rgba(224, 182, 255, 0.4)"></div>
+</div>
+</div>
+<!-- Card 3 -->
+<div class="bg-surface-container p-6 border border-outline-variant rounded-lg relative overflow-hidden group">
+<div class="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-20 transition-opacity">
+<span class="material-symbols-outlined !text-[64px]">speed</span>
+</div>
+<p class="font-label-sm text-label-sm text-on-surface-variant mb-1">Max Usage (Single Analysis)</p>
+<div class="flex items-baseline gap-2">
+<h3 class="font-headline-lg text-headline-lg text-tertiary-fixed-dim">128.4k</h3>
+<span class="text-xs text-tertiary-fixed-dim/60 font-code-sm">"codegen-infra"</span>
+</div>
+<div class="mt-4 h-1 w-full bg-surface-container-highest rounded-full overflow-hidden">
+<div class="h-full bg-tertiary-fixed-dim w-[85%]" style="box-shadow: 0 0 8px rgba(234, 195, 36, 0.4)"></div>
+</div>
+</div>
+</section>
+<!-- Log Table Controls -->
+<section class="bg-surface-container border border-outline-variant rounded-lg overflow-hidden flex flex-col">
+<div class="p-4 border-b border-outline-variant flex flex-col md:flex-row gap-4 justify-between items-center bg-surface-container-low">
+<div class="flex items-center gap-3 w-full md:w-auto">
+<div class="relative w-full md:w-80">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant !text-[18px]">search</span>
+<input class="w-full bg-surface-container-lowest border border-outline-variant rounded px-10 py-2 font-label-sm text-label-sm focus:outline-none focus:border-primary-container transition-colors" placeholder="Search repository..." type="text"/>
+</div>
+</div>
+<div class="flex items-center gap-3 w-full md:w-auto">
+<div class="relative">
+<select class="appearance-none bg-surface-container-lowest border border-outline-variant rounded pl-3 pr-10 py-2 font-label-sm text-label-sm focus:outline-none hover:bg-surface-container-high transition-colors text-on-surface cursor-pointer">
+<option>Last 30 Days</option>
+<option>Last 7 Days</option>
+<option>Last 24 Hours</option>
+<option>Custom Range</option>
+</select>
+<span class="material-symbols-outlined absolute right-2 top-1/2 -translate-y-1/2 text-on-surface-variant pointer-events-none">expand_more</span>
+</div>
+<div class="relative">
+<select class="appearance-none bg-surface-container-lowest border border-outline-variant rounded pl-3 pr-10 py-2 font-label-sm text-label-sm focus:outline-none hover:bg-surface-container-high transition-colors text-on-surface cursor-pointer">
+<option>Status: All</option>
+<option>Status: Success</option>
+<option>Status: Failed</option>
+</select>
+<span class="material-symbols-outlined absolute right-2 top-1/2 -translate-y-1/2 text-on-surface-variant pointer-events-none">filter_list</span>
+</div>
+</div>
+</div>
+<!-- Table Area -->
+<div class="overflow-x-auto custom-scrollbar">
+<table class="w-full border-collapse">
+<thead>
+<tr class="bg-surface-container-lowest">
+<th class="text-left py-4 px-6 font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider border-b border-outline-variant">Timestamp</th>
+<th class="text-left py-4 px-6 font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider border-b border-outline-variant">Repository Name</th>
+<th class="text-right py-4 px-6 font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider border-b border-outline-variant">Prompt</th>
+<th class="text-right py-4 px-6 font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider border-b border-outline-variant">Completion</th>
+<th class="text-right py-4 px-6 font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider border-b border-outline-variant">Total Tokens</th>
+<th class="text-center py-4 px-6 font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider border-b border-outline-variant">Status</th>
+<th class="text-left py-4 px-6 font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider border-b border-outline-variant">Model</th>
+</tr>
+</thead>
+<tbody class="font-code-sm text-code-sm divide-y divide-outline-variant/30">
+<!-- Row 1 -->
+<tr class="transition-colors">
+<td class="py-4 px-6 text-on-surface-variant">2024-06-15 14:22:08</td>
+<td class="py-4 px-6 font-medium text-primary">codewalk-ui-engine</td>
+<td class="py-4 px-6 text-right text-on-surface-variant">12,402</td>
+<td class="py-4 px-6 text-right text-on-surface-variant">4,102</td>
+<td class="py-4 px-6 text-right text-primary-fixed-dim">16,504</td>
+<td class="py-4 px-6 text-center">
+<span class="px-2 py-1 rounded text-[10px] font-bold uppercase bg-primary-container/10 text-primary-container border border-primary-container/20">Success</span>
+</td>
+<td class="py-4 px-6 text-on-surface-variant">gpt-4o-2024-05-13</td>
+</tr>
+<!-- Row 2 -->
+<tr class="transition-colors">
+<td class="py-4 px-6 text-on-surface-variant">2024-06-15 13:05:41</td>
+<td class="py-4 px-6 font-medium text-primary">infra-monitoring-api</td>
+<td class="py-4 px-6 text-right text-on-surface-variant">45,110</td>
+<td class="py-4 px-6 text-right text-on-surface-variant">8,200</td>
+<td class="py-4 px-6 text-right text-primary-fixed-dim">53,310</td>
+<td class="py-4 px-6 text-center">
+<span class="px-2 py-1 rounded text-[10px] font-bold uppercase bg-primary-container/10 text-primary-container border border-primary-container/20">Success</span>
+</td>
+<td class="py-4 px-6 text-on-surface-variant">claude-3-5-sonnet</td>
+</tr>
+<!-- Row 3 -->
+<tr class="transition-colors">
+<td class="py-4 px-6 text-on-surface-variant">2024-06-15 12:45:12</td>
+<td class="py-4 px-6 font-medium text-primary">legacy-data-transformer</td>
+<td class="py-4 px-6 text-right text-on-surface-variant">112,045</td>
+<td class="py-4 px-6 text-right text-on-surface-variant">0</td>
+<td class="py-4 px-6 text-right text-error">112,045</td>
+<td class="py-4 px-6 text-center">
+<span class="px-2 py-1 rounded text-[10px] font-bold uppercase bg-error/10 text-error border border-error/20">Failed</span>
+</td>
+<td class="py-4 px-6 text-on-surface-variant">gpt-4-turbo</td>
+</tr>
+<!-- Row 4 -->
+<tr class="transition-colors">
+<td class="py-4 px-6 text-on-surface-variant">2024-06-15 11:10:04</td>
+<td class="py-4 px-6 font-medium text-primary">auth-gateway-service</td>
+<td class="py-4 px-6 text-right text-on-surface-variant">2,400</td>
+<td class="py-4 px-6 text-right text-on-surface-variant">512</td>
+<td class="py-4 px-6 text-right text-primary-fixed-dim">2,912</td>
+<td class="py-4 px-6 text-center">
+<span class="px-2 py-1 rounded text-[10px] font-bold uppercase bg-primary-container/10 text-primary-container border border-primary-container/20">Success</span>
+</td>
+<td class="py-4 px-6 text-on-surface-variant">gpt-4o-mini</td>
+</tr>
+<!-- Row 5 -->
+<tr class="transition-colors">
+<td class="py-4 px-6 text-on-surface-variant">2024-06-15 09:44:23</td>
+<td class="py-4 px-6 font-medium text-primary">ml-training-pipeline</td>
+<td class="py-4 px-6 text-right text-on-surface-variant">88,100</td>
+<td class="py-4 px-6 text-right text-on-surface-variant">12,400</td>
+<td class="py-4 px-6 text-right text-primary-fixed-dim">100,500</td>
+<td class="py-4 px-6 text-center">
+<span class="px-2 py-1 rounded text-[10px] font-bold uppercase bg-primary-container/10 text-primary-container border border-primary-container/20">Success</span>
+</td>
+<td class="py-4 px-6 text-on-surface-variant">claude-3-opus</td>
+</tr>
+<!-- Row 6 -->
+<tr class="transition-colors">
+<td class="py-4 px-6 text-on-surface-variant">2024-06-14 23:59:11</td>
+<td class="py-4 px-6 font-medium text-primary">internal-docs-crawler</td>
+<td class="py-4 px-6 text-right text-on-surface-variant">5,200</td>
+<td class="py-4 px-6 text-right text-on-surface-variant">1,200</td>
+<td class="py-4 px-6 text-right text-primary-fixed-dim">6,400</td>
+<td class="py-4 px-6 text-center">
+<span class="px-2 py-1 rounded text-[10px] font-bold uppercase bg-primary-container/10 text-primary-container border border-primary-container/20">Success</span>
+</td>
+<td class="py-4 px-6 text-on-surface-variant">gpt-3.5-turbo</td>
+</tr>
+<!-- Row 7 -->
+<tr class="transition-colors">
+<td class="py-4 px-6 text-on-surface-variant">2024-06-14 22:15:33</td>
+<td class="py-4 px-6 font-medium text-primary">user-dashboard-next</td>
+<td class="py-4 px-6 text-right text-on-surface-variant">32,450</td>
+<td class="py-4 px-6 text-right text-on-surface-variant">4,110</td>
+<td class="py-4 px-6 text-right text-primary-fixed-dim">36,560</td>
+<td class="py-4 px-6 text-center">
+<span class="px-2 py-1 rounded text-[10px] font-bold uppercase bg-primary-container/10 text-primary-container border border-primary-container/20">Success</span>
+</td>
+<td class="py-4 px-6 text-on-surface-variant">gpt-4o</td>
+</tr>
+</tbody>
+</table>
+</div>
+<!-- Pagination -->
+<div class="p-4 border-t border-outline-variant flex items-center justify-between bg-surface-container-low">
+<p class="font-label-sm text-label-sm text-on-surface-variant">Showing 1 to 7 of 482 entries</p>
+<div class="flex items-center gap-2">
+<button class="p-1 rounded hover:bg-surface-container-high transition-colors border border-outline-variant">
+<span class="material-symbols-outlined !text-[20px]">chevron_left</span>
+</button>
+<div class="flex items-center gap-1">
+<button class="w-8 h-8 rounded bg-primary-container text-on-primary-container font-label-sm text-label-sm">1</button>
+<button class="w-8 h-8 rounded hover:bg-surface-container-high font-label-sm text-label-sm">2</button>
+<button class="w-8 h-8 rounded hover:bg-surface-container-high font-label-sm text-label-sm">3</button>
+<span class="px-1 text-on-surface-variant">...</span>
+<button class="w-8 h-8 rounded hover:bg-surface-container-high font-label-sm text-label-sm">69</button>
+</div>
+<button class="p-1 rounded hover:bg-surface-container-high transition-colors border border-outline-variant">
+<span class="material-symbols-outlined !text-[20px]">chevron_right</span>
+</button>
+</div>
+</div>
+</section>
+</div>
+<!-- Atmospheric Background Effect -->
+<div class="fixed bottom-0 right-0 w-1/3 h-1/3 pointer-events-none opacity-20">
+
+</div>
+</main>
+<script>
+        // Simple search interactivity
+        const searchInput = document.querySelector('input[type="text"]');
+        const rows = document.querySelectorAll('tbody tr');
+
+        searchInput.addEventListener('input', (e) => {
+            const term = e.target.value.toLowerCase();
+            rows.forEach(row => {
+                const repoName = row.cells[1].textContent.toLowerCase();
+                if (repoName.includes(term)) {
+                    row.style.display = 'table-row';
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+        });
+
+        // Micro-interaction for export button
+        const exportBtn = document.querySelector('button:contains("Export")');
+        if (exportBtn) {
+            exportBtn.addEventListener('click', () => {
+                exportBtn.classList.add('scale-95');
+                setTimeout(() => exportBtn.classList.remove('scale-95'), 100);
+                console.log('Initiating CSV export...');
+            });
+        }
+    </script>
+</body></html>

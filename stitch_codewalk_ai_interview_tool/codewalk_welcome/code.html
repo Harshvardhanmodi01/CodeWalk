@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&amp;family=Geist:wght@400;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+    }
+    .terminal-glow {
+      box-shadow: 0px 0px 12px rgba(125, 244, 255, 0.3);
+    }
+    .glass-panel {
+      background: rgba(21, 29, 30, 0.6);
+      backdrop-filter: blur(12px);
+    }
+    /* Hide scrollbars */
+    ::-webkit-scrollbar { display: none; }
+    * { -ms-overflow-style: none; scrollbar-width: none; }
+  </style>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          "colors": {
+                  "surface-container-highest": "#2e3637",
+                  "inverse-surface": "#dce4e5",
+                  "secondary": "#e0b6ff",
+                  "primary-fixed": "#7df4ff",
+                  "surface-container-low": "#151d1e",
+                  "surface-tint": "#00dbe9",
+                  "on-tertiary-container": "#715d00",
+                  "on-secondary-container": "#d7a4ff",
+                  "tertiary": "#fff5de",
+                  "primary-fixed-dim": "#00dbe9",
+                  "surface-variant": "#2e3637",
+                  "on-error-container": "#ffdad6",
+                  "secondary-fixed-dim": "#e0b6ff",
+                  "surface-container-lowest": "#080f10",
+                  "on-background": "#dce4e5",
+                  "on-primary-container": "#006970",
+                  "on-primary": "#00363a",
+                  "on-tertiary-fixed-variant": "#554500",
+                  "surface-container": "#192122",
+                  "surface": "#0d1515",
+                  "on-primary-fixed": "#002022",
+                  "outline-variant": "#3b494b",
+                  "tertiary-fixed": "#ffe179",
+                  "on-primary-fixed-variant": "#004f54",
+                  "inverse-primary": "#006970",
+                  "outline": "#849495",
+                  "tertiary-fixed-dim": "#eac324",
+                  "error-container": "#93000a",
+                  "on-secondary-fixed-variant": "#6a0baa",
+                  "inverse-on-surface": "#2a3233",
+                  "on-secondary-fixed": "#2e004e",
+                  "background": "#0d1515",
+                  "error": "#ffb4ab",
+                  "on-tertiary-fixed": "#231b00",
+                  "secondary-container": "#6d11ad",
+                  "surface-bright": "#333b3b",
+                  "surface-container-high": "#232b2c",
+                  "primary-container": "#00f0ff",
+                  "primary": "#dbfcff",
+                  "surface-dim": "#0d1515",
+                  "secondary-fixed": "#f2daff",
+                  "tertiary-container": "#fed639",
+                  "on-secondary": "#4c007d",
+                  "on-surface": "#dce4e5",
+                  "on-surface-variant": "#b9cacb",
+                  "on-tertiary": "#3b2f00",
+                  "on-error": "#690005"
+          },
+          "borderRadius": {
+                  "DEFAULT": "0.125rem",
+                  "lg": "0.25rem",
+                  "xl": "0.5rem",
+                  "full": "0.75rem"
+          },
+          "spacing": {
+                  "sidebar-width": "280px",
+                  "margin-mobile": "16px",
+                  "container-max": "1440px",
+                  "margin-desktop": "32px",
+                  "gutter": "16px",
+                  "unit": "4px"
+          },
+          "fontFamily": {
+                  "body-md": ["Geist"],
+                  "code-sm": ["JetBrains Mono"],
+                  "headline-lg": ["Geist"],
+                  "headline-md": ["Geist"],
+                  "code-md": ["JetBrains Mono"],
+                  "label-sm": ["Geist"]
+          },
+          "fontSize": {
+                  "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                  "code-sm": ["12px", {"lineHeight": "18px", "fontWeight": "400"}],
+                  "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                  "headline-md": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                  "code-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                  "label-sm": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600"}]
+          }
+        },
+      },
+    }
+  </script>
+</head>
+<body class="bg-background text-on-surface font-body-md selection:bg-primary-fixed/30">
+<!-- SideNavBar Anchor -->
+<aside class="fixed left-0 top-0 h-screen w-sidebar-width flex flex-col z-40 bg-surface-container border-r border-outline-variant">
+<div class="p-6">
+<span class="font-headline-md text-headline-md font-bold text-primary-fixed">CodeWalk</span>
+</div>
+<div class="flex-1 px-4 mt-8 flex flex-col gap-2">
+<!-- Dashboard - Active -->
+<a class="bg-surface-container-highest text-primary-fixed border-l-2 border-primary-fixed px-4 py-3 flex items-center gap-4 transition-all duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+<span class="font-label-sm text-label-sm">Dashboard</span>
+</a>
+<!-- History -->
+<a class="text-on-surface-variant px-4 py-3 flex items-center gap-4 hover:bg-surface-variant hover:text-on-surface transition-all duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined">history</span>
+<span class="font-label-sm text-label-sm">History</span>
+</a>
+<!-- Settings -->
+<a class="text-on-surface-variant px-4 py-3 flex items-center gap-4 hover:bg-surface-variant hover:text-on-surface transition-all duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined">settings</span>
+<span class="font-label-sm text-label-sm">Settings</span>
+</a>
+<!-- Help -->
+<a class="text-on-surface-variant px-4 py-3 flex items-center gap-4 hover:bg-surface-variant hover:text-on-surface transition-all duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined">help_outline</span>
+<span class="font-label-sm text-label-sm">Help</span>
+</a>
+</div>
+<div class="p-4 border-t border-outline-variant/30">
+<button class="w-full bg-primary-fixed text-on-primary-fixed font-bold py-3 rounded-lg text-label-sm flex items-center justify-center gap-2 hover:opacity-90 transition-opacity">
+<span class="material-symbols-outlined text-[18px]">add</span>
+        New Assessment
+      </button>
+</div>
+<div class="px-4 py-6 border-t border-outline-variant/30">
+<a class="text-on-surface-variant px-4 py-3 flex items-center gap-4 hover:bg-surface-variant hover:text-on-surface transition-all duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined">logout</span>
+<span class="font-label-sm text-label-sm">Logout</span>
+</a>
+</div>
+</aside>
+<!-- Main Content Area -->
+<main class="ml-sidebar-width min-h-screen relative flex flex-col">
+<!-- TopAppBar Anchor -->
+<header class="flex justify-between items-center px-8 py-4 bg-surface-container-low w-full border-b border-outline-variant z-30">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary-fixed">terminal</span>
+<h1 class="font-label-sm text-label-sm uppercase tracking-widest text-primary-fixed opacity-80">Assessment Overview</h1>
+</div>
+<div class="flex items-center gap-4">
+<button class="material-symbols-outlined text-on-surface-variant hover:text-primary-fixed transition-colors active:scale-95">share</button>
+<button class="material-symbols-outlined text-on-surface-variant hover:text-primary-fixed transition-colors active:scale-95">download</button>
+<button class="material-symbols-outlined text-on-surface-variant hover:text-primary-fixed transition-colors active:scale-95">more_vert</button>
+</div>
+</header>
+<!-- Canvas (Empty State) -->
+<div class="flex-1 flex flex-col items-center justify-center p-margin-desktop relative overflow-hidden">
+<!-- Atmospheric Background Element -->
+<div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-primary-fixed/5 blur-[120px] pointer-events-none rounded-full"></div>
+<!-- Center Bento Layout / Main Content -->
+<div class="max-w-4xl w-full z-10 space-y-12">
+<!-- Illustration Section -->
+<div class="flex flex-col items-center text-center space-y-6">
+<div class="relative w-64 h-64 flex items-center justify-center">
+<!-- Sleek abstract terminal illustration -->
+<div class="absolute inset-0 border border-outline-variant rounded-xl rotate-3 bg-surface-container-low opacity-50"></div>
+<div class="absolute inset-0 border border-primary-fixed/20 rounded-xl -rotate-2 bg-surface-container transition-transform duration-500 hover:rotate-0"></div>
+<div class="relative w-full h-full p-4 flex flex-col">
+<div class="flex gap-1.5 mb-4">
+<div class="w-2.5 h-2.5 rounded-full bg-error/50"></div>
+<div class="w-2.5 h-2.5 rounded-full bg-tertiary/50"></div>
+<div class="w-2.5 h-2.5 rounded-full bg-primary-fixed/50"></div>
+</div>
+<div class="flex-1 flex flex-col gap-2 font-code-sm text-code-sm opacity-40 overflow-hidden">
+<div class="h-2 w-3/4 bg-on-surface-variant/20 rounded"></div>
+<div class="h-2 w-1/2 bg-on-surface-variant/20 rounded"></div>
+<div class="h-2 w-2/3 bg-on-surface-variant/20 rounded"></div>
+<div class="h-2 w-1/3 bg-primary-fixed/20 rounded mt-4"></div>
+<div class="h-2 w-5/6 bg-on-surface-variant/20 rounded"></div>
+</div>
+<div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center gap-2">
+<span class="material-symbols-outlined text-6xl text-primary-fixed terminal-glow" style="font-variation-settings: 'FILL' 1;">code_blocks</span>
+</div>
+</div>
+</div>
+<div class="space-y-2">
+<h2 class="font-headline-lg text-headline-lg text-on-surface">Ready for your first Walk?</h2>
+<p class="font-body-md text-body-md text-on-surface-variant max-w-md mx-auto">
+              Analyze your first repo to start generating questions. Our AI will traverse your codebase to map its logic and create a tailored interview.
+            </p>
+</div>
+</div>
+<!-- Action Input Area -->
+<div class="max-w-2xl mx-auto w-full">
+<div class="relative group">
+<div class="absolute inset-y-0 left-4 flex items-center pointer-events-none text-primary-fixed">
+<span class="font-code-md text-code-md">$</span>
+</div>
+<input class="w-full h-16 bg-surface-container-lowest border border-outline-variant rounded-xl pl-10 pr-40 font-code-md text-code-md text-primary focus:border-primary-fixed focus:ring-0 focus:outline-none transition-all placeholder:text-on-surface-variant/40 group-hover:border-primary-fixed/50 terminal-glow" placeholder="Paste GitHub URL (e.g. https://github.com/user/repo)" type="text"/>
+<div class="absolute right-2 top-2 bottom-2">
+<button class="h-full px-6 bg-primary-fixed text-on-primary-fixed font-bold rounded-lg text-label-sm flex items-center gap-2 hover:brightness-110 active:scale-95 transition-all">
+                Analyze Repo
+                <span class="material-symbols-outlined">arrow_forward</span>
+</button>
+</div>
+</div>
+<div class="mt-3 flex items-center justify-center gap-6 text-on-surface-variant/50">
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-[16px]">lock</span>
+<span class="text-[10px] uppercase tracking-widest font-label-sm">Private Repos Supported</span>
+</div>
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-[16px]">bolt</span>
+<span class="text-[10px] uppercase tracking-widest font-label-sm">Instant Indexing</span>
+</div>
+</div>
+</div>
+<!-- Onboarding Mini-Visual -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6 pt-8 border-t border-outline-variant/20">
+<!-- Step 1 -->
+<div class="flex flex-col items-center gap-4 group">
+<div class="w-12 h-12 rounded-full border border-outline-variant flex items-center justify-center text-on-surface-variant group-hover:border-primary-fixed group-hover:text-primary-fixed transition-colors">
+<span class="font-bold">1</span>
+</div>
+<div class="text-center">
+<p class="font-label-sm text-label-sm uppercase text-on-surface mb-1">Paste Repo</p>
+<p class="text-[11px] text-on-surface-variant px-4">Provide a public or private GitHub repository link.</p>
+</div>
+</div>
+<!-- Step 2 -->
+<div class="flex flex-col items-center gap-4 group">
+<div class="w-12 h-12 rounded-full border border-outline-variant flex items-center justify-center text-on-surface-variant group-hover:border-primary-fixed group-hover:text-primary-fixed transition-colors">
+<span class="font-bold">2</span>
+</div>
+<div class="text-center">
+<p class="font-label-sm text-label-sm uppercase text-on-surface mb-1">Review Code</p>
+<p class="text-[11px] text-on-surface-variant px-4">CodeWalk maps functions, dependencies, and flow.</p>
+</div>
+</div>
+<!-- Step 3 -->
+<div class="flex flex-col items-center gap-4 group">
+<div class="w-12 h-12 rounded-full border border-outline-variant flex items-center justify-center text-on-surface-variant group-hover:border-primary-fixed group-hover:text-primary-fixed transition-colors">
+<span class="font-bold">3</span>
+</div>
+<div class="text-center">
+<p class="font-label-sm text-label-sm uppercase text-on-surface mb-1">Interview</p>
+<p class="text-[11px] text-on-surface-variant px-4">Generate and run a technical assessment session.</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Background Decoration: Grid Lines -->
+<div class="absolute inset-0 pointer-events-none z-0 opacity-[0.03]" style="background-image: linear-gradient(#dce4e5 1px, transparent 1px), linear-gradient(90deg, #dce4e5 1px, transparent 1px); background-size: 40px 40px;">
+</div>
+</main>
+<script>
+    // Micro-interaction for input glow intensity
+    const input = document.querySelector('input');
+    const inputContainer = input.parentElement;
+    
+    input.addEventListener('focus', () => {
+      inputContainer.classList.add('terminal-glow');
+    });
+    
+    input.addEventListener('blur', () => {
+      inputContainer.classList.remove('terminal-glow');
+    });
+
+    // Simple fade-in effect for elements
+    document.addEventListener('DOMContentLoaded', () => {
+      const items = document.querySelectorAll('.group, .max-w-4xl > div');
+      items.forEach((el, index) => {
+        el.style.opacity = '0';
+        el.style.transform = 'translateY(10px)';
+        el.style.transition = 'all 0.6s ease-out ' + (index * 0.1) + 's';
+        setTimeout(() => {
+          el.style.opacity = '1';
+          el.style.transform = 'translateY(0)';
+        }, 100);
+      });
+    });
+  </script>
+</body></html>

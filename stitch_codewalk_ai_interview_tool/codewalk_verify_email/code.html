@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>CodeWalk | Email Verification</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400&amp;family=Geist:wght@400;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .glow-cyan {
+            box-shadow: 0px 0px 12px rgba(125, 244, 255, 0.3);
+        }
+        .crt-flicker {
+            animation: flicker 0.15s infinite;
+        }
+        @keyframes flicker {
+            0% { opacity: 0.97; }
+            50% { opacity: 1; }
+            100% { opacity: 0.98; }
+        }
+        .terminal-inset {
+            background-color: #050a0a;
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-container-highest": "#2e3637",
+                        "inverse-surface": "#dce4e5",
+                        "secondary": "#e0b6ff",
+                        "primary-fixed": "#7df4ff",
+                        "surface-container-low": "#151d1e",
+                        "surface-tint": "#00dbe9",
+                        "on-tertiary-container": "#715d00",
+                        "on-secondary-container": "#d7a4ff",
+                        "tertiary": "#fff5de",
+                        "primary-fixed-dim": "#00dbe9",
+                        "surface-variant": "#2e3637",
+                        "on-error-container": "#ffdad6",
+                        "secondary-fixed-dim": "#e0b6ff",
+                        "surface-container-lowest": "#080f10",
+                        "on-background": "#dce4e5",
+                        "on-primary-container": "#006970",
+                        "on-primary": "#00363a",
+                        "on-tertiary-fixed-variant": "#554500",
+                        "surface-container": "#192122",
+                        "surface": "#0d1515",
+                        "on-primary-fixed": "#002022",
+                        "outline-variant": "#3b494b",
+                        "tertiary-fixed": "#ffe179",
+                        "on-primary-fixed-variant": "#004f54",
+                        "inverse-primary": "#006970",
+                        "outline": "#849495",
+                        "tertiary-fixed-dim": "#eac324",
+                        "error-container": "#93000a",
+                        "on-secondary-fixed-variant": "#6a0baa",
+                        "inverse-on-surface": "#2a3233",
+                        "on-secondary-fixed": "#2e004e",
+                        "background": "#0d1515",
+                        "error": "#ffb4ab",
+                        "on-tertiary-fixed": "#231b00",
+                        "secondary-container": "#6d11ad",
+                        "surface-bright": "#333b3b",
+                        "surface-container-high": "#232b2c",
+                        "primary-container": "#00f0ff",
+                        "primary": "#dbfcff",
+                        "surface-dim": "#0d1515",
+                        "secondary-fixed": "#f2daff",
+                        "tertiary-container": "#fed639",
+                        "on-secondary": "#4c007d",
+                        "on-surface": "#dce4e5",
+                        "on-surface-variant": "#b9cacb",
+                        "on-tertiary": "#3b2f00",
+                        "on-error": "#690005"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "sidebar-width": "280px",
+                        "margin-mobile": "16px",
+                        "container-max": "1440px",
+                        "margin-desktop": "32px",
+                        "gutter": "16px",
+                        "unit": "4px"
+                    },
+                    "fontFamily": {
+                        "body-md": ["Geist"],
+                        "code-sm": ["JetBrains Mono"],
+                        "headline-lg": ["Geist"],
+                        "headline-md": ["Geist"],
+                        "code-md": ["JetBrains Mono"],
+                        "label-sm": ["Geist"]
+                    },
+                    "fontSize": {
+                        "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                        "code-sm": ["12px", {"lineHeight": "18px", "fontWeight": "400"}],
+                        "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                        "headline-md": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                        "code-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                        "label-sm": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600"}]
+                    }
+                },
+            },
+        }
+    </script>
+</head>
+<body class="bg-surface text-on-surface font-body-md overflow-hidden h-screen w-screen selection:bg-primary-fixed-dim selection:text-on-primary">
+<!-- Atmospheric Background Shader Layer -->
+<div class="fixed inset-0 z-0 pointer-events-none opacity-40">
+
+</div>
+<!-- Navigation Shell (Suppressed as per rules for transactional screens, but we include the top bar branding for continuity if needed, however the rules say PROHIBIT for linear/transactional) -->
+<!-- The prompt asks for centered minimal layout, implying no standard nav shell. -->
+<main class="relative z-10 flex items-center justify-center min-h-screen px-margin-mobile md:px-0">
+<!-- Verification Card -->
+<div class="w-full max-w-md bg-surface-container border border-outline-variant p-8 md:p-12 relative overflow-hidden">
+<!-- Corner Accents (IDE-like focus) -->
+<div class="absolute top-0 left-0 w-2 h-2 border-t border-l border-primary-fixed"></div>
+<div class="absolute top-0 right-0 w-2 h-2 border-t border-r border-primary-fixed"></div>
+<div class="absolute bottom-0 left-0 w-2 h-2 border-b border-l border-primary-fixed"></div>
+<div class="absolute bottom-0 right-0 w-2 h-2 border-b border-r border-primary-fixed"></div>
+<div class="flex flex-col items-center text-center">
+<!-- Branding Anchor -->
+<div class="mb-10">
+<span class="font-headline-md text-headline-md font-bold text-primary-fixed tracking-tight">CodeWalk</span>
+</div>
+<!-- Central Icon -->
+<div class="relative group mb-8">
+<div class="absolute -inset-4 bg-primary-fixed opacity-5 blur-xl group-hover:opacity-10 transition-opacity"></div>
+<div class="relative w-24 h-24 flex items-center justify-center rounded-full bg-surface-container-low border border-outline-variant">
+<span class="material-symbols-outlined text-6xl text-primary-fixed" data-icon="mark_email_unread" style="font-variation-settings: 'wght' 200;">mark_email_unread</span>
+</div>
+<!-- Small status indicator -->
+<div class="absolute bottom-1 right-1 w-5 h-5 bg-primary-fixed-dim rounded-full border-4 border-surface-container flex items-center justify-center">
+<span class="material-symbols-outlined text-[10px] text-on-primary font-bold" data-icon="sync" style="font-variation-settings: 'wght' 800;">sync</span>
+</div>
+</div>
+<!-- Text Content -->
+<h1 class="font-headline-lg text-headline-lg text-on-surface mb-3">Check your inbox</h1>
+<p class="font-body-md text-body-md text-on-surface-variant max-w-[280px] mb-8">
+                    We've sent a verification link to <span class="text-primary-fixed font-code-md">dev_user@github.com</span>. Click the link to activate your workspace.
+                </p>
+<!-- Status Terminal Display -->
+<div class="w-full terminal-inset border border-outline-variant rounded-lg p-4 mb-10 text-left font-code-sm text-code-sm">
+<div class="flex items-center gap-2 mb-2">
+<div class="w-2 h-2 rounded-full bg-primary-fixed"></div>
+<span class="text-on-surface-variant opacity-70">SYSTEM STATUS</span>
+</div>
+<div class="space-y-1">
+<p class="text-primary-fixed flex items-center gap-2">
+<span class="opacity-50">$</span> mail-service --status
+                        </p>
+<p class="text-on-surface-variant">
+<span class="text-primary-fixed-dim">✓</span> Verification token generated
+                        </p>
+<p class="text-on-surface-variant">
+<span class="text-primary-fixed-dim">✓</span> SMTP handshake successful
+                        </p>
+<p class="text-on-surface-variant">
+<span class="text-primary-fixed-dim">✓</span> Payload delivered to queue
+                        </p>
+<div class="flex items-center gap-2 mt-2">
+<span class="text-primary-fixed animate-pulse">&gt;</span>
+<span class="text-on-surface-variant animate-pulse italic">Waiting for verification...</span>
+</div>
+</div>
+</div>
+<!-- Actions -->
+<div class="w-full flex flex-col gap-4">
+<button class="glow-cyan w-full py-4 bg-primary-fixed text-on-primary font-label-sm text-label-sm rounded-lg hover:bg-primary-fixed-dim transition-all active:scale-[0.98] flex items-center justify-center gap-2" id="resendBtn">
+<span class="material-symbols-outlined text-base" data-icon="forward_to_inbox">forward_to_inbox</span>
+                        Resend Email
+                    </button>
+<button class="w-full py-3 bg-transparent border border-outline-variant text-on-surface-variant font-label-sm text-label-sm rounded-lg hover:border-primary-fixed hover:text-on-surface transition-all flex items-center justify-center gap-2 group">
+<span class="material-symbols-outlined text-base group-hover:-translate-x-1 transition-transform" data-icon="arrow_back">arrow_back</span>
+                        Back to Login
+                    </button>
+</div>
+<!-- Help Footer -->
+<div class="mt-10 flex items-center gap-4 text-on-surface-variant opacity-60 font-label-sm text-label-sm">
+<a class="hover:text-primary-fixed transition-colors" href="#">Support</a>
+<span class="w-1 h-1 rounded-full bg-outline-variant"></span>
+<a class="hover:text-primary-fixed transition-colors" href="#">Contact Dev Ops</a>
+</div>
+</div>
+</div>
+</main>
+<!-- Success Toast (Hidden by default) -->
+<div class="fixed bottom-8 right-8 z-50 translate-y-20 opacity-0 transition-all duration-300 pointer-events-none" id="toast">
+<div class="bg-surface-container-highest border border-primary-fixed-dim p-4 flex items-center gap-3 rounded-lg shadow-2xl">
+<span class="material-symbols-outlined text-primary-fixed" data-icon="check_circle" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+<div>
+<p class="font-label-sm text-label-sm text-primary-fixed">Token Refreshed</p>
+<p class="text-[10px] text-on-surface-variant">Check your inbox for a new link.</p>
+</div>
+</div>
+</div>
+<script>
+        const resendBtn = document.getElementById('resendBtn');
+        const toast = document.getElementById('toast');
+
+        resendBtn.addEventListener('click', () => {
+            // Visual feedback on button
+            const originalContent = resendBtn.innerHTML;
+            resendBtn.innerHTML = `<span class="material-symbols-outlined animate-spin" data-icon="progress_activity">progress_activity</span> Sending...`;
+            resendBtn.disabled = true;
+            resendBtn.style.opacity = '0.7';
+
+            // Simulate API call
+            setTimeout(() => {
+                resendBtn.innerHTML = originalContent;
+                resendBtn.disabled = false;
+                resendBtn.style.opacity = '1';
+
+                // Show Toast
+                toast.classList.remove('translate-y-20', 'opacity-0');
+                toast.classList.add('translate-y-0', 'opacity-100');
+
+                // Hide Toast after delay
+                setTimeout(() => {
+                    toast.classList.add('translate-y-20', 'opacity-0');
+                    toast.classList.remove('translate-y-0', 'opacity-100');
+                }, 3000);
+            }, 1200);
+        });
+
+        // Simple mouse tracking for subtle card tilt
+        const card = document.querySelector('.bg-surface-container');
+        document.addEventListener('mousemove', (e) => {
+            const x = (window.innerWidth / 2 - e.pageX) / 50;
+            const y = (window.innerHeight / 2 - e.pageY) / 50;
+            card.style.transform = `rotateX(${y}deg) rotateY(${-x}deg)`;
+        });
+    </script>
+</body></html>

@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>CodeWalk | Answer Revealed</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&amp;family=Geist:wght@400;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "surface-container-highest": "#2e3637",
+                    "inverse-surface": "#dce4e5",
+                    "secondary": "#e0b6ff",
+                    "primary-fixed": "#7df4ff",
+                    "surface-container-low": "#151d1e",
+                    "surface-tint": "#00dbe9",
+                    "on-tertiary-container": "#715d00",
+                    "on-secondary-container": "#d7a4ff",
+                    "tertiary": "#fff5de",
+                    "primary-fixed-dim": "#00dbe9",
+                    "surface-variant": "#2e3637",
+                    "on-error-container": "#ffdad6",
+                    "secondary-fixed-dim": "#e0b6ff",
+                    "surface-container-lowest": "#080f10",
+                    "on-background": "#dce4e5",
+                    "on-primary-container": "#006970",
+                    "on-primary": "#00363a",
+                    "on-tertiary-fixed-variant": "#554500",
+                    "surface-container": "#192122",
+                    "surface": "#0d1515",
+                    "on-primary-fixed": "#002022",
+                    "outline-variant": "#3b494b",
+                    "tertiary-fixed": "#ffe179",
+                    "on-primary-fixed-variant": "#004f54",
+                    "inverse-primary": "#006970",
+                    "outline": "#849495",
+                    "tertiary-fixed-dim": "#eac324",
+                    "error-container": "#93000a",
+                    "on-secondary-fixed-variant": "#6a0baa",
+                    "inverse-on-surface": "#2a3233",
+                    "on-secondary-fixed": "#2e004e",
+                    "background": "#0d1515",
+                    "error": "#ffb4ab",
+                    "on-tertiary-fixed": "#231b00",
+                    "secondary-container": "#6d11ad",
+                    "surface-bright": "#333b3b",
+                    "surface-container-high": "#232b2c",
+                    "primary-container": "#00f0ff",
+                    "primary": "#dbfcff",
+                    "surface-dim": "#0d1515",
+                    "secondary-fixed": "#f2daff",
+                    "tertiary-container": "#fed639",
+                    "on-secondary": "#4c007d",
+                    "on-surface": "#dce4e5",
+                    "on-surface-variant": "#b9cacb",
+                    "on-tertiary": "#3b2f00",
+                    "on-error": "#690005"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.125rem",
+                    "lg": "0.25rem",
+                    "xl": "0.5rem",
+                    "full": "0.75rem"
+            },
+            "spacing": {
+                    "sidebar-width": "280px",
+                    "margin-mobile": "16px",
+                    "container-max": "1440px",
+                    "margin-desktop": "32px",
+                    "gutter": "16px",
+                    "unit": "4px"
+            },
+            "fontFamily": {
+                    "body-md": ["Geist"],
+                    "code-sm": ["JetBrains Mono"],
+                    "headline-lg": ["Geist"],
+                    "headline-md": ["Geist"],
+                    "code-md": ["JetBrains Mono"],
+                    "label-sm": ["Geist"]
+            },
+            "fontSize": {
+                    "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                    "code-sm": ["12px", {"lineHeight": "18px", "fontWeight": "400"}],
+                    "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                    "headline-md": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                    "code-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                    "label-sm": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+        }
+        .code-glow {
+            box-shadow: 0px 0px 12px rgba(125, 244, 255, 0.2);
+        }
+        .answer-reveal-animation {
+            animation: slideDown 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+        @keyframes slideDown {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #3b494b; border-radius: 10px; }
+    </style>
+</head>
+<body class="bg-background text-on-surface font-body-md selection:bg-primary-container selection:text-on-primary-container overflow-hidden">
+<!-- TopNavBar (Fixed) -->
+<nav class="fixed top-0 w-full z-50 flex justify-between items-center px-margin-desktop py-4 bg-surface/80 backdrop-blur-md border-b border-outline-variant">
+<div class="flex items-center gap-8">
+<span class="font-headline-md text-headline-md font-bold text-primary-fixed">CodeWalk</span>
+<div class="hidden md:flex gap-6">
+<a class="text-on-surface-variant hover:text-primary-fixed transition-colors font-body-md text-body-md" href="#">Docs</a>
+<a class="text-on-surface-variant hover:text-primary-fixed transition-colors font-body-md text-body-md" href="#">Pricing</a>
+<a class="text-on-surface-variant hover:text-primary-fixed transition-colors font-body-md text-body-md" href="#">Changelog</a>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<button class="text-on-surface-variant hover:text-primary-fixed font-body-md text-body-md px-4 py-2 transition-colors">Login</button>
+<button class="bg-primary-fixed text-on-primary-fixed font-bold px-6 py-2 rounded shadow-sm hover:opacity-90 active:scale-95 transition-all text-body-md">Try Free</button>
+</div>
+</nav>
+<!-- SideNavBar (Fixed) -->
+<aside class="fixed left-0 top-0 h-screen w-sidebar-width flex flex-col z-40 bg-surface-container border-r border-outline-variant pt-24">
+<div class="px-6 mb-8">
+<div class="flex items-center gap-3 mb-1">
+<div class="w-8 h-8 rounded bg-primary-container flex items-center justify-center">
+<span class="material-symbols-outlined text-on-primary-container" style="font-size: 20px;">terminal</span>
+</div>
+<div>
+<h3 class="font-label-sm text-label-sm text-on-surface font-bold">Developer Workspace</h3>
+<p class="text-[10px] text-on-surface-variant tracking-wider uppercase">Git-integrated Session</p>
+</div>
+</div>
+</div>
+<nav class="flex-1 px-2 space-y-1">
+<a class="flex items-center gap-3 text-on-surface-variant px-4 py-3 font-label-sm text-label-sm hover:bg-surface-variant hover:text-on-surface transition-all duration-200" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+                Dashboard
+            </a>
+<a class="flex items-center gap-3 bg-surface-container-highest text-primary-fixed border-l-2 border-primary-fixed px-4 py-3 font-label-sm text-label-sm transition-all duration-200" href="#">
+<span class="material-symbols-outlined">history</span>
+                History
+            </a>
+<a class="flex items-center gap-3 text-on-surface-variant px-4 py-3 font-label-sm text-label-sm hover:bg-surface-variant hover:text-on-surface transition-all duration-200" href="#">
+<span class="material-symbols-outlined">settings</span>
+                Settings
+            </a>
+<a class="flex items-center gap-3 text-on-surface-variant px-4 py-3 font-label-sm text-label-sm hover:bg-surface-variant hover:text-on-surface transition-all duration-200" href="#">
+<span class="material-symbols-outlined">help_outline</span>
+                Help
+            </a>
+</nav>
+<div class="p-4 border-t border-outline-variant">
+<button class="w-full bg-surface-variant text-primary-fixed border border-primary-fixed/30 font-bold py-3 rounded-lg hover:bg-primary-fixed hover:text-on-primary-fixed transition-all active:scale-95 mb-4 flex items-center justify-center gap-2">
+<span class="material-symbols-outlined">add</span>
+                New Assessment
+            </button>
+<a class="flex items-center gap-3 text-on-surface-variant px-4 py-3 font-label-sm text-label-sm hover:text-error transition-colors" href="#">
+<span class="material-symbols-outlined">logout</span>
+                Logout
+            </a>
+</div>
+</aside>
+<!-- Main Content Area -->
+<main class="ml-sidebar-width pt-[72px] h-screen flex flex-col">
+<!-- TopAppBar -->
+<header class="flex justify-between items-center px-gutter py-2 bg-surface-container-low w-full border-b border-outline-variant h-12">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary-fixed" style="font-size: 18px;">terminal</span>
+<h1 class="font-label-sm text-label-sm font-bold text-primary-fixed tracking-widest uppercase">Assessment Overview</h1>
+</div>
+<div class="flex items-center gap-4">
+<button class="text-on-surface-variant hover:text-primary-fixed active:scale-95 transition-all"><span class="material-symbols-outlined" style="font-size: 20px;">share</span></button>
+<button class="text-on-surface-variant hover:text-primary-fixed active:scale-95 transition-all"><span class="material-symbols-outlined" style="font-size: 20px;">download</span></button>
+<button class="text-on-surface-variant hover:text-primary-fixed active:scale-95 transition-all"><span class="material-symbols-outlined" style="font-size: 20px;">more_vert</span></button>
+</div>
+</header>
+<!-- IDE Layout -->
+<div class="flex-1 flex overflow-hidden">
+<!-- Left Panel: Navigator/Files -->
+<div class="w-64 border-r border-outline-variant bg-surface-container flex flex-col">
+<div class="p-4 border-b border-outline-variant flex justify-between items-center bg-surface-container-high">
+<span class="font-label-sm text-label-sm font-bold uppercase tracking-tighter">Explorer</span>
+<span class="material-symbols-outlined text-on-surface-variant" style="font-size: 16px;">unfold_more</span>
+</div>
+<div class="flex-1 overflow-y-auto py-2">
+<div class="px-4 py-1 flex items-center gap-2 text-on-surface-variant hover:bg-surface-variant cursor-pointer">
+<span class="material-symbols-outlined text-primary-fixed" style="font-size: 18px;">folder</span>
+<span class="font-code-sm text-code-sm">src/components</span>
+</div>
+<div class="pl-8 py-1 flex items-center gap-2 bg-surface-container-highest text-primary-fixed cursor-pointer border-r-2 border-primary-fixed">
+<span class="material-symbols-outlined" style="font-size: 18px;">javascript</span>
+<span class="font-code-sm text-code-sm">DataGrid.tsx</span>
+</div>
+<div class="pl-8 py-1 flex items-center gap-2 text-on-surface-variant hover:bg-surface-variant cursor-pointer">
+<span class="material-symbols-outlined" style="font-size: 18px;">css</span>
+<span class="font-code-sm text-code-sm">DataGrid.css</span>
+</div>
+</div>
+</div>
+<!-- Center Panel: Editor + Assessment Prompt -->
+<div class="flex-1 flex flex-col bg-surface relative">
+<!-- Editor Header/Tabs -->
+<div class="flex bg-surface-container-low border-b border-outline-variant overflow-x-auto">
+<div class="px-4 py-2 flex items-center gap-2 bg-surface border-r border-outline-variant text-primary-fixed border-t-2 border-t-primary-fixed">
+<span class="font-code-sm text-code-sm">DataGrid.tsx</span>
+<span class="material-symbols-outlined" style="font-size: 14px;">close</span>
+</div>
+</div>
+<!-- Code Content -->
+<div class="flex-1 overflow-y-auto font-code-md text-code-md p-6 bg-surface-container-lowest">
+<div class="flex gap-4">
+<div class="text-on-surface-variant/30 text-right select-none w-8">
+                            1<br/>2<br/>3<br/>4<br/>5<br/>6<br/>7<br/>8<br/>9<br/>10<br/>11<br/>12<br/>13<br/>14<br/>15
+                        </div>
+<div class="flex-1 text-on-surface-variant">
+<span class="text-secondary">import</span> { useMemo } <span class="text-secondary">from</span> <span class="text-primary-fixed">'react'</span>;<br/><br/>
+<span class="text-secondary">const</span> <span class="text-primary-fixed">DataGrid</span> = ({ items, filter }) =&gt; {<br/>
+                              <span class="text-secondary">const</span> filteredData = <span class="text-tertiary-fixed-dim">useMemo</span>(() =&gt; {<br/>
+                                <span class="text-on-surface-variant/50">// Heavy computation here</span><br/>
+                                <span class="text-secondary">return</span> items.<span class="text-tertiary-fixed-dim">filter</span>(item =&gt; item.<span class="text-primary-fixed">includes</span>(filter));<br/>
+                              }, [items]); <span class="text-error bg-error-container/20 px-1 rounded-sm">/* BUG DETECTED */</span><br/><br/>
+                              <span class="text-secondary">return</span> (<br/>
+                                &lt;<span class="text-secondary">div</span>&gt;<br/>
+                                  {filteredData.<span class="text-tertiary-fixed-dim">map</span>(i =&gt; &lt;<span class="text-secondary">span</span>&gt;{i}&lt;/<span class="text-secondary">span</span>&gt;)}<br/>
+                                &lt;/<span class="text-secondary">div</span>&gt;<br/>
+                              );<br/>
+                            };
+                        </div>
+</div>
+</div>
+<!-- Assessment Overlay (Visible State) -->
+<div class="absolute bottom-0 left-0 w-full max-h-[60%] overflow-y-auto bg-surface-container-high border-t border-primary-fixed/30 backdrop-blur-xl p-8 shadow-2xl z-20">
+<div class="max-w-4xl mx-auto space-y-6">
+<div class="flex justify-between items-start">
+<div>
+<h2 class="font-headline-md text-headline-md text-primary-fixed mb-2">Performance Analysis</h2>
+<p class="text-on-surface-variant font-body-md text-body-md leading-relaxed">The <code class="bg-surface px-2 py-0.5 rounded text-secondary font-code-sm">useMemo</code> hook above is missing a critical dependency. Identify the missing variable in the dependency array and explain why its absence causes stale UI states.</p>
+</div>
+<div class="flex flex-col items-end gap-3">
+<span class="bg-primary-container text-on-primary-container px-3 py-1 rounded-full font-label-sm text-label-sm font-bold animate-pulse">LIVE ASSESSMENT</span>
+<button class="flex items-center gap-2 text-on-surface-variant hover:text-primary-fixed font-label-sm text-label-sm transition-colors group" onclick="window.location.reload()">
+<span class="material-symbols-outlined group-hover:rotate-180 transition-transform duration-500" style="font-size: 18px;">visibility_off</span>
+                                    Hide Answer
+                                </button>
+</div>
+</div>
+<!-- Answer Block: Revealed State -->
+<div class="answer-reveal-animation bg-surface-container-lowest border-l-4 border-primary-fixed p-6 rounded-r-lg space-y-4">
+<div class="flex items-center gap-2 text-primary-fixed">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+<span class="font-label-sm text-label-sm font-bold tracking-widest uppercase">Expected Answer</span>
+</div>
+<div class="space-y-4 font-body-md text-body-md text-on-surface leading-relaxed">
+<p>
+                                    The missing dependency is <code class="bg-surface-variant px-1.5 py-0.5 rounded text-primary-fixed-dim">filter</code>. 
+                                </p>
+<p>
+                                    In React's <code class="font-code-md text-code-md text-secondary">useMemo</code> hook, the dependency array tells React when to re-calculate the memoized value. Currently, the array only contains <code class="font-code-md text-code-md text-secondary">[items]</code>. This means that even if the <code class="font-code-md text-code-md text-secondary">filter</code> string changes, the component will skip the expensive recalculation and return the previously cached <code class="font-code-md text-code-md text-secondary">filteredData</code> from the last time <code class="font-code-md text-code-md text-secondary">items</code> changed.
+                                </p>
+<div class="bg-surface p-4 border border-outline-variant rounded font-code-md text-code-md">
+<span class="text-on-surface-variant/50">// Correct implementation:</span><br/>
+<span class="text-secondary">const</span> filteredData = <span class="text-tertiary-fixed-dim">useMemo</span>(() =&gt; {<br/>
+                                      <span class="text-secondary">return</span> items.<span class="text-tertiary-fixed-dim">filter</span>(item =&gt; item.<span class="text-primary-fixed">includes</span>(filter));<br/>
+                                    }, [<span class="text-primary-fixed-dim font-bold">items, filter</span>]);
+                                </div>
+<p class="text-on-surface-variant italic border-t border-outline-variant pt-4">
+                                    By adding both variables, you ensure the computation is stable relative to all its external inputs, preventing "stale" renders where the UI doesn't reflect the current user input.
+                                </p>
+</div>
+</div>
+<div class="flex gap-4 pt-4 border-t border-outline-variant">
+<button class="bg-primary-fixed text-on-primary-fixed font-bold px-8 py-3 rounded-lg code-glow hover:opacity-90 active:scale-95 transition-all flex items-center gap-2">
+<span class="material-symbols-outlined">navigate_next</span>
+                                Next Challenge
+                            </button>
+<button class="border border-outline text-on-surface-variant font-bold px-8 py-3 rounded-lg hover:bg-surface-variant transition-all">
+                                Bookmark
+                            </button>
+</div>
+</div>
+</div>
+</div>
+<!-- Right Panel: AI & Terminal -->
+<div class="w-80 border-l border-outline-variant bg-surface-container flex flex-col">
+<div class="p-4 border-b border-outline-variant flex justify-between items-center bg-surface-container-high">
+<span class="font-label-sm text-label-sm font-bold uppercase tracking-tighter">AI Assistant</span>
+<span class="bg-primary-fixed/10 text-primary-fixed text-[10px] px-2 py-0.5 rounded border border-primary-fixed/20">GPT-4o</span>
+</div>
+<div class="flex-1 overflow-y-auto p-4 space-y-4">
+<div class="bg-surface-container-low p-3 rounded-lg border border-outline-variant">
+<p class="text-code-sm font-code-sm text-on-surface-variant">Looking at the useMemo hook... the dependencies look suspicious. Why wouldn't the list update when I type in the search box?</p>
+</div>
+<div class="bg-primary-fixed/5 p-3 rounded-lg border border-primary-fixed/20">
+<p class="text-code-sm font-code-sm text-primary-fixed leading-tight italic">Analyzing React Hook lifecycle... Memory mapping suggests dependency mismatch in closure.</p>
+</div>
+</div>
+<!-- Console -->
+<div class="h-1/3 border-t border-outline-variant bg-surface-container-lowest flex flex-col">
+<div class="px-4 py-2 bg-surface-container border-b border-outline-variant flex items-center gap-2">
+<span class="material-symbols-outlined text-on-surface-variant" style="font-size: 16px;">terminal</span>
+<span class="font-label-sm text-label-sm font-bold text-on-surface-variant uppercase">Terminal</span>
+</div>
+<div class="flex-1 p-4 font-code-sm text-code-sm text-on-surface-variant overflow-y-auto space-y-1">
+<p><span class="text-primary-fixed">$</span> npm run audit:perf</p>
+<p class="text-tertiary-fixed-dim">Checking hooks...</p>
+<p class="text-error">Warning: useMemo has missing dependency: 'filter'</p>
+<p class="text-on-surface-variant/40 animate-pulse">_</p>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- Floating Action Button (FAB) - Contextual -->
+<button class="fixed bottom-8 right-8 w-14 h-14 bg-primary-container text-on-primary-container rounded-full shadow-2xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all z-50 group">
+<span class="material-symbols-outlined" style="font-size: 32px; font-variation-settings: 'FILL' 1;">bolt</span>
+<div class="absolute right-16 bg-surface-container-highest text-on-surface px-3 py-1 rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity font-label-sm text-label-sm pointer-events-none">AI Refactor</div>
+</button>
+</body></html>

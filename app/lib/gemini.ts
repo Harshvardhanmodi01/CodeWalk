@@ -428,8 +428,10 @@ STRICT RULES — DO NOT DEVIATE:
    - 1 to 2 Project Logic questions tagged [P1], [P2]
 
 2. [C] Code Logic questions:
-   - MUST reference an actual line number in the form "Line X:"
-   - MUST ask "What does this do?" or "What does this return?" — NOT "Why" or "What if"
+   - MUST reference an actual line number in the form "Line X:" that contains executable code logic (such as a function declaration, variable assignment, conditional statement, loop, or return statement).
+   - NEVER reference an empty line, a comment-only line (e.g., lines starting with //, /*, *, or #), or a line containing only an opening/closing brace or bracket (e.g., {, }, [, ]).
+   - The user will provide a list of valid line numbers. You MUST only select from these line numbers. Generating a question on any other line number is a strict failure.
+   - MUST ask logical, code-comprehension questions about the behavior, purpose, inputs/outputs, conditional outcomes, loops, or state changes at that line. Focus on the programmatic logic, NOT trivial syntax or rules.
    - Must be answerable by reading the code shown
    - Include a 5-line context snippet from the code in the question text where helpful
 
@@ -447,9 +449,60 @@ A: Answer
 [P1] Question text
 A: Answer
 
-5. NO hypotheticals. NO "what if". NO opinions. Only factual code questions.
+5. NO hypotheticals. NO "what if" scenarios unrelated to the actual code block. NO opinions. Only factual code questions.
 6. Answers: 2-3 sentences, under 60 words.
 7. Questions: under 20 words.`;
+
+/**
+ * Parses code content and returns line numbers of lines containing executable logic
+ * (filtering out comments, whitespace, and brackets/punctuation).
+ */
+export function getExecutableLineNumbers(code: string): number[] {
+  const lines = code.split('\n');
+  const validLines: number[] = [];
+  let inBlockComment = false;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    const lineNum = i + 1;
+
+    if (inBlockComment) {
+      if (line.includes('*/')) {
+        inBlockComment = false;
+      }
+      continue;
+    }
+    if (line.startsWith('/*')) {
+      if (!line.includes('*/')) {
+        inBlockComment = true;
+      }
+      continue;
+    }
+
+    // Skip empty lines
+    if (!line) continue;
+
+    // Skip comment lines
+    if (line.startsWith('//') || line.startsWith('*') || line.startsWith('#')) {
+      continue;
+    }
+
+    // Skip lines with only brackets, braces, parentheses, commas, semicolons
+    const cleanLine = line.replace(/[{}\[\]();,\s]/g, '');
+    if (cleanLine.length === 0) {
+      continue;
+    }
+
+    validLines.push(lineNum);
+  }
+
+  // Fallback if no valid lines are detected
+  if (validLines.length === 0) {
+    return Array.from({ length: lines.length }, (_, idx) => idx + 1);
+  }
+
+  return validLines;
+}
 
 /**
  * Build the user prompt for a single file.
@@ -465,19 +518,37 @@ function buildFilePrompt(
     .map((line, i) => `${i + 1}: ${line}`)
     .join('\n');
 
+  const validLines = getExecutableLineNumbers(code);
+
   let prompt = `PROJECT: ${projectName || 'Unknown'}\nFILE: ${filename}\n\n`;
   if (readmeContext) {
     prompt += `README EXCERPT:\n${readmeContext.slice(0, 1500)}\n\n`;
   }
   prompt += `SOURCE CODE (with line numbers):\n\`\`\`\n${numbered}\n\`\`\`\n\n`;
-  prompt += `Generate 2-3 [C] questions referencing real lines of this file, plus 1-2 [P] questions about structure/patterns. Follow the strict format.`;
+  prompt += `CRITICAL: You are only allowed to choose from the following line numbers for [C] questions (these contain actual executable code logic, not comments, blank lines, or closing brackets):\n`;
+  prompt += `${validLines.join(', ')}\n\n`;
+  prompt += `Generate 2-3 [C] questions referencing real lines from the list above, plus 1-2 [P] questions about structure/patterns. Follow the strict format.`;
   return prompt;
 }
 
 /**
  * Build the prompt for the final slide (README + Generic).
  */
-function buildFinalPrompt(readme: string, projectName?: string): string {
+function buildFinalPrompt(readme: string, projectName?: string, hasReadme: boolean = true): string {
+  if (!hasReadme || !readme.trim()) {
+    return `PROJECT: ${projectName || 'Unknown'}
+
+Generate the FINAL slide questions only. Format strictly:
+
+[G1] One generic domain/real-world question about how this kind of system is used
+A: Answer
+
+[G2] One more generic domain question (use cases, real-world application)
+A: Answer
+
+NO code line references here. Focus on domain knowledge.`;
+  }
+
   return `PROJECT: ${projectName || 'Unknown'}
 
 README:
@@ -500,15 +571,26 @@ NO code line references here. Focus on documentation and domain knowledge.`;
 /**
  * Call the Groq chat completion API with timeout protection.
  */
-async function callGroq(systemPrompt: string, userPrompt: string): Promise<string> {
+async function callGroq(systemPrompt: string, userPrompt: string, customModel?: string): Promise<string> {
   const groq = getClient();
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
+  // Map user-selected models to supported Groq models
+  let modelToUse = customModel || MODEL;
+  const lowerModel = modelToUse.toLowerCase();
+  if (lowerModel.includes('gpt-4') || lowerModel.includes('claude') || lowerModel.includes('gpt-3.5')) {
+    modelToUse = 'llama-3.3-70b-versatile'; // Fallback / mock map for custom dashboard models
+  } else if (lowerModel.includes('llama-3.1-8b') || lowerModel.includes('llama3-8b')) {
+    modelToUse = 'llama-3.1-8b-instant';
+  } else if (lowerModel.includes('mixtral')) {
+    modelToUse = 'mixtral-8x7b-32768';
+  }
+
   try {
     const completion = await groq.chat.completions.create(
       {
-        model: MODEL,
+        model: modelToUse,
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt },
@@ -541,13 +623,14 @@ export async function generateQuestionsRaw(
   code: string,
   filename: string,
   readmeContext?: string,
-  projectName?: string
+  projectName?: string,
+  model?: string
 ): Promise<string> {
   if (!code || !filename) {
     throw new Error('Code and filename are required');
   }
   const userPrompt = buildFilePrompt(code, filename, readmeContext, projectName);
-  const response = await callGroq(SYSTEM_PROMPT, userPrompt);
+  const response = await callGroq(SYSTEM_PROMPT, userPrompt, model);
 
   // Basic validation — must contain at least one [C and one [P
   if (!/\[C\d?/.test(response) || !/\[P\d?/.test(response)) {
@@ -561,9 +644,11 @@ export async function generateQuestionsRaw(
  */
 export async function generateFinalQuestions(
   readme: string,
-  projectName?: string
+  projectName?: string,
+  model?: string,
+  hasReadme: boolean = true
 ): Promise<string> {
-  const userPrompt = buildFinalPrompt(readme, projectName);
-  const finalSystem = `You are an expert technical interviewer generating final-slide interview questions: 1 README question and 2 generic domain questions. Follow the user's format strictly.`;
-  return await callGroq(finalSystem, userPrompt);
+  const userPrompt = buildFinalPrompt(readme, projectName, hasReadme);
+  const finalSystem = `You are an expert technical interviewer generating final-slide interview questions. Follow the user's format strictly.`;
+  return await callGroq(finalSystem, userPrompt, model);
 }
