@@ -250,20 +250,11 @@ async function callGroq(systemPrompt: string, userPrompt: string, customModel?: 
 /**
  * Extract JSON from LLM response (handles markdown, extra text)
  */
-export async function generateQuestionsRaw(
-  code: string,
-  filename: string,
-  readmeContext?: string,
-  projectName?: string,
-  model?: string
-): Promise<string> {
-  if (!code || !filename) {
-    throw new Error('Code and filename are required');
-  }
-  const userPrompt = buildFilePrompt(code, filename, readmeContext, projectName);
-  const response = await callGroq(SYSTEM_PROMPT, userPrompt, model);
-
-  // Find first '{' and last '}'
+function extractJSON(raw: string): any | null {
+  const cleaned = raw
+    .replace(/```json/g, '')
+    .replace(/```/g, '')
+    .trim();
   const firstBrace = cleaned.indexOf('{');
   const lastBrace = cleaned.lastIndexOf('}');
   if (firstBrace === -1 || lastBrace === -1) return null;
@@ -274,6 +265,26 @@ export async function generateQuestionsRaw(
     return null;
   }
 }
+
+/**
+ * Generate raw questions string for a single file
+ */
+export async function generateQuestionsRaw(
+  code: string,
+  filename: string,
+  readmeContext?: string,
+  projectName?: string,
+  model?: string
+): Promise<string> {
+
+  if (!code || !filename) {
+    throw new Error('Code and filename are required');
+  }
+  const userPrompt = buildFilePrompt(code, filename, readmeContext, projectName);
+  const response = await callGroq(SYSTEM_PROMPT, userPrompt, model);
+  return response;
+}
+
 
 async function parseAndValidateResponse(rawResponse: string, retryCount = 0): Promise<any[]> {
   const parsedObj = extractJSON(rawResponse);
@@ -301,4 +312,71 @@ export async function generateFinalQuestions(
   const userPrompt = buildFinalPrompt(readme, projectName, hasReadme);
   const finalSystem = `You are an expert technical interviewer generating final-slide interview questions. Follow the user's format strictly.`;
   return await callGroq(finalSystem, userPrompt, model);
+}
+
+/**
+ * Generate questions for a single file as JSON array (with self‑critique, used by worker)
+ */
+export async function generateQuestionsForFile(
+  code: string,
+  filename: string,
+  readmeContext?: string,
+  projectName?: string,
+  astAnalysis?: any
+): Promise<any[]> {
+  if (!code || !filename) throw new Error('Code and filename required');
+
+  const userPrompt = buildFilePrompt(code, filename, readmeContext, projectName, astAnalysis);
+  let bestQuestions: any[] = [];
+  let bestScore = 0;
+
+  for (let attempt = 0; attempt < 2; attempt++) {
+    let response = await callGroq(SYSTEM_PROMPT, userPrompt);
+    let questions: any[];
+    try {
+      questions = await parseAndValidateResponse(response);
+    } catch (err) {
+      if (attempt === 0) {
+        console.warn(`Retrying generation for ${filename}`);
+        const retryPrompt = userPrompt + '\n\nIMPORTANT: Output ONLY valid JSON. Follow the schema exactly.';
+        response = await callGroq(SYSTEM_PROMPT, retryPrompt);
+        questions = await parseAndValidateResponse(response, 1);
+      } else {
+        throw err;
+      }
+    }
+    const score = await selfCritiqueQuestions(questions, code);
+    if (score > bestScore) {
+      bestScore = score;
+      bestQuestions = questions;
+    }
+    if (score >= 7) break;
+  }
+
+  // Fallback if still no questions (should not happen)
+  if (bestQuestions.length === 0) {
+    bestQuestions = [{
+      text: "[C★] Line 1: What is the purpose of this file?",
+      lineStart: 1,
+      lineEnd: null,
+      category: "C",
+      difficulty: "★",
+      answer: "This file contains the main logic of the module.",
+    }];
+  }
+  return bestQuestions;
+}
+
+/**
+ * Final slide questions as JSON array (used by worker)
+ */
+export async function generateFinalQuestionsJson(
+  readme: string,
+  projectName?: string
+): Promise<any[]> {
+  const userPrompt = buildFinalPrompt(readme, projectName);
+  const finalSystem = `You are an expert interviewer. Generate final slide questions as JSON only. Output ONLY JSON.`;
+  const response = await callGroq(finalSystem, userPrompt);
+  const parsed = extractJSON(response);
+  return parsed?.questions || [];
 }

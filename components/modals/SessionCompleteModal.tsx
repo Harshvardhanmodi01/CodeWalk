@@ -221,7 +221,7 @@ export default function SessionCompleteModal({
             </div>
 
             <div className="bg-surface-container-high border border-outline-variant p-4 rounded-xl flex items-center gap-4">
-              <span className="h-12 min-w-[48px] shrink-0 px-3 bg-secondary-fixed/10 border border-secondary-fixed/20 text-secondary-fixed-dim rounded-xl flex items-center justify-center text-xl font-bold font-mono">
+              <span className="h-12 min-w-[80px] shrink-0 px-3 bg-secondary-fixed/10 border border-secondary-fixed/20 text-secondary-fixed-dim rounded-xl flex items-center justify-center text-xl font-bold font-mono">
                 {formatSeconds(Object.values(questionTimes).reduce((a, b) => a + b, 0))}
               </span>
               <div>
@@ -231,7 +231,7 @@ export default function SessionCompleteModal({
             </div>
 
             <div className="bg-surface-container-high border border-outline-variant p-4 rounded-xl flex items-center gap-4">
-              <span className="h-12 min-w-[48px] shrink-0 px-3 bg-primary-container/10 border border-primary-fixed/20 text-primary-fixed rounded-xl flex items-center justify-center text-xl font-bold font-mono">
+              <span className="h-12 min-w-[64px] shrink-0 px-3 bg-primary-container/10 border border-primary-fixed/20 text-primary-fixed rounded-xl flex items-center justify-center text-xl font-bold font-mono">
                 {overallScore}%
               </span>
               <div>

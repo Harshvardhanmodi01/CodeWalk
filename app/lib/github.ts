@@ -28,6 +28,7 @@ function buildHeaders(customToken?: string): HeadersInit {
   const headers: HeadersInit = {
     Accept: 'application/vnd.github+json',
     'X-GitHub-Api-Version': '2022-11-28',
+    'User-Agent': 'CodeWalk-App',
   };
   const token = customToken || process.env.GITHUB_TOKEN;
   if (token) {
@@ -234,11 +235,7 @@ export async function getReadme(
     if (data.content && data.encoding === 'base64') {
       // Strip newlines that GitHub adds
       const cleaned = data.content.replace(/\n/g, '');
-      try {
-        return atob(cleaned);
-      } catch {
-        return Buffer.from(cleaned, 'base64').toString('utf-8');
-      }
+      return Buffer.from(cleaned, 'base64').toString('utf-8');
     }
     return null;
   } catch {

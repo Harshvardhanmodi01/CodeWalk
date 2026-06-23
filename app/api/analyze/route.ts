@@ -497,23 +497,24 @@ export async function POST(request: NextRequest) {
     // Final slide: README + Generic
     let readmeQuestions = '';
     let genericQuestions = '';
-    try {
-      const hasReadme = !!(readme && readme.trim().length > 0);
-      const finalRaw = await generateFinalQuestions(
-        readme || '',
-        repo,
-        model,
-        hasReadme
-      );
-      // Split into [D] vs [G] sections
-      const dMatch = finalRaw.match(/\[D\][\s\S]*?(?=\[G1\]|$)/);
-      const gMatch = finalRaw.match(/\[G1\][\s\S]*$/);
-      readmeQuestions = dMatch && hasReadme ? dMatch[0].trim() : '';
-      genericQuestions = gMatch ? gMatch[0].trim() : '';
-      const finalCount = (finalRaw.match(/^\[(D|G\d?)/gm) || []).length;
-      totalQuestions += finalCount;
-    } catch (err) {
-      warnings.push(`Final slide generation failed: ${err instanceof Error ? err.message : 'unknown'}`);
+    if (readme && readme.trim().length > 0) {
+      try {
+        const finalRaw = await generateFinalQuestions(
+          readme,
+          repo,
+          model,
+          true
+        );
+        // Split into [D] vs [G] sections
+        const dMatch = finalRaw.match(/\[D\][\s\S]*?(?=\[G1\]|$)/);
+        const gMatch = finalRaw.match(/\[G1\][\s\S]*$/);
+        readmeQuestions = dMatch ? dMatch[0].trim() : '';
+        genericQuestions = gMatch ? gMatch[0].trim() : '';
+        const finalCount = (finalRaw.match(/^\[(D|G\d?)/gm) || []).length;
+        totalQuestions += finalCount;
+      } catch (err) {
+        warnings.push(`Final slide generation failed: ${err instanceof Error ? err.message : 'unknown'}`);
+      }
     }
 
     const totalMs = Date.now() - t0;

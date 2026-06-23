@@ -161,7 +161,12 @@ export default function ResultsPage() {
           }
           const data = await res.json();
           if (data.content && data.encoding === 'base64') {
-            const decoded = atob(data.content.replace(/\n/g, ''));
+            const binaryString = atob(data.content.replace(/\n/g, ''));
+            const bytes = new Uint8Array(binaryString.length);
+            for (let i = 0; i < binaryString.length; i++) {
+              bytes[i] = binaryString.charCodeAt(i);
+            }
+            const decoded = new TextDecoder('utf-8').decode(bytes);
             if (!decoded || decoded.trim().length === 0) {
               throw new Error('README is empty');
             }

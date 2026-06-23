@@ -173,7 +173,7 @@ async function analyzeRepo(repoUrl, jobId) {
     }
     let readmeQuestions = '', genericQuestions = '';
     if (readme) {
-        const finalArray = await (0, gemini_1.generateFinalQuestions)(readme, repo);
+        const finalArray = await (0, gemini_1.generateFinalQuestionsJson)(readme, repo);
         const readmeQs = finalArray.filter(q => q.text?.startsWith('[D]'));
         const genericQs = finalArray.filter(q => q.text?.startsWith('[G1]') || q.text?.startsWith('[G2]'));
         if (readmeQs.length) {
