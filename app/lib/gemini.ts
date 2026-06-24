@@ -40,7 +40,7 @@ function isValidQuestion(q: any): boolean {
   return true;
 }
 
-// ---------- Self‑critique ----------
+// ---------- Self‑critique (UNCHANGED) ----------
 async function selfCritiqueQuestions(questionsArray: any[], code: string): Promise<number> {
   const critiquePrompt = `You are a strict judge. Score each question 1-10 based on:
 - Specificity (references exact line/block) [0-3]
@@ -63,18 +63,35 @@ Return only valid JSON: { "scores": [score1, score2, ...], "average": number }`;
   }
 }
 
-// ---------- System prompt (strict) ----------
-const SYSTEM_PROMPT = `You are an expert senior engineer. Generate interview questions about the code below.
+// ---------- System prompt (UPDATED — taxonomy enforced) ----------
+const SYSTEM_PROMPT = `You are an expert senior engineer conducting a technical interview. Generate EXACTLY 5 interview questions about the code below following a strict taxonomy.
+
+### TAXONOMY (you MUST generate exactly these 5 question types, in this order):
+1. [SURFACE — 1 question] Test basic code comprehension. Ask about a specific return value, variable state, or execution path at a named line. Difficulty: ★ (Junior)
+2. [DESIGN — 1st of 2] Test architectural judgment. Ask WHY a specific approach was chosen at a named line — e.g. "Why use X over Y here?". Difficulty: ★★ (Mid)
+3. [DESIGN — 2nd of 2] Test deeper design reasoning. Ask about a tradeoff, data structure choice, or algorithmic decision at a named line. Difficulty: ★★ (Mid)
+4. [EDGE CASE — 1 question] Test boundary condition thinking. Ask what happens at a specific line when input is null, empty, zero, very large, or malformed. Difficulty: ★★ (Mid)
+5. [ADVERSARIAL — 1 question] Test code-review skill. Point to a specific line and ask the candidate to identify a real bug, vulnerability, race condition, or performance trap that exists in the code. Difficulty: ★★★ (Senior)
 
 ### RULES:
-1. Output ONLY valid JSON matching the schema.
-2. Generate 4–6 questions.
-3. Every question must reference a SPECIFIC line number or block.
-4. Answers must be 1–2 sentences, derivable ONLY from the code.
-5. NEVER ask "what does this do". Use categories: return values, edge cases, security, performance.
+1. Output ONLY valid JSON matching the schema below. No markdown, no explanation.
+2. Generate EXACTLY 5 questions — one per taxonomy type, in the order above.
+3. Every question MUST reference a SPECIFIC line number or block (e.g. "Line 34", "Lines 56-58").
+4. Answers must be 1–2 sentences, derivable ONLY from the provided code — no outside knowledge.
+5. NEVER ask "what does this do" or "what is the purpose of". Every question must be specific and pointed.
+6. The adversarial question MUST identify a real flaw in the code — do not invent one. If the code is clean, find a subtle inefficiency or unhandled edge case.
+7. Category mapping:
+   - Surface → C (CodeLogic)
+   - Design → A (Architecture)
+   - Edge Case → C (CodeLogic) with edge-case framing
+   - Adversarial → B (Bug) or S (Security) or P (Performance), whichever fits
 
-### EXAMPLE GOOD:
-{"text":"[C★★] Line 34: What does calculateDiscount() return when user is not logged in?","lineStart":34,"lineEnd":null,"category":"C","difficulty":"★★","answer":"It returns 0 and logs a warning."}
+### EXAMPLE GOOD QUESTIONS (one per type):
+Surface:   {"text":"[C★] Line 18: What value does processToken() return when the token has expired?","lineStart":18,"lineEnd":null,"category":"C","difficulty":"★","answer":"It returns null and sets the session flag to false."}
+Design:    {"text":"[A★★] Line 34: Why is a Map used here instead of a plain object for storing user sessions?","lineStart":34,"lineEnd":null,"category":"A","difficulty":"★★","answer":"Maps preserve insertion order and allow non-string keys, which is needed for the numeric user IDs used here."}
+Design:    {"text":"[A★★] Lines 51-55: Why does this function return early instead of using an else branch?","lineStart":51,"lineEnd":55,"category":"A","difficulty":"★★","answer":"Early return reduces nesting depth and makes the happy path easier to follow; it also avoids the dangling-else problem."}
+Edge Case: {"text":"[C★★] Line 72: What happens at the slice() call when the input array is empty?","lineStart":72,"lineEnd":null,"category":"C","difficulty":"★★","answer":"slice() on an empty array returns [], so the loop below it never executes — no error is thrown but the caller silently gets an empty result."}
+Adversarial:{"text":"[B★★★] Lines 88-91: What bug exists in this retry loop that could cause it to run indefinitely under certain conditions?","lineStart":88,"lineEnd":91,"category":"B","difficulty":"★★★","answer":"The retry counter is only incremented inside the success branch, so a persistent failure never increments it and the loop never terminates."}
 
 ### OUTPUT JSON SCHEMA:
 {"questions":[{"text":"...","lineStart":42,"lineEnd":null,"category":"C","difficulty":"★★","answer":"..."}]}
@@ -85,7 +102,9 @@ const SYSTEM_PROMPT = `You are an expert senior engineer. Generate interview que
 ### INPUT CODE (with line numbers):`;
 
 /**
- * Build prompt with optional AST hints
+ * Build prompt with optional AST hints.
+ * UPDATED: taxonomy reminder injected at the end of the user prompt
+ * so the model sees it immediately before generating output.
  */
 function buildFilePrompt(
   code: string,
@@ -104,23 +123,34 @@ function buildFilePrompt(
 
   if (astAnalysis && astAnalysis.complexity !== undefined) {
     prompt += `## Code Analysis:\n- Complexity: ${astAnalysis.complexity}\n`;
-    if (astAnalysis.conditionals?.length) prompt += `- Conditionals: ${astAnalysis.conditionals.length} (edge cases)\n`;
-    if (astAnalysis.loops?.length) prompt += `- Loops: ${astAnalysis.loops.length} (ask about complexity)\n`;
-    if (astAnalysis.asyncCalls?.length) prompt += `- Async calls: ${astAnalysis.asyncCalls.map((c:any)=>c.callee).join(', ')} (error handling)\n`;
+    if (astAnalysis.conditionals?.length) prompt += `- Conditionals: ${astAnalysis.conditionals.length} (use for edge case question)\n`;
+    if (astAnalysis.loops?.length) prompt += `- Loops: ${astAnalysis.loops.length} (check for off-by-one or infinite loop in adversarial question)\n`;
+    if (astAnalysis.asyncCalls?.length) prompt += `- Async calls: ${astAnalysis.asyncCalls.map((c: any) => c.callee).join(', ')} (check error handling for adversarial question)\n`;
     prompt += `\n`;
   }
 
   prompt += `CODE:\n\`\`\`\n${numbered}\n\`\`\`\n\n`;
-  prompt += `Generate 4–6 JSON questions. Output ONLY the JSON object.`;
+
+  // Taxonomy reminder at point-of-generation — keeps the 5-question contract
+  // salient immediately before the model starts outputting JSON.
+  prompt += `REQUIRED OUTPUT: Generate EXACTLY 5 questions in this order:
+1. SURFACE (★, category C) — specific return value or execution path
+2. DESIGN #1 (★★, category A) — why this approach vs an alternative
+3. DESIGN #2 (★★, category A) — tradeoff or data structure choice
+4. EDGE CASE (★★, category C) — behaviour at a boundary condition
+5. ADVERSARIAL (★★★, category B/S/P) — real bug or vulnerability in the code
+
+Output ONLY the JSON object. No markdown. No explanation.`;
+
   return prompt;
 }
 
 function buildFinalPrompt(readme: string, projectName?: string): string {
-  return `PROJECT: ${projectName || 'Unknown'}\nREADME:\n${readme.slice(0,4000)}\n\nGenerate 3 final JSON questions. Output ONLY JSON.`;
+  return `PROJECT: ${projectName || 'Unknown'}\nREADME:\n${readme.slice(0, 4000)}\n\nGenerate 3 final JSON questions. Output ONLY JSON.`;
 }
 
 /**
- * Call Groq with timeout
+ * Call Groq with timeout (UNCHANGED)
  */
 async function callGroq(systemPrompt: string, userPrompt: string): Promise<string> {
   const groq = getClient();
@@ -151,17 +181,15 @@ async function callGroq(systemPrompt: string, userPrompt: string): Promise<strin
 }
 
 /**
- * Extract JSON from LLM response (handles markdown, extra text)
+ * Extract JSON from LLM response (UNCHANGED)
  */
 function extractJSON(text: string): any | null {
-  // Remove markdown code fences
   let cleaned = text.trim();
   if (cleaned.startsWith('```json')) cleaned = cleaned.slice(7);
   else if (cleaned.startsWith('```')) cleaned = cleaned.slice(3);
   if (cleaned.endsWith('```')) cleaned = cleaned.slice(0, -3);
   cleaned = cleaned.trim();
 
-  // Find first '{' and last '}'
   const firstBrace = cleaned.indexOf('{');
   const lastBrace = cleaned.lastIndexOf('}');
   if (firstBrace === -1 || lastBrace === -1) return null;
@@ -188,7 +216,7 @@ async function parseAndValidateResponse(rawResponse: string, retryCount = 0): Pr
 }
 
 /**
- * Generate questions for a single file (with self‑critique)
+ * Generate questions for a single file (with self‑critique) (UNCHANGED)
  */
 export async function generateQuestionsForFile(
   code: string,
@@ -211,7 +239,7 @@ export async function generateQuestionsForFile(
     } catch (err) {
       if (attempt === 0) {
         console.warn(`Retrying generation for ${filename}`);
-        const retryPrompt = userPrompt + '\n\nIMPORTANT: Output ONLY valid JSON. Follow the schema exactly.';
+        const retryPrompt = userPrompt + '\n\nIMPORTANT: Output ONLY valid JSON. Follow the schema exactly. Generate EXACTLY 5 questions in the taxonomy order.';
         response = await callGroq(SYSTEM_PROMPT, retryPrompt);
         questions = await parseAndValidateResponse(response, 1);
       } else {
@@ -224,7 +252,7 @@ export async function generateQuestionsForFile(
       bestQuestions = questions;
     }
     if (score >= 7) break;
-   }
+  }
 
   // Fallback if still no questions (should not happen)
   if (bestQuestions.length === 0) {
@@ -241,7 +269,7 @@ export async function generateQuestionsForFile(
 }
 
 /**
- * Final slide questions
+ * Final slide questions (UNCHANGED)
  */
 export async function generateFinalQuestions(readme: string, projectName?: string): Promise<any[]> {
   const userPrompt = buildFinalPrompt(readme, projectName);
