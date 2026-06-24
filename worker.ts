@@ -10,6 +10,9 @@ import { smartTruncate, getFilePriority } from './app/lib/utils';
 import { analyzeCodeAST } from './app/lib/astAnalyzer';
 import { analyzePythonCode } from './app/lib/pythonAstParser';
 import { analyzeCodeAST as analyzeCppAST } from './app/lib/astAnalyzerCpp';
+import { runExclusionPass } from './app/lib/fileExclusion';
+import { buildImportGraph, getInDegrees, type FileWithContent } from './app/lib/importGraph';
+import { scoreFiles, topFilesFromScored } from './app/lib/fileScoring';
 
 const REDIS_URL = process.env.REDIS_URL!;
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -31,9 +34,27 @@ function buildSnippet(code: string, lineNumber: number): string {
   return out.join('\n');
 }
 
+/**
+ * Attempt to fetch the repo's .gitignore and return its raw text.
+ * Returns null if not present or unreachable.
+ */
+async function fetchGitignore(owner: string, repo: string): Promise<string | null> {
+  try {
+    const items = await fetchRepoContents(owner, repo, '');
+    const gitignoreEntry = items.find(
+      (f) => f.type === 'file' && f.name === '.gitignore' && f.download_url
+    );
+    if (!gitignoreEntry?.download_url) return null;
+    return await fetchFileContent(gitignoreEntry.download_url);
+  } catch {
+    return null;
+  }
+}
+
 async function collectCodeFiles(owner: string, repo: string) {
   const root = await fetchRepoContents(owner, repo, '');
   const collected: any[] = [];
+  // Pre-exclusion: skip obviously irrelevant top-level dirs to avoid API quota waste
   const skipDirs = new Set(['node_modules', 'dist', 'build', '.next', 'vendor', '__pycache__', '.git', 'public', 'static']);
   for (const item of root) {
     if (item.type === 'file' && isCodeFile(item.name)) {
@@ -47,7 +68,17 @@ async function collectCodeFiles(owner: string, repo: string) {
       } catch { /* ignore */ }
     }
   }
-  return collected;
+
+  // ── Hard exclusion pass ───────────────────────────────────────────────────
+  // Run BEFORE any scoring or selection so no generated/config/test file
+  // ever reaches the analysis pipeline.
+  const gitignoreText = await fetchGitignore(owner, repo);
+  const filtered = runExclusionPass(collected, gitignoreText);
+  console.log(
+    `[collectCodeFiles] ${collected.length} raw files → ${filtered.length} after exclusion pass` +
+    (gitignoreText ? ' (+ .gitignore applied)' : '')
+  );
+  return filtered;
 }
 
 async function analyzeRepo(repoUrl: string, jobId: string) {
@@ -62,44 +93,63 @@ async function analyzeRepo(repoUrl: string, jobId: string) {
     throw new Error('No JavaScript/TypeScript, Python, or C/C++ files found');
   }
 
-  const sorted = supportedFiles
-    .map((f) => ({ ...f, priority: getFilePriority(f.path) }))
-    .sort((a, b) => a.priority - b.priority || a.path.length - b.path.length);
-  const topFiles = sorted.slice(0, 3);
+  // ── Phase 1: fetch all content + run AST on every supported file ──────────
+  // We need content for the import graph regardless, so fetch eagerly.
+  const contentMap: Record<string, string> = {};
+  const astMap: Record<string, any> = {};
+
+  await Promise.all(supportedFiles.map(async (file) => {
+    if (!file.download_url) return;
+    try {
+      const content = await fetchFileContent(file.download_url);
+      if (!content || content.trim().length === 0) return;
+      contentMap[file.path] = content;
+
+      const { truncatedCode } = smartTruncate(content);
+      const isJS = /\.(js|jsx|ts|tsx)$/i.test(file.path);
+      const isPy = /\.py$/i.test(file.path);
+      const isCpp = /\.(c|cpp|cc|cxx)$/i.test(file.path);
+
+      if (isJS) {
+        try { astMap[file.path] = analyzeCodeAST(truncatedCode, file.path); }
+        catch (e) { console.warn(`JS/TS AST failed for ${file.path}:`, e); }
+      } else if (isPy) {
+        try { astMap[file.path] = await analyzePythonCode(truncatedCode); }
+        catch (e) { console.warn(`Python AST failed for ${file.path}:`, e); }
+      } else if (isCpp) {
+        try { astMap[file.path] = await analyzeCppAST(truncatedCode); }
+        catch (e) { console.warn(`C++ AST failed for ${file.path}:`, e); }
+      }
+    } catch (e) {
+      console.warn(`Failed to fetch ${file.path}:`, e);
+    }
+  }));
+
+  // ── Phase 2: build import graph → centrality ─────────────────────────────
+  const filesWithContent: FileWithContent[] = Object.entries(contentMap).map(
+    ([path, content]) => ({ path, content })
+  );
+  const importGraph = buildImportGraph(filesWithContent);
+  const centralityMap = getInDegrees(importGraph);  // raw in-degrees
+
+  // ── Phase 3: score + rank → pick top N ───────────────────────────────────
+  // scoreFiles() normalises both signals and returns sorted ScoredFile[].
+  const scored = scoreFiles(supportedFiles, astMap, centralityMap);
+  const topFiles = topFilesFromScored(scored);
+  console.log(
+    `[analyzeRepo] ${supportedFiles.length} candidates → top ${topFiles.length} selected by scoring`
+  );
+
   const fileResults: Array<{ fileName: string; questions: string; codeSnapshots: Array<{ lineNumber: number; snippet: string }> }> = [];
   let totalQuestions = 0;
   const warnings: string[] = [];
 
   for (const file of topFiles) {
-    if (!file.download_url) continue;
-    const content = await fetchFileContent(file.download_url);
+    // Content and AST already fetched in Phase 1 above
+    const content = contentMap[file.path];
     if (!content || content.trim().length === 0) continue;
     const { truncatedCode } = smartTruncate(content);
-
-    let astAnalysis = null;
-    const isJS = /\.(js|jsx|ts|tsx)$/i.test(file.path);
-    const isPython = /\.py$/i.test(file.path);
-    const isCpp = /\.(c|cpp|cc|cxx)$/i.test(file.path);
-
-    if (isJS) {
-      try {
-        astAnalysis = analyzeCodeAST(truncatedCode, file.path);
-      } catch (err) {
-        console.warn(`JS/TS AST failed for ${file.path}:`, err);
-      }
-    } else if (isPython) {
-      try {
-        astAnalysis = await analyzePythonCode(truncatedCode);
-      } catch (err) {
-        console.warn(`Python AST failed for ${file.path}:`, err);
-      }
-    } else if (isCpp) {
-      try {
-        astAnalysis = await analyzeCppAST(truncatedCode);
-      } catch (err) {
-        console.warn(`C++ AST failed for ${file.path}:`, err);
-      }
-    }
+    const astAnalysis = astMap[file.path] ?? null;
 
     let questionsArray: any[] = [];
     try {
