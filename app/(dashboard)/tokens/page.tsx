@@ -1,13 +1,20 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import SummaryCards from '@/components/tokens/SummaryCards';
 import UsageChart from '@/components/tokens/UsageChart';
 import TokenTable from '@/components/tokens/TokenTable';
+import { useGlobal } from '@/app/context/GlobalContext';
 
 export default function TokenUsageDashboard() {
   const router = useRouter();
+  const { user } = useGlobal();
+
+  useEffect(() => {
+    // Re-fetch or sync state when auth changes
+    console.log('TokenUsageDashboard: auth session changed, user =', user?.email || 'guest');
+  }, [user]);
 
   return (
     <div className="flex-grow flex flex-col bg-surface overflow-hidden min-h-screen">

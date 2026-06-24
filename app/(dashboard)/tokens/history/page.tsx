@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { useGlobal } from '@/app/context/GlobalContext';
 
 interface HistoryLog {
   timestamp: string;
@@ -18,8 +19,14 @@ export default function TokenHistoryLogPage() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'All' | 'Success' | 'Failed'>('All');
   const [logs, setLogs] = useState<HistoryLog[]>([]);
+  const { user } = useGlobal();
 
   useEffect(() => {
+    if (!user) {
+      setLogs([]);
+      return;
+    }
+
     // Load dynamic logs from localStorage
     const stored = localStorage.getItem('cw_analyses');
     const dynamicAnalyses = stored ? JSON.parse(stored) : [];
@@ -67,7 +74,7 @@ export default function TokenHistoryLogPage() {
     ];
 
     setLogs([...dynamicLogs, ...staticLogs]);
-  }, []);
+  }, [user]);
 
   const filteredLogs = logs.filter((log) => {
     const matchesSearch = log.repo.toLowerCase().includes(search.toLowerCase());

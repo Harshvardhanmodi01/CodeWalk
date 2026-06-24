@@ -72,11 +72,11 @@ export default function AppContent({ children }: { children: React.ReactNode }) 
     }`;
 
   const isDashboardOrAuth = 
+    pathname === '/' ||
     pathname?.startsWith('/dashboard') || 
     pathname?.startsWith('/results') || 
     pathname?.startsWith('/history') || 
     pathname?.startsWith('/profile') || 
-    pathname?.startsWith('/pricing') || 
     pathname?.startsWith('/tokens') || 
     pathname?.startsWith('/login') || 
     pathname?.startsWith('/signup') || 

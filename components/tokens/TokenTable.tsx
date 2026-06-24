@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useGlobal } from '@/app/context/GlobalContext';
 
 interface TokenLog {
   repo: string;
@@ -13,8 +14,14 @@ interface TokenLog {
 export default function TokenTable() {
   const [search, setSearch] = useState('');
   const [logs, setLogs] = useState<TokenLog[]>([]);
+  const { user } = useGlobal();
 
   useEffect(() => {
+    if (!user) {
+      setLogs([]);
+      return;
+    }
+
     // Load dynamic logs from localStorage
     const stored = localStorage.getItem('cw_analyses');
     const dynamicAnalyses = stored ? JSON.parse(stored) : [];
@@ -53,7 +60,7 @@ export default function TokenTable() {
     ];
 
     setLogs([...dynamicLogs, ...staticLogs]);
-  }, []);
+  }, [user]);
 
   const filteredLogs = logs.filter((log) => 
     log.repo.toLowerCase().includes(search.toLowerCase())

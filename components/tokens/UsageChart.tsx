@@ -1,18 +1,22 @@
 'use client';
 
 import React, { useState } from 'react';
+import { useGlobal } from '@/app/context/GlobalContext';
 
 export default function UsageChart() {
   const [range, setRange] = useState<'7d' | '30d'>('7d');
+  const { user, tokenStats } = useGlobal();
+
+  const todayPercentage = user && tokenStats.limit > 0 ? Math.round((tokenStats.used / tokenStats.limit) * 100) : 0;
 
   const days = [
-    { label: 'Mon', height: 'h-[45%]', tokens: '45,000', active: false },
-    { label: 'Tue', height: 'h-[60%]', tokens: '60,000', active: false },
-    { label: 'Wed', height: 'h-[85%]', tokens: '85,000', active: false },
-    { label: 'Thu', height: 'h-[40%]', tokens: '40,000', active: false },
-    { label: 'Fri', height: 'h-[95%]', tokens: '95,000', active: false },
-    { label: 'Sat', height: 'h-[55%]', tokens: '55,000', active: false },
-    { label: 'Today', height: 'h-[68%]', tokens: '68,432', active: true }
+    { label: 'Mon', height: user ? '45%' : '0%', tokens: user ? '45,000' : '0', active: false },
+    { label: 'Tue', height: user ? '60%' : '0%', tokens: user ? '60,000' : '0', active: false },
+    { label: 'Wed', height: user ? '85%' : '0%', tokens: user ? '85,000' : '0', active: false },
+    { label: 'Thu', height: user ? '40%' : '0%', tokens: user ? '40,000' : '0', active: false },
+    { label: 'Fri', height: user ? '95%' : '0%', tokens: user ? '95,000' : '0', active: false },
+    { label: 'Sat', height: user ? '55%' : '0%', tokens: user ? '55,000' : '0', active: false },
+    { label: 'Today', height: `${todayPercentage}%`, tokens: user ? tokenStats.used.toLocaleString() : '0', active: true }
   ];
 
   return (
@@ -54,11 +58,14 @@ export default function UsageChart() {
               </div>
 
               {/* Progress color fill */}
-              <div className={`absolute bottom-0 left-0 right-0 ${day.height} rounded-t-sm transition-all duration-300 ${
-                day.active 
-                  ? 'bg-tertiary-fixed glow-cyan' 
-                  : 'bg-primary/40 group-hover:bg-primary/60'
-              }`}></div>
+              <div 
+                style={{ height: day.height }}
+                className={`absolute bottom-0 left-0 right-0 rounded-t-sm transition-all duration-300 ${
+                  day.active 
+                    ? 'bg-tertiary-fixed glow-cyan' 
+                    : 'bg-primary/40 group-hover:bg-primary/60'
+                }`}
+              ></div>
             </div>
 
             <span className={`font-code-sm text-[10px] font-mono ${day.active ? 'text-tertiary-fixed font-bold' : 'text-on-surface-variant/75'}`}>

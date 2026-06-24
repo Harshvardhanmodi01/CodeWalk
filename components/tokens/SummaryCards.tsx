@@ -1,21 +1,16 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { useRouter } from 'next/navigation';
+import { useGlobal } from '@/app/context/GlobalContext';
 
 export default function SummaryCards() {
   const router = useRouter();
-  const [tokensUsed, setTokensUsed] = useState(68432);
-  const limit = 100000;
+  const { user, tokenStats } = useGlobal();
+  const tokensUsed = user ? tokenStats.used : 0;
+  const limit = user ? tokenStats.limit : 50000;
 
-  useEffect(() => {
-    const t = localStorage.getItem('cw_quota_tokens');
-    if (t) {
-      setTokensUsed(parseInt(t));
-    }
-  }, []);
-
-  const percentage = Math.round((tokensUsed / limit) * 100);
+  const percentage = limit > 0 ? Math.round((tokensUsed / limit) * 100) : 0;
   
   // SVG circular properties
   const radius = 80;

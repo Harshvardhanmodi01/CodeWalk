@@ -55,7 +55,7 @@ const GlobalContext = createContext<GlobalContextType | undefined>(undefined);
 
 export function GlobalProvider({ children }: { children: React.ReactNode }) {
   // Theme state
-  const [theme, setTheme] = useState<'light' | 'dark'>('light');
+  const [theme, setTheme] = useState<'light' | 'dark'>('dark');
 
   // User state
   const [user, setUser] = useState<User | null>(null);
@@ -77,7 +77,7 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
   // Token usage state
   const [tokenStats, setTokenStats] = useState<TokenStats>({
     limit: 50000,
-    used: 12500,
+    used: 0,
     history: [],
   });
 
@@ -89,10 +89,8 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
         setTheme(storedTheme);
         document.documentElement.classList.toggle('dark', storedTheme === 'dark');
       } else {
-        const darkMediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-        const preferredTheme = darkMediaQuery.matches ? 'dark' : 'light';
-        setTheme(preferredTheme);
-        document.documentElement.classList.toggle('dark', preferredTheme === 'dark');
+        setTheme('dark');
+        document.documentElement.classList.toggle('dark', true);
       }
     } catch {}
 
@@ -124,7 +122,7 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
             bitbucketConnected: false,
           });
           setSubscription('Free');
-          setTokenStats({ limit: 50000, used: 12500, history: [] });
+          setTokenStats({ limit: 50000, used: 0, history: [] });
         }
       }
     );

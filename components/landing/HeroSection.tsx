@@ -64,10 +64,10 @@ export default function HeroSection() {
       {/* Background Grid Accent */}
       <div className="absolute inset-0 pointer-events-none opacity-[0.03]" style={{ backgroundImage: 'linear-gradient(#dce4e5 1px, transparent 1px), linear-gradient(90deg, #dce4e5 1px, transparent 1px)', backgroundSize: '40px 40px' }}></div>
 
-      <div className="container max-w-container-max mx-auto px-margin-desktop grid grid-cols-1 lg:grid-cols-12 gap-8 items-center z-10">
+      <div className="container max-w-container-max mx-auto px-margin-desktop grid grid-cols-1 xl:grid-cols-12 gap-8 items-center z-10">
         
-        {/* Left Panel: Recruiter manual review chaos */}
-        <div className="hidden lg:flex lg:col-span-3 relative h-[500px] items-center justify-center">
+        {/* Left Panel: Recruiter manual review chaos - visible only on xl screens */}
+        <div className="hidden xl:flex xl:col-span-3 relative h-[500px] items-center justify-center">
           <div className="w-48 h-64 bg-white/5 border border-outline-variant p-4 shadow-xl text-[10px] text-on-surface-variant/50 font-code-sm rotate-[-12deg] absolute left-0 top-[40px]">
             <div className="w-full h-2 bg-error/20 mb-2"></div>
             <div className="w-full h-2 bg-error/20 mb-2"></div>
@@ -88,7 +88,7 @@ export default function HeroSection() {
         </div>
 
         {/* Center: Main CTA & Terminal */}
-        <div className="lg:col-span-6 flex flex-col items-center text-center space-y-12">
+        <div className="col-span-12 xl:col-span-6 flex flex-col items-center text-center space-y-12 w-full">
           <div className="space-y-4">
             <h1 className="font-headline-lg text-headline-lg lg:text-[64px] lg:leading-tight text-on-surface tracking-tight font-extrabold">
               Deep Technical <span className="text-primary-fixed">Intelligence</span>.
@@ -99,35 +99,37 @@ export default function HeroSection() {
           </div>
 
           {/* Terminal styled CTA Box */}
-          <form onSubmit={handleSubmit} className="w-full max-w-xl group relative">
+          <form onSubmit={handleSubmit} className="w-full max-w-xl group relative px-4 sm:px-0">
             <div className="bg-surface-container-lowest border border-outline-variant p-1 glow-cyan transition-all duration-500 group-hover:border-primary-fixed/50 rounded-lg">
-              <div className="bg-surface-container-low border border-outline-variant flex items-center px-4 py-3 sm:py-4 space-x-3 terminal-shadow rounded">
-                <span className="text-primary-fixed font-code-md text-code-md select-none font-mono">$</span>
-                <div className="flex-1 text-left font-code-md text-code-md text-on-surface overflow-hidden whitespace-nowrap flex items-center font-mono">
-                  <span>codewalk analyze&nbsp;</span>
-                  {isFocused ? (
-                    <input
-                      type="text"
-                      className="bg-transparent border-none focus:ring-0 p-0 text-primary-fixed w-full outline-none font-mono"
-                      value={inputValue}
-                      onChange={(e) => setInputValue(e.target.value)}
-                      placeholder="https://github.com/username/repo"
-                      onBlur={() => setIsFocused(false)}
-                      autoFocus
-                    />
-                  ) : (
-                    <span 
-                      onClick={() => setIsFocused(true)}
-                      className="text-primary-fixed-dim cursor-text select-none flex items-center w-full"
-                    >
-                      {inputValue || typedPlaceholder}
-                      <span className="border-l-2 border-primary-fixed ml-0.5 cursor-blink h-5 align-middle"></span>
-                    </span>
-                  )}
+              <div className="bg-surface-container-low border border-outline-variant flex flex-col sm:flex-row items-stretch sm:items-center p-2.5 sm:p-3 sm:space-x-3 terminal-shadow rounded gap-2 sm:gap-0">
+                <div className="flex-1 flex items-center px-2 py-1.5 space-x-2 overflow-hidden">
+                  <span className="text-primary-fixed font-code-md text-code-md select-none font-mono">$</span>
+                  <div className="flex-1 text-left font-code-md text-code-md text-on-surface overflow-hidden whitespace-nowrap flex items-center font-mono">
+                    <span className="shrink-0 text-on-surface-variant/70">codewalk analyze&nbsp;</span>
+                    {isFocused ? (
+                      <input
+                        type="text"
+                        className="bg-transparent border-none focus:ring-0 p-0 text-primary-fixed w-full outline-none font-mono text-sm"
+                        value={inputValue}
+                        onChange={(e) => setInputValue(e.target.value)}
+                        placeholder="https://github.com/username/repo"
+                        onBlur={() => setIsFocused(false)}
+                        autoFocus
+                      />
+                    ) : (
+                      <span 
+                        onClick={() => setIsFocused(true)}
+                        className="text-primary-fixed-dim cursor-text select-none flex items-center w-full overflow-hidden text-ellipsis text-sm"
+                      >
+                        {inputValue || typedPlaceholder}
+                        <span className="border-l-2 border-primary-fixed ml-0.5 cursor-blink h-5 align-middle"></span>
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <button 
                   type="submit" 
-                  className="bg-primary-fixed text-on-primary-fixed px-4 py-2 font-label-sm text-label-sm font-bold flex items-center gap-2 hover:opacity-90 transition-all active:scale-95 shrink-0"
+                  className="bg-primary-fixed text-on-primary-fixed px-5 py-2.5 font-label-sm text-label-sm font-bold flex items-center justify-center gap-2 hover:opacity-90 transition-all active:scale-95 shrink-0 rounded"
                 >
                   ANALYZE
                   <span className="material-symbols-outlined text-sm font-bold">arrow_forward</span>
@@ -147,8 +149,8 @@ export default function HeroSection() {
           </div>
         </div>
 
-        {/* Right Panel: Clean Structured CodeWalk Output */}
-        <div className="hidden lg:flex lg:col-span-3 flex-col space-y-4 h-[500px] overflow-hidden relative">
+        {/* Right Panel: Clean Structured CodeWalk Output - visible only on xl screens */}
+        <div className="hidden xl:flex xl:col-span-3 flex-col space-y-4 h-[500px] overflow-hidden relative">
           <div className="bg-surface-container-high border border-outline-variant p-4 space-y-4 transform translate-y-8 w-full rounded-lg">
             <div className="flex items-center justify-between">
               <span className="font-label-sm text-label-sm text-primary-fixed font-bold tracking-widest">ANALYSIS COMPLETE</span>

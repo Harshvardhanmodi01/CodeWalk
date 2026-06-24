@@ -10,9 +10,11 @@ export default function Navbar() {
         CodeWalk
       </Link>
       <div className="hidden md:flex items-center gap-8">
-        <a className="font-body-md text-body-md text-primary-fixed font-bold hover:opacity-80" href="#">Docs</a>
+        <Link className="font-body-md text-body-md text-on-surface-variant hover:text-primary-fixed transition-colors" href="/how-it-works">How it Works</Link>
+        <Link className="font-body-md text-body-md text-on-surface-variant hover:text-primary-fixed transition-colors" href="/about">About Us</Link>
+        <Link className="font-body-md text-body-md text-on-surface-variant hover:text-primary-fixed transition-colors" href="/blog">Blog</Link>
+        <Link className="font-body-md text-body-md text-on-surface-variant hover:text-primary-fixed transition-colors" href="/support">Support</Link>
         <Link className="font-body-md text-body-md text-on-surface-variant hover:text-primary-fixed transition-colors" href="/pricing">Pricing</Link>
-        <a className="font-body-md text-body-md text-on-surface-variant hover:text-primary-fixed transition-colors" href="#">Changelog</a>
       </div>
       <div className="flex items-center gap-4">
         <Link href="/login" className="px-4 py-2 font-label-sm text-label-sm text-on-surface hover:text-primary-fixed transition-colors">Login</Link>
