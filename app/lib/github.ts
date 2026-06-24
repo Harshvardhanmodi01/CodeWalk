@@ -24,12 +24,13 @@ const sleep = (ms: number): Promise<void> =>
 /**
  * Build GitHub API headers with optional auth token
  */
-function buildHeaders(): HeadersInit {
+function buildHeaders(customToken?: string): HeadersInit {
   const headers: HeadersInit = {
     Accept: 'application/vnd.github+json',
     'X-GitHub-Api-Version': '2022-11-28',
+    'User-Agent': 'CodeWalk-App',
   };
-  const token = process.env.GITHUB_TOKEN;
+  const token = customToken || process.env.GITHUB_TOKEN;
   if (token) {
     (headers as Record<string, string>).Authorization = `Bearer ${token}`;
   }
@@ -123,15 +124,26 @@ function parseLinkHeader(header: string | null): { next?: string } {
 export async function fetchRepoContents(
   owner: string,
   repo: string,
-  path: string = ''
+  path: string = '',
+  branch?: string,
+  token?: string
 ): Promise<GitHubFile[]> {
-  const url = `${GITHUB_API_BASE}/repos/${owner}/${repo}/contents/${path}`;
+  let url = `${GITHUB_API_BASE}/repos/${owner}/${repo}/contents/${path}`;
+  if (branch) {
+    url += `?ref=${encodeURIComponent(branch)}`;
+  }
   const allItems: GitHubFile[] = [];
   let nextUrl: string | undefined = url;
 
   while (nextUrl) {
-    const response: Response = await fetchWithRetry(nextUrl, {
-      headers: buildHeaders(),
+    // Append branch ref to paginated URLs if not already present
+    let finalUrl = nextUrl;
+    if (branch && !finalUrl.includes('ref=')) {
+      finalUrl += (finalUrl.includes('?') ? '&' : '?') + `ref=${encodeURIComponent(branch)}`;
+    }
+
+    const response: Response = await fetchWithRetry(finalUrl, {
+      headers: buildHeaders(token),
     });
 
     if (response.status === 404) {
@@ -167,13 +179,15 @@ export async function fetchRepoContents(
 /**
  * Fetch raw file content from a download URL.
  */
-export async function fetchFileContent(url: string): Promise<string> {
+export async function fetchFileContent(url: string, token?: string): Promise<string> {
   if (!url) {
     throw new Error('Download URL is required');
   }
 
   try {
-    const response = await fetchWithRetry(url);
+    const response = await fetchWithRetry(url, {
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    });
     if (!response.ok) {
       throw new Error(`Failed to fetch file: ${response.status}`);
     }
@@ -203,11 +217,16 @@ export function isCodeFile(filename: string): boolean {
  */
 export async function getReadme(
   owner: string,
-  repo: string
+  repo: string,
+  branch?: string,
+  token?: string
 ): Promise<string | null> {
   try {
-    const url = `${GITHUB_API_BASE}/repos/${owner}/${repo}/readme`;
-    const response = await fetchWithRetry(url, { headers: buildHeaders() });
+    let url = `${GITHUB_API_BASE}/repos/${owner}/${repo}/readme`;
+    if (branch) {
+      url += `?ref=${encodeURIComponent(branch)}`;
+    }
+    const response = await fetchWithRetry(url, { headers: buildHeaders(token) });
 
     if (response.status === 404) return null;
     if (!response.ok) return null;
@@ -216,11 +235,7 @@ export async function getReadme(
     if (data.content && data.encoding === 'base64') {
       // Strip newlines that GitHub adds
       const cleaned = data.content.replace(/\n/g, '');
-      try {
-        return atob(cleaned);
-      } catch {
-        return Buffer.from(cleaned, 'base64').toString('utf-8');
-      }
+      return Buffer.from(cleaned, 'base64').toString('utf-8');
     }
     return null;
   } catch {

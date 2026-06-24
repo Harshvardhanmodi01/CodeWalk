@@ -5,8 +5,8 @@ dotenv.config({ path: path.resolve(process.cwd(), '.env.local') });
 import { Worker } from 'bullmq';
 import { createClient } from '@supabase/supabase-js';
 import { extractRepoInfo, fetchRepoContents, fetchFileContent, isCodeFile, getReadme } from './app/lib/github';
-import { generateQuestionsForFile, generateFinalQuestions } from './app/lib/gemini';
-import { smartTruncate } from './app/lib/utils';
+import { generateQuestionsForFile, generateFinalQuestionsJson } from './app/lib/gemini';
+import { smartTruncate, getFilePriority } from './app/lib/utils';
 import { analyzeCodeAST } from './app/lib/astAnalyzer';
 import { analyzePythonCode } from './app/lib/pythonAstParser';
 import { analyzeCodeAST as analyzeCppAST } from './app/lib/astAnalyzerCpp';
@@ -106,8 +106,8 @@ async function analyzeRepo(repoUrl: string, jobId: string) {
       contentMap[file.path] = content;
 
       const { truncatedCode } = smartTruncate(content);
-      const isJS  = /\.(js|jsx|ts|tsx)$/i.test(file.path);
-      const isPy  = /\.py$/i.test(file.path);
+      const isJS = /\.(js|jsx|ts|tsx)$/i.test(file.path);
+      const isPy = /\.py$/i.test(file.path);
       const isCpp = /\.(c|cpp|cc|cxx)$/i.test(file.path);
 
       if (isJS) {
@@ -192,7 +192,7 @@ async function analyzeRepo(repoUrl: string, jobId: string) {
 
   let readmeQuestions = '', genericQuestions = '';
   if (readme) {
-    const finalArray = await generateFinalQuestions(readme, repo);
+    const finalArray = await generateFinalQuestionsJson(readme, repo);
     const readmeQs = finalArray.filter(q => q.text?.startsWith('[D]'));
     const genericQs = finalArray.filter(q => q.text?.startsWith('[G1]') || q.text?.startsWith('[G2]'));
     if (readmeQs.length) {

@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>CodeWalk | Assessment Overview</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&amp;family=Geist:wght@400;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .active-glow {
+            box-shadow: 0px 0px 12px rgba(125, 244, 255, 0.3);
+        }
+        .code-scrollbar::-webkit-scrollbar {
+            width: 8px;
+        }
+        .code-scrollbar::-webkit-scrollbar-track {
+            background: #0d1515;
+        }
+        .code-scrollbar::-webkit-scrollbar-thumb {
+            background: #3b494b;
+            border-radius: 4px;
+        }
+        .code-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #849495;
+        }
+        /* Custom toggle styling */
+        .toggle-checkbox:checked + .toggle-label {
+            background-color: #00dbe9;
+        }
+        .toggle-checkbox:checked + .toggle-label .toggle-dot {
+            transform: translateX(100%);
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-container-highest": "#2e3637",
+                        "inverse-surface": "#dce4e5",
+                        "secondary": "#e0b6ff",
+                        "primary-fixed": "#7df4ff",
+                        "surface-container-low": "#151d1e",
+                        "surface-tint": "#00dbe9",
+                        "on-tertiary-container": "#715d00",
+                        "on-secondary-container": "#d7a4ff",
+                        "tertiary": "#fff5de",
+                        "primary-fixed-dim": "#00dbe9",
+                        "surface-variant": "#2e3637",
+                        "on-error-container": "#ffdad6",
+                        "secondary-fixed-dim": "#e0b6ff",
+                        "surface-container-lowest": "#080f10",
+                        "on-background": "#dce4e5",
+                        "on-primary-container": "#006970",
+                        "on-primary": "#00363a",
+                        "on-tertiary-fixed-variant": "#554500",
+                        "surface-container": "#192122",
+                        "surface": "#0d1515",
+                        "on-primary-fixed": "#002022",
+                        "outline-variant": "#3b494b",
+                        "tertiary-fixed": "#ffe179",
+                        "on-primary-fixed-variant": "#004f54",
+                        "inverse-primary": "#006970",
+                        "outline": "#849495",
+                        "tertiary-fixed-dim": "#eac324",
+                        "error-container": "#93000a",
+                        "on-secondary-fixed-variant": "#6a0baa",
+                        "inverse-on-surface": "#2a3233",
+                        "on-secondary-fixed": "#2e004e",
+                        "background": "#0d1515",
+                        "error": "#ffb4ab",
+                        "on-tertiary-fixed": "#231b00",
+                        "secondary-container": "#6d11ad",
+                        "surface-bright": "#333b3b",
+                        "surface-container-high": "#232b2c",
+                        "primary-container": "#00f0ff",
+                        "primary": "#dbfcff",
+                        "surface-dim": "#0d1515",
+                        "secondary-fixed": "#f2daff",
+                        "tertiary-container": "#fed639",
+                        "on-secondary": "#4c007d",
+                        "on-surface": "#dce4e5",
+                        "on-surface-variant": "#b9cacb",
+                        "on-tertiary": "#3b2f00",
+                        "on-error": "#690005"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "sidebar-width": "280px",
+                        "margin-mobile": "16px",
+                        "container-max": "1440px",
+                        "margin-desktop": "32px",
+                        "gutter": "16px",
+                        "unit": "4px"
+                    },
+                    "fontFamily": {
+                        "body-md": ["Geist"],
+                        "code-sm": ["JetBrains Mono"],
+                        "headline-lg": ["Geist"],
+                        "headline-md": ["Geist"],
+                        "code-md": ["JetBrains Mono"],
+                        "label-sm": ["Geist"]
+                    },
+                    "fontSize": {
+                        "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                        "code-sm": ["12px", {"lineHeight": "18px", "fontWeight": "400"}],
+                        "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                        "headline-md": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                        "code-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                        "label-sm": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600"}]
+                    }
+                },
+            },
+        }
+    </script>
+</head>
+<body class="bg-background text-on-surface font-body-md overflow-hidden">
+<!-- SIDE NAV (Shared Component Anchor) -->
+<aside class="fixed left-0 top-0 h-screen w-sidebar-width flex flex-col z-40 bg-surface-container border-r border-outline-variant hidden md:flex">
+<div class="px-6 py-8">
+<h1 class="font-headline-md text-headline-md font-bold text-primary-fixed tracking-tight">CodeWalk</h1>
+<div class="mt-8 flex items-center space-x-3">
+<div class="w-10 h-10 rounded-lg bg-surface-container-highest border border-outline-variant flex items-center justify-center overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="A futuristic professional avatar for a software engineer, rendered in a high-contrast cybernetic style with glowing teal accents. The character has a focused expression, set against a dark, tech-oriented studio background with soft bokeh lights in primary cyan and deep violet. 8k resolution, cinematic lighting." src="https://lh3.googleusercontent.com/aida-public/AB6AXuC1v93IvN_EVQ4n8UOu0yJH2rPevtzg5AzUGjssuifFbP-JI2rzdzXzUX1IkReYg2AcJDIPERxiBO6BdhC0PogbvG8UGw_NqUXDAiMClhRnfh7GXK7X2g2T99WNx0VhHd87Z2Q6RA7BOdusRzRovVYp98t-MSdgGjviDLQ1NqF_Oz7fcEUL0oZGfvgcAIDIBi20KJD0Qg0J757OqebZ9BIgMO15n7etmGNP0v2N5dULDJVr-gfFIOUwQaCxE-trBVb6TLLoU3bSrvw"/>
+</div>
+<div class="flex flex-col">
+<span class="font-label-sm text-label-sm text-on-surface font-bold">Developer Workspace</span>
+<span class="text-[10px] text-on-surface-variant uppercase tracking-widest">Git-integrated Session</span>
+</div>
+</div>
+</div>
+<nav class="flex-1 mt-4 px-2 space-y-1">
+<div class="bg-surface-container-highest text-primary-fixed border-l-2 border-primary-fixed px-4 py-3 flex items-center space-x-3 cursor-pointer">
+<span class="material-symbols-outlined text-primary-fixed">dashboard</span>
+<span class="font-label-sm text-label-sm">Dashboard</span>
+</div>
+<div class="text-on-surface-variant px-4 py-3 flex items-center space-x-3 hover:bg-surface-variant hover:text-on-surface transition-all duration-200 cursor-pointer">
+<span class="material-symbols-outlined">history</span>
+<span class="font-label-sm text-label-sm">History</span>
+</div>
+<div class="text-on-surface-variant px-4 py-3 flex items-center space-x-3 hover:bg-surface-variant hover:text-on-surface transition-all duration-200 cursor-pointer">
+<span class="material-symbols-outlined">settings</span>
+<span class="font-label-sm text-label-sm">Settings</span>
+</div>
+<div class="text-on-surface-variant px-4 py-3 flex items-center space-x-3 hover:bg-surface-variant hover:text-on-surface transition-all duration-200 cursor-pointer">
+<span class="material-symbols-outlined">help_outline</span>
+<span class="font-label-sm text-label-sm">Help</span>
+</div>
+</nav>
+<div class="p-4 border-t border-outline-variant">
+<button class="w-full bg-primary-fixed text-on-primary py-3 rounded-lg font-bold text-label-sm uppercase tracking-wider active:scale-95 transition-all active-glow">
+                New Assessment
+            </button>
+</div>
+<div class="px-2 pb-6">
+<div class="text-on-surface-variant px-4 py-3 flex items-center space-x-3 hover:bg-surface-variant hover:text-on-surface transition-all duration-200 cursor-pointer">
+<span class="material-symbols-outlined">logout</span>
+<span class="font-label-sm text-label-sm">Logout</span>
+</div>
+</div>
+</aside>
+<!-- MAIN CONTENT AREA -->
+<main class="md:ml-sidebar-width h-screen flex flex-col relative">
+<!-- TOP APP BAR (Shared Component Anchor) -->
+<header class="flex justify-between items-center px-6 py-2 bg-surface-container-low w-full border-b border-outline-variant z-30">
+<div class="flex items-center space-x-6">
+<div class="flex items-center space-x-2 text-on-surface-variant font-code-sm text-code-sm">
+<span class="material-symbols-outlined text-primary-fixed text-lg">terminal</span>
+<span class="opacity-60">facebook/react</span>
+<span class="opacity-40">/</span>
+<span class="opacity-60">src</span>
+<span class="opacity-40">/</span>
+<span class="text-on-surface font-bold">Main.ts</span>
+</div>
+<div class="h-4 w-px bg-outline-variant"></div>
+<div class="flex items-center space-x-4">
+<button class="text-on-surface-variant hover:text-primary-fixed active:scale-95 transition-all">
+<span class="material-symbols-outlined">chevron_left</span>
+</button>
+<span class="font-label-sm text-label-sm text-primary-fixed font-bold tracking-widest uppercase">Question 3 of 6</span>
+<button class="text-on-surface-variant hover:text-primary-fixed active:scale-95 transition-all">
+<span class="material-symbols-outlined">chevron_right</span>
+</button>
+</div>
+</div>
+<div class="flex items-center space-x-3">
+<button class="flex items-center space-x-2 bg-surface-container-highest border border-outline-variant px-4 py-1.5 rounded-lg text-label-sm font-bold text-on-surface hover:bg-surface-variant transition-all">
+<span class="material-symbols-outlined text-base">download</span>
+<span>Export PDF</span>
+</button>
+<button class="w-10 h-10 flex items-center justify-center text-on-surface-variant hover:text-primary-fixed">
+<span class="material-symbols-outlined">share</span>
+</button>
+<button class="w-10 h-10 flex items-center justify-center text-on-surface-variant hover:text-primary-fixed">
+<span class="material-symbols-outlined">more_vert</span>
+</button>
+</div>
+</header>
+<!-- MAIN WORKSPACE -->
+<div class="flex-1 flex overflow-hidden">
+<!-- LEFT PANEL: CODE EDITOR -->
+<section class="w-7/12 flex flex-col bg-surface border-r border-outline-variant relative">
+<div class="flex-1 overflow-auto code-scrollbar font-code-md text-code-md p-6 leading-relaxed">
+<div class="flex">
+<div class="w-12 text-on-surface-variant/30 text-right pr-4 select-none">
+                            38<br/>39<br/>40<br/>41<br/>42<br/>43<br/>44<br/>45<br/>46<br/>47<br/>48<br/>49<br/>50
+                        </div>
+<div class="flex-1 whitespace-pre">
+<span class="text-[#849495] font-italic">// Initialize internal state hook</span>
+<span class="text-secondary">const</span> useInternalLogic = (deps: any[]) =&gt; {
+  <span class="text-secondary">const</span> [state, setState] = useState(initial);
+
+  <span class="text-[#849495]">// CRITICAL: Trigger re-render on dependency mismatch</span>
+<div class="relative group">
+<div class="absolute -inset-x-6 inset-y-0 border-y border-primary-fixed/40 bg-primary-fixed/5 active-glow z-0"></div>
+<span class="relative z-10">  useEffect(() =&gt; {</span>
+</div>
+<span class="text-secondary">    const</span> result = computeExpensiveOperation(deps);
+      setState(result);
+  }, [deps]);
+
+  <span class="text-secondary">return</span> state;
+};
+                        </div>
+</div>
+</div>
+<!-- TERMINAL INSET FOOTER -->
+<div class="h-32 bg-surface-container-lowest border-t border-outline-variant p-4 font-code-sm text-code-sm flex flex-col space-y-1">
+<div class="flex items-start space-x-2">
+<span class="text-primary-fixed">$</span>
+<span class="text-on-surface-variant">analyzer --check --strict react-hooks-lint</span>
+</div>
+<div class="flex items-start space-x-2">
+<span class="text-primary-fixed">&gt;</span>
+<span class="text-error">Error: useCallback missing for expensive computation at line 42.</span>
+</div>
+<div class="flex items-start space-x-2">
+<span class="text-primary-fixed">&gt;</span>
+<span class="text-on-surface-variant/40 animate-pulse">Scanning workspace for potential optimizations...</span>
+</div>
+</div>
+</section>
+<!-- RIGHT PANEL: QUESTION & NOTES -->
+<section class="w-5/12 flex flex-col bg-surface-container-low p-8 overflow-y-auto space-y-8">
+<!-- TOP META & BADGES -->
+<div class="flex justify-between items-start">
+<div class="space-y-2">
+<h2 class="text-headline-md font-headline-md text-on-surface">Question Details</h2>
+<div class="flex items-center space-x-3">
+<span class="bg-secondary-container/20 text-secondary border border-secondary/30 px-2 py-0.5 rounded text-label-sm font-bold uppercase tracking-tighter">Mid-Level ★★</span>
+<span class="bg-primary-container/10 text-primary-fixed border border-primary-fixed/30 px-2 py-0.5 rounded text-label-sm font-bold uppercase tracking-tighter">Performance</span>
+</div>
+</div>
+<div class="flex flex-col items-end space-y-2">
+<span class="text-on-surface-variant text-[10px] font-bold uppercase tracking-widest">Show Answer</span>
+<div class="relative inline-block w-12 h-6 select-none transition duration-200 ease-in">
+<input class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer z-10 transition-transform duration-200" id="toggle" name="toggle" type="checkbox"/>
+<label class="toggle-label block overflow-hidden h-6 rounded-full bg-surface-container-highest cursor-pointer border border-outline-variant" for="toggle">
+<span class="toggle-dot block w-6 h-6 rounded-full bg-on-surface-variant transform transition-all"></span>
+</label>
+</div>
+</div>
+</div>
+<!-- QUESTION TEXT -->
+<div class="bg-surface-container p-6 border border-outline-variant rounded-lg">
+<p class="text-body-md leading-relaxed text-on-surface">
+                        How would you optimize the re-rendering logic in this hook? Consider the implications of <code class="bg-surface-container-highest px-1.5 py-0.5 rounded font-code-md text-primary-fixed">computeExpensiveOperation</code> and how it interacts with the React rendering lifecycle.
+                    </p>
+</div>
+<!-- INTERVIEWER NOTES -->
+<div class="space-y-4">
+<div class="flex items-center justify-between">
+<h3 class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-widest">Interviewer Notes</h3>
+<span class="material-symbols-outlined text-on-surface-variant text-base">edit_note</span>
+</div>
+<textarea class="w-full h-40 bg-surface-container-lowest border border-outline-variant rounded-lg p-4 font-body-md text-on-surface placeholder:text-on-surface-variant/30 focus:ring-1 focus:ring-primary-fixed focus:border-primary-fixed outline-none transition-all" placeholder="Type notes on candidate response here..."></textarea>
+</div>
+<!-- SPACER -->
+<div class="flex-1"></div>
+<!-- RATING BUTTONS -->
+<div class="space-y-4">
+<h3 class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-widest text-center">Rate Response</h3>
+<div class="grid grid-cols-5 bg-surface-container-highest p-1 rounded-xl border border-outline-variant">
+<button class="py-3 px-2 rounded-lg text-label-sm font-bold text-on-surface-variant hover:bg-surface-variant hover:text-error transition-all uppercase tracking-tighter">Poor</button>
+<button class="py-3 px-2 rounded-lg text-label-sm font-bold text-on-surface-variant hover:bg-surface-variant hover:text-tertiary transition-all uppercase tracking-tighter">Avg</button>
+<button class="py-3 px-2 rounded-lg text-label-sm font-bold text-on-surface-variant hover:bg-primary-fixed hover:text-on-primary transition-all uppercase tracking-tighter active-glow">Good</button>
+<button class="py-3 px-2 rounded-lg text-label-sm font-bold text-on-surface-variant hover:bg-primary-fixed hover:text-on-primary transition-all uppercase tracking-tighter active-glow">Great</button>
+<button class="py-3 px-2 rounded-lg text-label-sm font-bold text-on-surface-variant/40 hover:bg-surface-variant hover:text-on-surface transition-all uppercase tracking-tighter">Skip</button>
+</div>
+</div>
+</section>
+</div>
+<!-- PROGRESS BAR (Contextual Component) -->
+<div class="h-1 bg-surface-container-highest w-full relative">
+<div class="absolute top-0 left-0 h-full bg-primary-fixed" style="width: 50%;"></div>
+</div>
+</main>
+<!-- FLOATING ACTION BUTTON (Suppressed as per rules for Detail/Result screens, but showing logic here) -->
+<!-- If we were on Home, we'd render a FAB. Since this is an Assessment Overview/Result page, we suppress it. -->
+<script>
+        // Simple toggle behavior for the "Show Answer" switch
+        const toggle = document.getElementById('toggle');
+        toggle.addEventListener('change', (e) => {
+            if (e.target.checked) {
+                console.log('Answer mode activated');
+                // Potential UI transition for answer visibility could go here
+            }
+        });
+
+        // Micro-interaction for buttons
+        document.querySelectorAll('button').forEach(btn => {
+            btn.addEventListener('mousedown', () => {
+                btn.style.transform = 'scale(0.96)';
+            });
+            btn.addEventListener('mouseup', () => {
+                btn.style.transform = 'scale(1)';
+            });
+            btn.addEventListener('mouseleave', () => {
+                btn.style.transform = 'scale(1)';
+            });
+        });
+    </script>
+</body></html>

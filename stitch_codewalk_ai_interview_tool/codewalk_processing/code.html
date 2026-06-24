@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>CodeWalk | Processing Assessment</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400&amp;family=Geist:wght@400;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          "colors": {
+            "surface-container-highest": "#2e3637",
+            "inverse-surface": "#dce4e5",
+            "secondary": "#e0b6ff",
+            "primary-fixed": "#7df4ff",
+            "surface-container-low": "#151d1e",
+            "surface-tint": "#00dbe9",
+            "on-tertiary-container": "#715d00",
+            "on-secondary-container": "#d7a4ff",
+            "tertiary": "#fff5de",
+            "primary-fixed-dim": "#00dbe9",
+            "surface-variant": "#2e3637",
+            "on-error-container": "#ffdad6",
+            "secondary-fixed-dim": "#e0b6ff",
+            "surface-container-lowest": "#080f10",
+            "on-background": "#dce4e5",
+            "on-primary-container": "#006970",
+            "on-primary": "#00363a",
+            "on-tertiary-fixed-variant": "#554500",
+            "surface-container": "#192122",
+            "surface": "#0d1515",
+            "on-primary-fixed": "#002022",
+            "outline-variant": "#3b494b",
+            "tertiary-fixed": "#ffe179",
+            "on-primary-fixed-variant": "#004f54",
+            "inverse-primary": "#006970",
+            "outline": "#849495",
+            "tertiary-fixed-dim": "#eac324",
+            "error-container": "#93000a",
+            "on-secondary-fixed-variant": "#6a0baa",
+            "inverse-on-surface": "#2a3233",
+            "on-secondary-fixed": "#2e004e",
+            "background": "#0d1515",
+            "error": "#ffb4ab",
+            "on-tertiary-fixed": "#231b00",
+            "secondary-container": "#6d11ad",
+            "surface-bright": "#333b3b",
+            "surface-container-high": "#232b2c",
+            "primary-container": "#00f0ff",
+            "primary": "#dbfcff",
+            "surface-dim": "#0d1515",
+            "secondary-fixed": "#f2daff",
+            "tertiary-container": "#fed639",
+            "on-secondary": "#4c007d",
+            "on-surface": "#dce4e5",
+            "on-surface-variant": "#b9cacb",
+            "on-tertiary": "#3b2f00",
+            "on-error": "#690005"
+          },
+          "borderRadius": {
+            "DEFAULT": "0.125rem",
+            "lg": "0.25rem",
+            "xl": "0.5rem",
+            "full": "0.75rem"
+          },
+          "spacing": {
+            "sidebar-width": "280px",
+            "margin-mobile": "16px",
+            "container-max": "1440px",
+            "margin-desktop": "32px",
+            "gutter": "16px",
+            "unit": "4px"
+          },
+          "fontFamily": {
+            "body-md": ["Geist"],
+            "code-sm": ["JetBrains Mono"],
+            "headline-lg": ["Geist"],
+            "headline-md": ["Geist"],
+            "code-md": ["JetBrains Mono"],
+            "label-sm": ["Geist"]
+          },
+          "fontSize": {
+            "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+            "code-sm": ["12px", {"lineHeight": "18px", "fontWeight": "400"}],
+            "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+            "headline-md": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+            "code-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+            "label-sm": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600"}]
+          }
+        },
+      },
+    }
+  </script>
+<style>
+    body {
+      background-color: #0d1515;
+      color: #dce4e5;
+      overflow: hidden;
+    }
+
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+    }
+
+    .glow-cyan {
+      box-shadow: 0px 0px 12px rgba(125, 244, 255, 0.3);
+    }
+
+    .border-pane {
+      border: 1px solid #30363D;
+    }
+
+    /* Moving Code Background Animation */
+    @keyframes scrollCode {
+      0% { transform: translateY(0); }
+      100% { transform: translateY(-50%); }
+    }
+
+    .code-bg-container {
+      mask-image: linear-gradient(to bottom, transparent, black 20%, black 80%, transparent);
+      -webkit-mask-image: linear-gradient(to bottom, transparent, black 20%, black 80%, transparent);
+    }
+
+    .code-scroll {
+      animation: scrollCode 60s linear infinite;
+    }
+
+    /* Step animations */
+    @keyframes pulse-opacity {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    .active-step-indicator {
+      animation: pulse-opacity 2s ease-in-out infinite;
+    }
+    
+    .loading-bar-fill {
+      transition: width 45s linear;
+    }
+  </style>
+</head>
+<body class="font-body-md text-body-md selection:bg-primary-fixed-dim selection:text-on-primary-fixed">
+<!-- Shared Component: TopNavBar (Simulated fixed header) -->
+<header class="fixed top-0 w-full z-50 flex justify-between items-center px-margin-desktop py-4 bg-surface/80 backdrop-blur-md border-b border-outline-variant">
+<div class="font-headline-md text-headline-md font-bold text-primary-fixed">CodeWalk</div>
+<div class="hidden md:flex gap-8 items-center">
+<span class="text-on-surface-variant font-body-md text-body-md hover:text-primary-fixed transition-colors cursor-default">Docs</span>
+<span class="text-on-surface-variant font-body-md text-body-md hover:text-primary-fixed transition-colors cursor-default">Pricing</span>
+<span class="text-on-surface-variant font-body-md text-body-md hover:text-primary-fixed transition-colors cursor-default">Changelog</span>
+</div>
+<div class="flex items-center gap-4">
+<button class="text-primary-fixed hover:opacity-80 transition-opacity font-body-md text-body-md">Login</button>
+<button class="bg-primary-container text-on-primary-container px-4 py-2 rounded-lg font-bold hover:opacity-90 transition-opacity font-body-md text-body-md">Try Free</button>
+</div>
+</header>
+<!-- Background Animated Layer -->
+<div class="fixed inset-0 z-0 overflow-hidden opacity-10 pointer-events-none code-bg-container">
+<div class="code-scroll font-code-md text-code-md text-primary-fixed-dim whitespace-pre p-10 leading-relaxed">
+<code>
+        function initializeEnvironment() {
+          const workspace = new DeveloperWorkspace();
+          workspace.connectToRepository('{{DATA:REPO_URI}}');
+          return workspace.prepareSession();
+        }
+
+        class AssessmentEngine {
+          constructor(config) {
+            this.aiMode = 'deterministic';
+            this.parser = new SyntaxParser();
+          }
+
+          async generateQuestions(source) {
+            const nodes = await this.parser.walk(source);
+            return nodes.map(node =&gt; this.transform(node));
+          }
+        }
+
+        // Analyzing complex data structures...
+        const stack = [];
+        const visited = new Set();
+        
+        while (queue.length &gt; 0) {
+          const current = queue.shift();
+          process.stdout.write(`Analyzing node: ${current.id}`);
+          // Recursive descent for deep parsing
+        }
+
+        export const QualityGate = (results) =&gt; {
+          return results.filter(r =&gt; r.score &gt; 0.85);
+        };
+        
+        // Repeating for visual density
+        function initializeEnvironment() {
+          const workspace = new DeveloperWorkspace();
+          workspace.connectToRepository('{{DATA:REPO_URI}}');
+          return workspace.prepareSession();
+        }
+
+        class AssessmentEngine {
+          constructor(config) {
+            this.aiMode = 'deterministic';
+            this.parser = new SyntaxParser();
+          }
+
+          async generateQuestions(source) {
+            const nodes = await this.parser.walk(source);
+            return nodes.map(node =&gt; this.transform(node));
+          }
+        }
+
+        const stack = [];
+        const visited = new Set();
+        
+        while (queue.length &gt; 0) {
+          const current = queue.shift();
+          process.stdout.write(`Analyzing node: ${current.id}`);
+        }
+      </code>
+</div>
+</div>
+<!-- Main Processing Content -->
+<main class="relative z-10 flex flex-col items-center justify-center min-h-screen px-margin-mobile md:px-0">
+<div class="w-full max-w-2xl">
+<!-- Logo/Header Area -->
+<div class="text-center mb-12">
+<div class="inline-flex items-center justify-center w-16 h-16 rounded-xl border-pane bg-surface-container-low mb-6 glow-cyan">
+<span class="material-symbols-outlined text-primary-fixed-dim text-4xl" style="font-variation-settings: 'FILL' 1;">terminal</span>
+</div>
+<h1 class="font-headline-lg text-headline-lg text-primary mb-2">Preparing Workspace</h1>
+<p class="font-body-md text-body-md text-on-surface-variant">Our AI is analyzing your repository to generate a custom assessment.</p>
+</div>
+<!-- Step List Container -->
+<div class="bg-surface-container border-pane rounded-xl overflow-hidden">
+<div class="p-8 space-y-6">
+<!-- Step 1: DONE -->
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-4">
+<div class="w-8 h-8 rounded-full bg-primary-container/20 flex items-center justify-center">
+<span class="material-symbols-outlined text-primary-fixed-dim text-lg" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+</div>
+<span class="font-body-md text-body-md text-on-surface">Fetching Repository</span>
+</div>
+<span class="font-code-sm text-code-sm text-primary-fixed-dim bg-primary-container/10 px-2 py-0.5 rounded uppercase tracking-wider">DONE</span>
+</div>
+<!-- Step 2: ACTIVE -->
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-4">
+<div class="w-8 h-8 rounded-full border border-primary-fixed flex items-center justify-center active-step-indicator">
+<span class="material-symbols-outlined text-primary-fixed text-lg">sync</span>
+</div>
+<span class="font-body-md text-body-md text-primary font-semibold">Parsing Code Structure</span>
+</div>
+<span class="font-code-sm text-code-sm text-primary-fixed bg-primary-fixed/10 px-2 py-0.5 rounded border border-primary-fixed/20 uppercase tracking-wider animate-pulse">ACTIVE</span>
+</div>
+<!-- Step 3: PENDING -->
+<div class="flex items-center justify-between opacity-40">
+<div class="flex items-center gap-4">
+<div class="w-8 h-8 rounded-full border border-outline flex items-center justify-center">
+<span class="material-symbols-outlined text-on-surface-variant text-lg">hourglass_empty</span>
+</div>
+<span class="font-body-md text-body-md text-on-surface-variant">Generating Questions</span>
+</div>
+<span class="font-code-sm text-code-sm text-on-surface-variant uppercase tracking-wider">PENDING</span>
+</div>
+<!-- Step 4: PENDING -->
+<div class="flex items-center justify-between opacity-40">
+<div class="flex items-center gap-4">
+<div class="w-8 h-8 rounded-full border border-outline flex items-center justify-center">
+<span class="material-symbols-outlined text-on-surface-variant text-lg">verified_user</span>
+</div>
+<span class="font-body-md text-body-md text-on-surface-variant">Quality Check</span>
+</div>
+<span class="font-code-sm text-code-sm text-on-surface-variant uppercase tracking-wider">PENDING</span>
+</div>
+</div>
+<!-- Terminal Status Output Area -->
+<div class="bg-surface-container-lowest border-t border-outline-variant p-4">
+<div class="flex items-center gap-2 mb-2">
+<div class="flex gap-1.5">
+<div class="w-2.5 h-2.5 rounded-full bg-outline-variant"></div>
+<div class="w-2.5 h-2.5 rounded-full bg-outline-variant"></div>
+<div class="w-2.5 h-2.5 rounded-full bg-outline-variant"></div>
+</div>
+<span class="font-label-sm text-label-sm text-on-surface-variant/60 ml-2">SYSTEM CONSOLE</span>
+</div>
+<div class="font-code-sm text-code-sm text-on-surface-variant/80 space-y-1">
+<div><span class="text-primary-fixed-dim">$</span> connection_established: origin: GitHub</div>
+<div><span class="text-primary-fixed-dim">$</span> repo_cloned: HEAD at 14a2c91</div>
+<div><span class="text-primary-fixed-dim">$</span> parsing_entrypoint: src/main.ts ...</div>
+<div class="flex items-center gap-2">
+<span class="text-primary-fixed-dim">$</span> <span id="typing-line">analyzing_ast: node_count: 14,204</span><span class="w-2 h-4 bg-primary-fixed-dim animate-pulse"></span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- Bottom Progress Area -->
+<footer class="fixed bottom-0 left-0 w-full p-margin-desktop bg-surface/80 backdrop-blur-sm">
+<div class="max-w-container-max mx-auto">
+<div class="flex justify-between items-end mb-3">
+<div class="flex flex-col">
+<span class="font-label-sm text-label-sm text-primary-fixed-dim uppercase tracking-widest mb-1">Overall Progress</span>
+<span class="font-headline-md text-headline-md text-primary">32%</span>
+</div>
+<div class="text-right">
+<span class="font-label-sm text-label-sm text-on-surface-variant">Estimated time remaining</span>
+<div class="font-body-md text-body-md text-on-surface">45s</div>
+</div>
+</div>
+<!-- Progress Bar -->
+<div class="w-full h-1 bg-surface-container-highest rounded-full overflow-hidden">
+<div class="h-full bg-primary-fixed-dim glow-cyan rounded-full loading-bar-fill" id="progress-fill" style="width: 0%;"></div>
+</div>
+</div>
+</footer>
+<script>
+    // Initialize progress bar animation
+    window.onload = () => {
+      setTimeout(() => {
+        const fill = document.getElementById('progress-fill');
+        fill.style.width = '100%';
+      }, 500);
+
+      // Simple terminal interaction simulation
+      const terminalTexts = [
+        "analyzing_ast: node_count: 14,204",
+        "mapping_dependencies: cycle_check: passed",
+        "identifying_bottlenecks: latency_risk: low",
+        "building_graph: edge_count: 52,109",
+        "indexing_symbols: global_scope: active"
+      ];
+      let currentIdx = 0;
+      const line = document.getElementById('typing-line');
+
+      setInterval(() => {
+        currentIdx = (currentIdx + 1) % terminalTexts.length;
+        line.textContent = terminalTexts[currentIdx];
+      }, 3000);
+    };
+  </script>
+</body></html>

@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Pricing | CodeWalk</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&amp;family=Geist:wght@400;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            display: inline-block;
+            vertical-align: middle;
+        }
+        .glow-cyan {
+            box-shadow: 0px 0px 12px rgba(125, 244, 255, 0.3);
+        }
+        .terminal-prefix::before {
+            content: '>';
+            color: #7df4ff;
+            margin-right: 8px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .glass-panel {
+            background: rgba(21, 29, 30, 0.6);
+            backdrop-filter: blur(12px);
+            border: 1px solid #30363D;
+        }
+        body {
+            background-color: #0d1515;
+            color: #dce4e5;
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "surface-container-highest": "#2e3637",
+                      "inverse-surface": "#dce4e5",
+                      "secondary": "#e0b6ff",
+                      "primary-fixed": "#7df4ff",
+                      "surface-container-low": "#151d1e",
+                      "surface-tint": "#00dbe9",
+                      "on-tertiary-container": "#715d00",
+                      "on-secondary-container": "#d7a4ff",
+                      "tertiary": "#fff5de",
+                      "primary-fixed-dim": "#00dbe9",
+                      "surface-variant": "#2e3637",
+                      "on-error-container": "#ffdad6",
+                      "secondary-fixed-dim": "#e0b6ff",
+                      "surface-container-lowest": "#080f10",
+                      "on-background": "#dce4e5",
+                      "on-primary-container": "#006970",
+                      "on-primary": "#00363a",
+                      "on-tertiary-fixed-variant": "#554500",
+                      "surface-container": "#192122",
+                      "surface": "#0d1515",
+                      "on-primary-fixed": "#002022",
+                      "outline-variant": "#3b494b",
+                      "tertiary-fixed": "#ffe179",
+                      "on-primary-fixed-variant": "#004f54",
+                      "inverse-primary": "#006970",
+                      "outline": "#849495",
+                      "tertiary-fixed-dim": "#eac324",
+                      "error-container": "#93000a",
+                      "on-secondary-fixed-variant": "#6a0baa",
+                      "inverse-on-surface": "#2a3233",
+                      "on-secondary-fixed": "#2e004e",
+                      "background": "#0d1515",
+                      "error": "#ffb4ab",
+                      "on-tertiary-fixed": "#231b00",
+                      "secondary-container": "#6d11ad",
+                      "surface-bright": "#333b3b",
+                      "surface-container-high": "#232b2c",
+                      "primary-container": "#00f0ff",
+                      "primary": "#dbfcff",
+                      "surface-dim": "#0d1515",
+                      "secondary-fixed": "#f2daff",
+                      "tertiary-container": "#fed639",
+                      "on-secondary": "#4c007d",
+                      "on-surface": "#dce4e5",
+                      "on-surface-variant": "#b9cacb",
+                      "on-tertiary": "#3b2f00",
+                      "on-error": "#690005"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.125rem",
+                      "lg": "0.25rem",
+                      "xl": "0.5rem",
+                      "full": "0.75rem"
+              },
+              "spacing": {
+                      "sidebar-width": "280px",
+                      "margin-mobile": "16px",
+                      "container-max": "1440px",
+                      "margin-desktop": "32px",
+                      "gutter": "16px",
+                      "unit": "4px"
+              },
+              "fontFamily": {
+                      "body-md": ["Geist"],
+                      "code-sm": ["JetBrains Mono"],
+                      "headline-lg": ["Geist"],
+                      "headline-md": ["Geist"],
+                      "code-md": ["JetBrains Mono"],
+                      "label-sm": ["Geist"]
+              },
+              "fontSize": {
+                      "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                      "code-sm": ["12px", {"lineHeight": "18px", "fontWeight": "400"}],
+                      "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                      "headline-md": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                      "code-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                      "label-sm": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600"}]
+              }
+            },
+          },
+        }
+    </script>
+</head>
+<body class="font-body-md text-body-md overflow-x-hidden">
+<!-- TopNavBar -->
+<nav class="fixed top-0 w-full z-50 flex justify-between items-center px-margin-desktop py-4 bg-surface/80 backdrop-blur-md border-b border-outline-variant">
+<div class="font-headline-md text-headline-md font-bold text-primary-fixed">CodeWalk</div>
+<div class="hidden md:flex items-center gap-8">
+<a class="text-on-surface-variant hover:text-primary-fixed transition-colors font-body-md text-body-md" href="#">Docs</a>
+<a class="text-primary-fixed font-bold hover:text-primary-fixed transition-colors font-body-md text-body-md" href="#">Pricing</a>
+<a class="text-on-surface-variant hover:text-primary-fixed transition-colors font-body-md text-body-md" href="#">Changelog</a>
+</div>
+<div class="flex items-center gap-4">
+<button class="text-primary-fixed px-4 py-2 hover:opacity-80 transition-opacity font-label-sm text-label-sm">Login</button>
+<button class="bg-primary-container text-on-primary px-6 py-2 rounded-lg font-label-sm text-label-sm font-bold glow-cyan transition-transform active:scale-95">Try Free</button>
+</div>
+</nav>
+<!-- Background Decoration -->
+<div class="fixed inset-0 pointer-events-none z-0">
+
+</div>
+<!-- Main Content Canvas -->
+<main class="relative pt-32 pb-24 px-gutter container mx-auto max-w-container-max z-10">
+<!-- Header -->
+<header class="text-center mb-20">
+<div class="inline-flex items-center px-3 py-1 rounded-full bg-surface-container-highest border border-outline-variant mb-4">
+<span class="material-symbols-outlined text-primary-fixed mr-2" style="font-size: 14px;">terminal</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant tracking-widest uppercase">Scalable Intelligence</span>
+</div>
+<h1 class="font-headline-lg text-headline-lg md:text-5xl lg:text-6xl text-on-surface mb-6">Choose your assessment velocity.</h1>
+<p class="font-body-md text-body-md text-on-surface-variant max-w-2xl mx-auto">
+                From solo developers to engineering powerhouses, CodeWalk scales with your technical rigorousness.
+            </p>
+</header>
+<!-- Pricing Cards Grid -->
+<div class="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto items-stretch">
+<!-- Free Card (Current) -->
+<div class="glass-panel p-8 rounded-xl flex flex-col transition-all hover:border-outline">
+<div class="mb-8">
+<h3 class="font-headline-md text-headline-md text-on-surface mb-2">Free</h3>
+<p class="font-label-sm text-label-sm text-on-surface-variant">FOR INDIVIDUAL EXPLORATION</p>
+</div>
+<div class="mb-8 flex items-baseline gap-1">
+<span class="font-headline-lg text-headline-lg text-on-surface">$0</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant">/mo</span>
+</div>
+<div class="space-y-4 mb-12 flex-grow">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary-fixed" style="font-size: 20px;">check_circle</span>
+<span class="font-body-md text-body-md">5 analyses / month</span>
+</div>
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary-fixed" style="font-size: 20px;">check_circle</span>
+<span class="font-body-md text-body-md">Basic PDF reports</span>
+</div>
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary-fixed" style="font-size: 20px;">check_circle</span>
+<span class="font-body-md text-body-md">Public repo access only</span>
+</div>
+<div class="flex items-center gap-3 opacity-30">
+<span class="material-symbols-outlined text-on-surface-variant" style="font-size: 20px;">block</span>
+<span class="font-body-md text-body-md">Priority processing</span>
+</div>
+</div>
+<button class="w-full py-4 border border-outline-variant text-on-surface-variant rounded-lg font-label-sm text-label-sm cursor-not-allowed opacity-60">
+                    CURRENT PLAN
+                </button>
+</div>
+<!-- Pro Card (Dominant) -->
+<div class="relative group">
+<div class="absolute -inset-1 bg-gradient-to-r from-primary-fixed to-secondary-container rounded-xl blur-lg opacity-20 group-hover:opacity-40 transition-opacity"></div>
+<div class="relative bg-surface-container-low border-2 border-primary-fixed p-8 rounded-xl flex flex-col h-full glow-cyan">
+<!-- Badge -->
+<div class="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-primary-fixed text-on-primary-fixed px-4 py-1 rounded-full font-label-sm text-label-sm font-bold shadow-lg">
+                        MOST POPULAR
+                    </div>
+<div class="mb-8">
+<h3 class="font-headline-md text-headline-md text-primary-fixed mb-2">Pro</h3>
+<p class="font-label-sm text-label-sm text-on-surface-variant">FOR PROFESSIONAL HIRING</p>
+</div>
+<div class="mb-8 flex items-baseline gap-1">
+<span class="font-headline-lg text-headline-lg text-on-surface">$99</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant">/mo</span>
+</div>
+<div class="space-y-4 mb-12 flex-grow">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary-fixed" style="font-size: 20px;">verified</span>
+<span class="font-body-md text-body-md text-on-surface">50 analyses / month</span>
+</div>
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary-fixed" style="font-size: 20px;">verified</span>
+<span class="font-body-md text-body-md text-on-surface font-bold">Priority Processing</span>
+</div>
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary-fixed" style="font-size: 20px;">verified</span>
+<span class="font-body-md text-body-md text-on-surface font-bold">Full Scorecards (AI-driven)</span>
+</div>
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary-fixed" style="font-size: 20px;">verified</span>
+<span class="font-body-md text-body-md text-on-surface">Private Repo Integration</span>
+</div>
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary-fixed" style="font-size: 20px;">verified</span>
+<span class="font-body-md text-body-md text-on-surface">Custom Benchmarks</span>
+</div>
+</div>
+<button class="w-full py-4 bg-primary-container text-on-primary-container rounded-lg font-label-sm text-label-sm font-bold flex items-center justify-center gap-2 transition-all hover:bg-primary-fixed hover:scale-[1.02] active:scale-95 shadow-[0_0_20px_rgba(0,219,233,0.3)]">
+                        Checkout with Stripe
+                        <span class="material-symbols-outlined" style="font-size: 18px;">arrow_forward</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Business Teaser -->
+<div class="mt-20 text-center max-w-2xl mx-auto px-6 py-10 rounded-2xl glass-panel border-dashed border-outline-variant">
+<div class="flex justify-center mb-4">
+<div class="w-12 h-12 rounded-lg bg-surface-container-highest flex items-center justify-center border border-outline-variant">
+<span class="material-symbols-outlined text-secondary" style="font-size: 24px;">corporate_fare</span>
+</div>
+</div>
+<h4 class="font-headline-md text-headline-md text-on-surface mb-2">Need more?</h4>
+<p class="font-body-md text-body-md text-on-surface-variant mb-6">
+                Looking for unlimited analyses, SSO, and team collaboration? Our <span class="text-secondary font-bold">Business</span> tier is built for scale.
+            </p>
+<a class="inline-flex items-center gap-2 text-primary-fixed hover:underline font-label-sm text-label-sm" href="#">
+                CONTACT SALES FOR CUSTOM QUOTE
+                <span class="material-symbols-outlined" style="font-size: 16px;">arrow_outward</span>
+</a>
+</div>
+<!-- Comparison Table (Subtle Bento Style) -->
+<section class="mt-32">
+<h2 class="font-headline-md text-headline-md text-center mb-12">Feature Matrix</h2>
+<div class="overflow-x-auto">
+<table class="w-full border-collapse">
+<thead>
+<tr class="border-b border-outline-variant">
+<th class="py-6 px-4 text-left font-label-sm text-label-sm text-on-surface-variant uppercase tracking-widest">Capabilities</th>
+<th class="py-6 px-4 text-center font-label-sm text-label-sm text-on-surface-variant uppercase tracking-widest">Free</th>
+<th class="py-6 px-4 text-center font-label-sm text-label-sm text-primary-fixed uppercase tracking-widest">Pro</th>
+</tr>
+</thead>
+<tbody class="font-code-md text-code-md">
+<tr class="border-b border-outline-variant/30 hover:bg-surface-container-low transition-colors">
+<td class="py-6 px-4 terminal-prefix">AI Code Breakdown</td>
+<td class="py-6 px-4 text-center"><span class="material-symbols-outlined text-primary-fixed">check</span></td>
+<td class="py-6 px-4 text-center"><span class="material-symbols-outlined text-primary-fixed">check</span></td>
+</tr>
+<tr class="border-b border-outline-variant/30 hover:bg-surface-container-low transition-colors">
+<td class="py-6 px-4 terminal-prefix">Complexity Mapping</td>
+<td class="py-6 px-4 text-center"><span class="material-symbols-outlined text-on-surface-variant">remove</span></td>
+<td class="py-6 px-4 text-center"><span class="material-symbols-outlined text-primary-fixed">check</span></td>
+</tr>
+<tr class="border-b border-outline-variant/30 hover:bg-surface-container-low transition-colors">
+<td class="py-6 px-4 terminal-prefix">Custom Rubrics</td>
+<td class="py-6 px-4 text-center"><span class="material-symbols-outlined text-on-surface-variant">remove</span></td>
+<td class="py-6 px-4 text-center"><span class="material-symbols-outlined text-primary-fixed">check</span></td>
+</tr>
+<tr class="border-b border-outline-variant/30 hover:bg-surface-container-low transition-colors">
+<td class="py-6 px-4 terminal-prefix">API Access</td>
+<td class="py-6 px-4 text-center"><span class="material-symbols-outlined text-on-surface-variant">remove</span></td>
+<td class="py-6 px-4 text-center"><span class="material-symbols-outlined text-secondary" style="font-variation-settings: 'FILL' 1;">star</span></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+</main>
+<!-- Simple Footer -->
+<footer class="border-t border-outline-variant bg-surface-container-lowest py-12 px-margin-desktop">
+<div class="container mx-auto flex flex-col md:flex-row justify-between items-center gap-8">
+<div class="flex flex-col items-center md:items-start">
+<span class="font-headline-md text-headline-md font-bold text-primary-fixed">CodeWalk</span>
+<p class="font-label-sm text-label-sm text-on-surface-variant mt-2">© 2024 CodeWalk AI Systems</p>
+</div>
+<div class="flex gap-8">
+<a class="text-on-surface-variant hover:text-primary-fixed transition-colors font-label-sm text-label-sm" href="#">Privacy</a>
+<a class="text-on-surface-variant hover:text-primary-fixed transition-colors font-label-sm text-label-sm" href="#">Terms</a>
+<a class="text-on-surface-variant hover:text-primary-fixed transition-colors font-label-sm text-label-sm" href="#">Security</a>
+<a class="text-on-surface-variant hover:text-primary-fixed transition-colors font-label-sm text-label-sm" href="#">Status</a>
+</div>
+</div>
+</footer>
+<script>
+        // Micro-interaction for buttons
+        document.querySelectorAll('button').forEach(btn => {
+            btn.addEventListener('mousedown', () => {
+                btn.style.transform = 'scale(0.96)';
+            });
+            btn.addEventListener('mouseup', () => {
+                btn.style.transform = '';
+            });
+            btn.addEventListener('mouseleave', () => {
+                btn.style.transform = '';
+            });
+        });
+
+        // Hover effect for feature table rows
+        const rows = document.querySelectorAll('tbody tr');
+        rows.forEach(row => {
+            row.addEventListener('mouseenter', () => {
+                row.querySelector('.terminal-prefix').classList.add('text-primary-fixed');
+            });
+            row.addEventListener('mouseleave', () => {
+                row.querySelector('.terminal-prefix').classList.remove('text-primary-fixed');
+            });
+        });
+    </script>
+</body></html>

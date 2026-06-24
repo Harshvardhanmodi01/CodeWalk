@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>CodeWalk | Assessment Scorecard</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&amp;family=Geist:wght@400;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                "surface-container-highest": "#2e3637",
+                "inverse-surface": "#dce4e5",
+                "secondary": "#e0b6ff",
+                "primary-fixed": "#7df4ff",
+                "surface-container-low": "#151d1e",
+                "surface-tint": "#00dbe9",
+                "on-tertiary-container": "#715d00",
+                "on-secondary-container": "#d7a4ff",
+                "tertiary": "#fff5de",
+                "primary-fixed-dim": "#00dbe9",
+                "surface-variant": "#2e3637",
+                "on-error-container": "#ffdad6",
+                "secondary-fixed-dim": "#e0b6ff",
+                "surface-container-lowest": "#080f10",
+                "on-background": "#dce4e5",
+                "on-primary-container": "#006970",
+                "on-primary": "#00363a",
+                "on-tertiary-fixed-variant": "#554500",
+                "surface-container": "#192122",
+                "surface": "#0d1515",
+                "on-primary-fixed": "#002022",
+                "outline-variant": "#3b494b",
+                "tertiary-fixed": "#ffe179",
+                "on-primary-fixed-variant": "#004f54",
+                "inverse-primary": "#006970",
+                "outline": "#849495",
+                "tertiary-fixed-dim": "#eac324",
+                "error-container": "#93000a",
+                "on-secondary-fixed-variant": "#6a0baa",
+                "inverse-on-surface": "#2a3233",
+                "on-secondary-fixed": "#2e004e",
+                "background": "#0d1515",
+                "error": "#ffb4ab",
+                "on-tertiary-fixed": "#231b00",
+                "secondary-container": "#6d11ad",
+                "surface-bright": "#333b3b",
+                "surface-container-high": "#232b2c",
+                "primary-container": "#00f0ff",
+                "primary": "#dbfcff",
+                "surface-dim": "#0d1515",
+                "secondary-fixed": "#f2daff",
+                "tertiary-container": "#fed639",
+                "on-secondary": "#4c007d",
+                "on-surface": "#dce4e5",
+                "on-surface-variant": "#b9cacb",
+                "on-tertiary": "#3b2f00",
+                "on-error": "#690005"
+            },
+            "borderRadius": {
+                "DEFAULT": "0.125rem",
+                "lg": "0.25rem",
+                "xl": "0.5rem",
+                "full": "0.75rem"
+            },
+            "spacing": {
+                "sidebar-width": "280px",
+                "margin-mobile": "16px",
+                "container-max": "1440px",
+                "margin-desktop": "32px",
+                "gutter": "16px",
+                "unit": "4px"
+            },
+            "fontFamily": {
+                "body-md": ["Geist"],
+                "code-sm": ["JetBrains Mono"],
+                "headline-lg": ["Geist"],
+                "headline-md": ["Geist"],
+                "code-md": ["JetBrains Mono"],
+                "label-sm": ["Geist"]
+            },
+            "fontSize": {
+                "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                "code-sm": ["12px", {"lineHeight": "18px", "fontWeight": "400"}],
+                "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                "headline-md": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                "code-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                "label-sm": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        body {
+            background-color: #0d1515;
+            color: #dce4e5;
+            margin: 0;
+            overflow: hidden;
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .glow-cyan {
+            box-shadow: 0px 0px 12px rgba(125, 244, 255, 0.3);
+        }
+        .pane-border {
+            border: 1px solid #30363D;
+        }
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+        @keyframes ring-draw {
+            from { stroke-dashoffset: 100; }
+            to { stroke-dashoffset: 16; } /* 84 out of 100 approx */
+        }
+        .animate-gauge {
+            stroke-dasharray: 100;
+            stroke-dashoffset: 100;
+            animation: ring-draw 1.5s ease-out forwards;
+        }
+    </style>
+</head>
+<body class="font-body-md text-body-md selection:bg-primary-container selection:text-on-primary-container">
+<!-- Background Layer (Atmospheric) -->
+<div class="fixed inset-0 z-0 pointer-events-none opacity-20">
+
+</div>
+<!-- Main Modal Overlay -->
+<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 md:p-8">
+<!-- Scorecard Container -->
+<div class="relative w-full max-w-5xl h-full max-h-[900px] bg-surface border border-outline-variant rounded-lg shadow-2xl flex flex-col overflow-hidden">
+<!-- Top Bar (Contextual Action) -->
+<div class="flex justify-between items-center px-6 py-4 bg-surface-container-low border-b border-outline-variant">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary-fixed">description</span>
+<h1 class="font-headline-md text-headline-md text-on-surface">CodeWalk Report Preview</h1>
+</div>
+<button class="p-2 hover:bg-surface-variant rounded-full transition-colors group">
+<span class="material-symbols-outlined text-on-surface-variant group-hover:text-on-surface">close</span>
+</button>
+</div>
+<!-- Content Area (Scrollable) -->
+<div class="flex-1 overflow-y-auto custom-scrollbar p-6 md:p-10">
+<!-- PDF Sheet Visual Container -->
+<div class="mx-auto max-w-4xl bg-surface-container-lowest border border-outline-variant p-8 md:p-12 shadow-sm relative">
+<!-- Paper Header Decor -->
+<div class="absolute top-0 left-0 w-full h-1 bg-primary-fixed"></div>
+<!-- Header Section -->
+<div class="flex flex-col md:flex-row justify-between items-start gap-8 mb-12">
+<div>
+<div class="mb-2 text-primary-fixed font-label-sm uppercase tracking-widest">Technical Assessment</div>
+<h2 class="font-headline-lg text-headline-lg text-on-surface mb-6">CodeWalk Report for Sarah Jenkins</h2>
+<!-- Meta Fields Bento -->
+<div class="grid grid-cols-1 sm:grid-cols-3 gap-6">
+<div class="flex flex-col">
+<span class="font-label-sm text-on-surface-variant text-[10px] uppercase">Interviewer</span>
+<span class="font-body-md text-on-surface font-semibold">Marcus Holloway</span>
+</div>
+<div class="flex flex-col">
+<span class="font-label-sm text-on-surface-variant text-[10px] uppercase">Role</span>
+<span class="font-body-md text-on-surface font-semibold">Lead Frontend Engineer</span>
+</div>
+<div class="flex flex-col">
+<span class="font-label-sm text-on-surface-variant text-[10px] uppercase">Date</span>
+<span class="font-body-md text-on-surface font-semibold">October 24, 2023</span>
+</div>
+</div>
+</div>
+<!-- Overall Score Gauge -->
+<div class="relative flex items-center justify-center w-32 h-32 md:w-40 md:h-40">
+<svg class="w-full h-full transform -rotate-90" viewbox="0 0 36 36">
+<circle cx="18" cy="18" fill="none" r="16" stroke="#2e3637" stroke-width="2.5"></circle>
+<circle class="animate-gauge" cx="18" cy="18" fill="none" r="16" stroke="#00dbe9" stroke-dasharray="100, 100" stroke-width="2.5"></circle>
+</svg>
+<div class="absolute inset-0 flex flex-col items-center justify-center">
+<span class="text-3xl md:text-4xl font-bold text-primary-fixed">84</span>
+<span class="text-[10px] font-label-sm text-on-surface-variant uppercase tracking-tighter">Overall Score</span>
+</div>
+</div>
+</div>
+<!-- Execution Summary Section -->
+<div class="mb-12">
+<div class="flex items-center gap-2 mb-6 border-b border-outline-variant pb-2">
+<span class="material-symbols-outlined text-primary-fixed text-sm">terminal</span>
+<h3 class="font-label-sm text-on-surface uppercase tracking-widest">Question Breakdown</h3>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="border-b border-outline-variant">
+<th class="py-3 px-4 font-label-sm text-on-surface-variant uppercase">ID</th>
+<th class="py-3 px-4 font-label-sm text-on-surface-variant uppercase">Competency</th>
+<th class="py-3 px-4 font-label-sm text-on-surface-variant uppercase">Result</th>
+<th class="py-3 px-4 font-label-sm text-on-surface-variant uppercase text-right">Rating</th>
+</tr>
+</thead>
+<tbody>
+<tr class="border-b border-outline-variant/30 hover:bg-surface-variant/20 transition-colors">
+<td class="py-4 px-4 font-code-sm text-on-surface-variant">Q-01</td>
+<td class="py-4 px-4 font-body-md text-on-surface">Asynchronous State Management</td>
+<td class="py-4 px-4">
+<span class="inline-flex items-center gap-2 bg-primary-fixed/10 text-primary-fixed px-2 py-0.5 rounded-sm font-label-sm text-[10px]">
+<span class="status-dot bg-primary-fixed"></span> COMPLETED
+                                            </span>
+</td>
+<td class="py-4 px-4 text-right font-bold text-primary-fixed">9/10</td>
+</tr>
+<tr class="border-b border-outline-variant/30 hover:bg-surface-variant/20 transition-colors">
+<td class="py-4 px-4 font-code-sm text-on-surface-variant">Q-02</td>
+<td class="py-4 px-4 font-body-md text-on-surface">Memory Leak Identification</td>
+<td class="py-4 px-4">
+<span class="inline-flex items-center gap-2 bg-primary-fixed/10 text-primary-fixed px-2 py-0.5 rounded-sm font-label-sm text-[10px]">
+<span class="status-dot bg-primary-fixed"></span> COMPLETED
+                                            </span>
+</td>
+<td class="py-4 px-4 text-right font-bold text-primary-fixed">8/10</td>
+</tr>
+<tr class="border-b border-outline-variant/30 hover:bg-surface-variant/20 transition-colors">
+<td class="py-4 px-4 font-code-sm text-on-surface-variant">Q-03</td>
+<td class="py-4 px-4 font-body-md text-on-surface">CSS Container Queries Implementation</td>
+<td class="py-4 px-4">
+<span class="inline-flex items-center gap-2 bg-secondary/10 text-secondary px-2 py-0.5 rounded-sm font-label-sm text-[10px]">
+<span class="status-dot bg-secondary"></span> PARTIAL
+                                            </span>
+</td>
+<td class="py-4 px-4 text-right font-bold text-secondary">6/10</td>
+</tr>
+<tr class="border-b border-outline-variant/30 hover:bg-surface-variant/20 transition-colors">
+<td class="py-4 px-4 font-code-sm text-on-surface-variant">Q-04</td>
+<td class="py-4 px-4 font-body-md text-on-surface">Accessibility &amp; ARIA Compliance</td>
+<td class="py-4 px-4">
+<span class="inline-flex items-center gap-2 bg-primary-fixed/10 text-primary-fixed px-2 py-0.5 rounded-sm font-label-sm text-[10px]">
+<span class="status-dot bg-primary-fixed"></span> COMPLETED
+                                            </span>
+</td>
+<td class="py-4 px-4 text-right font-bold text-primary-fixed">10/10</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<!-- Interviewer Notes Section -->
+<div class="mb-12">
+<div class="flex items-center gap-2 mb-4 border-b border-outline-variant pb-2">
+<span class="material-symbols-outlined text-primary-fixed text-sm">edit_note</span>
+<h3 class="font-label-sm text-on-surface uppercase tracking-widest">Executive Summary</h3>
+</div>
+<div class="bg-surface p-6 pane-border rounded-sm">
+<p class="text-on-surface-variant leading-relaxed mb-4">
+                                Candidate demonstrated exceptional proficiency in modern React patterns and React Query. Code structure was clean and followed atomic design principles. Major strength noted in <span class="text-primary-fixed">debugging complex race conditions</span> within the state management task.
+                            </p>
+<p class="text-on-surface-variant leading-relaxed">
+                                Opportunity for growth identified in advanced CSS architectural patterns (Container Queries). However, overall technical logic and problem-solving speed were well above average for this seniority level.
+                            </p>
+</div>
+</div>
+<!-- Footer / Branding -->
+<div class="flex justify-between items-center pt-8 border-t border-outline-variant opacity-50">
+<div class="flex items-center gap-2">
+<span class="font-bold text-primary-fixed tracking-tight">CodeWalk</span>
+<span class="text-[10px] font-label-sm text-on-surface-variant">Verified Technical Assessment</span>
+</div>
+<div class="text-[10px] font-label-sm text-on-surface-variant">
+                            ID: CW-2023-8842-SJ
+                        </div>
+</div>
+</div>
+</div>
+<!-- Modal Footer Actions -->
+<div class="p-6 bg-surface-container border-t border-outline-variant flex justify-end items-center gap-4">
+<button class="px-6 py-2.5 rounded-sm font-label-sm text-on-surface hover:bg-surface-container-highest transition-all duration-200 active:scale-95">
+                    Cancel
+                </button>
+<button class="px-8 py-2.5 bg-primary-fixed text-on-primary font-label-sm flex items-center gap-2 glow-cyan hover:brightness-110 transition-all duration-200 active:scale-95">
+<span class="material-symbols-outlined text-lg">download</span>
+                    Download PDF
+                </button>
+</div>
+</div>
+</div>
+<!-- Micro-interaction Scripts -->
+<script>
+        // Placeholder for future interactivity (e.g. printing or downloading logic)
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                console.log('Modal closed via ESC');
+                // Normally handle closing here
+            }
+        });
+
+        // Small interaction for buttons
+        const buttons = document.querySelectorAll('button');
+        buttons.forEach(btn => {
+            btn.addEventListener('mouseenter', () => {
+                // Subtle UI feedback
+            });
+        });
+    </script>
+</body></html>

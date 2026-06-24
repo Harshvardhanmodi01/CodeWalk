@@ -3,8 +3,11 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.generateQuestionsForFile = generateQuestionsForFile;
+exports.getExecutableLineNumbers = getExecutableLineNumbers;
+exports.generateQuestionsRaw = generateQuestionsRaw;
 exports.generateFinalQuestions = generateFinalQuestions;
+exports.generateQuestionsForFile = generateQuestionsForFile;
+exports.generateFinalQuestionsJson = generateFinalQuestionsJson;
 const groq_sdk_1 = __importDefault(require("groq-sdk"));
 const MODEL = 'llama-3.3-70b-versatile';
 //const MODEL = process.env.DEBUG ? 'llama-3.1-8b-instant' : 'llama-3.3-70b-versatile';
@@ -55,8 +58,13 @@ async function selfCritiqueQuestions(questionsArray, code) {
 - Answer uniquely derivable from code [0-2]
 - Senior engineer would find it insightful [0-2]
 
-Questions:
-${JSON.stringify(questionsArray, null, 2)}
+2. [C] Code Logic questions:
+   - MUST reference an actual line number in the form "Line X:" that contains executable code logic (such as a function declaration, variable assignment, conditional statement, loop, or return statement).
+   - NEVER reference an empty line, a comment-only line (e.g., lines starting with //, /*, *, or #), or a line containing only an opening/closing brace or bracket (e.g., {, }, [, ]).
+   - The user will provide a list of valid line numbers. You MUST only select from these line numbers. Generating a question on any other line number is a strict failure.
+   - MUST ask logical, code-comprehension questions about the behavior, purpose, inputs/outputs, conditional outcomes, loops, or state changes at that line. Focus on the programmatic logic, NOT trivial syntax or rules.
+   - Must be answerable by reading the code shown
+   - Include a 5-line context snippet from the code in the question text where helpful
 
 Return only valid JSON: { "scores": [score1, score2, ...], "average": number }`;
     const system = "You are a precise evaluator. Output only JSON.";
@@ -79,24 +87,61 @@ const SYSTEM_PROMPT = `You are an expert senior engineer. Generate interview que
 4. Answers must be 1–2 sentences, derivable ONLY from the code.
 5. NEVER ask "what does this do". Use categories: return values, edge cases, security, performance.
 
-### EXAMPLE GOOD:
-{"text":"[C★★] Line 34: What does calculateDiscount() return when user is not logged in?","lineStart":34,"lineEnd":null,"category":"C","difficulty":"★★","answer":"It returns 0 and logs a warning."}
-
-### OUTPUT JSON SCHEMA:
-{"questions":[{"text":"...","lineStart":42,"lineEnd":null,"category":"C","difficulty":"★★","answer":"..."}]}
-
-### CATEGORIES: C=CodeLogic, B=Bug, S=Security, P=Performance, A=Architecture, T=Testability
-### DIFFICULTY: ★ Junior, ★★ Mid, ★★★ Senior
-
-### INPUT CODE (with line numbers):`;
+5. NO hypotheticals. NO "what if" scenarios unrelated to the actual code block. NO opinions. Only factual code questions.
+6. Answers: 2-3 sentences, under 60 words.
+7. Questions: under 20 words.`;
 /**
- * Build prompt with optional AST hints
+ * Parses code content and returns line numbers of lines containing executable logic
+ * (filtering out comments, whitespace, and brackets/punctuation).
+ */
+function getExecutableLineNumbers(code) {
+    const lines = code.split('\n');
+    const validLines = [];
+    let inBlockComment = false;
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        const lineNum = i + 1;
+        if (inBlockComment) {
+            if (line.includes('*/')) {
+                inBlockComment = false;
+            }
+            continue;
+        }
+        if (line.startsWith('/*')) {
+            if (!line.includes('*/')) {
+                inBlockComment = true;
+            }
+            continue;
+        }
+        // Skip empty lines
+        if (!line)
+            continue;
+        // Skip comment lines
+        if (line.startsWith('//') || line.startsWith('*') || line.startsWith('#')) {
+            continue;
+        }
+        // Skip lines with only brackets, braces, parentheses, commas, semicolons
+        const cleanLine = line.replace(/[{}\[\]();,\s]/g, '');
+        if (cleanLine.length === 0) {
+            continue;
+        }
+        validLines.push(lineNum);
+    }
+    // Fallback if no valid lines are detected
+    if (validLines.length === 0) {
+        return Array.from({ length: lines.length }, (_, idx) => idx + 1);
+    }
+    return validLines;
+}
+/**
+ * Build the user prompt for a single file.
  */
 function buildFilePrompt(code, filename, readmeContext, projectName, astAnalysis) {
     const numbered = code
         .split('\n')
         .map((line, i) => `${i + 1}: ${line}`)
         .join('\n');
+    const validLines = getExecutableLineNumbers(code);
     let prompt = `PROJECT: ${projectName || 'Unknown'}\nFILE: ${filename}\n\n`;
     if (readmeContext)
         prompt += `README EXCERPT:\n${readmeContext.slice(0, 1500)}\n\n`;
@@ -110,23 +155,69 @@ function buildFilePrompt(code, filename, readmeContext, projectName, astAnalysis
             prompt += `- Async calls: ${astAnalysis.asyncCalls.map((c) => c.callee).join(', ')} (error handling)\n`;
         prompt += `\n`;
     }
-    prompt += `CODE:\n\`\`\`\n${numbered}\n\`\`\`\n\n`;
-    prompt += `Generate 4–6 JSON questions. Output ONLY the JSON object.`;
+    prompt += `SOURCE CODE (with line numbers):\n\`\`\`\n${numbered}\n\`\`\`\n\n`;
+    prompt += `CRITICAL: You are only allowed to choose from the following line numbers for [C] questions (these contain actual executable code logic, not comments, blank lines, or closing brackets):\n`;
+    prompt += `${validLines.join(', ')}\n\n`;
+    prompt += `Generate 2-3 [C] questions referencing real lines from the list above, plus 1-2 [P] questions about structure/patterns. Follow the strict format.`;
     return prompt;
 }
-function buildFinalPrompt(readme, projectName) {
-    return `PROJECT: ${projectName || 'Unknown'}\nREADME:\n${readme.slice(0, 4000)}\n\nGenerate 3 final JSON questions. Output ONLY JSON.`;
+/**
+ * Build the prompt for the final slide (README + Generic).
+ */
+function buildFinalPrompt(readme, projectName, hasReadme = true) {
+    if (!hasReadme || !readme.trim()) {
+        return `PROJECT: ${projectName || 'Unknown'}
+
+Generate the FINAL slide questions only. Format strictly:
+
+[G1] One generic domain/real-world question about how this kind of system is used
+A: Answer
+
+[G2] One more generic domain question (use cases, real-world application)
+A: Answer
+
+NO code line references here. Focus on domain knowledge.`;
+    }
+    return `PROJECT: ${projectName || 'Unknown'}
+
+README:
+${readme.slice(0, 4000)}
+
+Generate the FINAL slide questions only. Format strictly:
+
+[D] One question answerable from the README (under 20 words)
+A: Answer in 2-3 sentences
+
+[G1] One generic domain/real-world question about how this kind of system is used
+A: Answer
+
+[G2] One more generic domain question (use cases, real-world application)
+A: Answer
+
+NO code line references here. Focus on documentation and domain knowledge.`;
 }
 /**
  * Call Groq with timeout
  */
-async function callGroq(systemPrompt, userPrompt) {
+async function callGroq(systemPrompt, userPrompt, customModel) {
     const groq = getClient();
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
+    // Map user-selected models to supported Groq models
+    let modelToUse = customModel || MODEL;
+    const lowerModel = modelToUse.toLowerCase();
+    if (lowerModel.includes('gpt-4') || lowerModel.includes('claude') || lowerModel.includes('gpt-3.5')) {
+        modelToUse = 'llama-3.3-70b-versatile'; // Fallback / mock map for custom dashboard models
+    }
+    else if (lowerModel.includes('llama-3.1-8b') || lowerModel.includes('llama3-8b')) {
+        modelToUse = 'llama-3.1-8b-instant';
+    }
+    else if (lowerModel.includes('mixtral')) {
+        modelToUse = 'mixtral-8x7b-32768';
+    }
     try {
         const completion = await groq.chat.completions.create({
-            model: MODEL,
+            model: modelToUse,
             messages: [
                 { role: 'system', content: systemPrompt },
                 { role: 'user', content: userPrompt },
@@ -150,17 +241,11 @@ async function callGroq(systemPrompt, userPrompt) {
 /**
  * Extract JSON from LLM response (handles markdown, extra text)
  */
-function extractJSON(text) {
-    // Remove markdown code fences
-    let cleaned = text.trim();
-    if (cleaned.startsWith('```json'))
-        cleaned = cleaned.slice(7);
-    else if (cleaned.startsWith('```'))
-        cleaned = cleaned.slice(3);
-    if (cleaned.endsWith('```'))
-        cleaned = cleaned.slice(0, -3);
-    cleaned = cleaned.trim();
-    // Find first '{' and last '}'
+function extractJSON(raw) {
+    const cleaned = raw
+        .replace(/```json/g, '')
+        .replace(/```/g, '')
+        .trim();
     const firstBrace = cleaned.indexOf('{');
     const lastBrace = cleaned.lastIndexOf('}');
     if (firstBrace === -1 || lastBrace === -1)
@@ -172,6 +257,17 @@ function extractJSON(text) {
     catch {
         return null;
     }
+}
+/**
+ * Generate raw questions string for a single file
+ */
+async function generateQuestionsRaw(code, filename, readmeContext, projectName, model) {
+    if (!code || !filename) {
+        throw new Error('Code and filename are required');
+    }
+    const userPrompt = buildFilePrompt(code, filename, readmeContext, projectName);
+    const response = await callGroq(SYSTEM_PROMPT, userPrompt, model);
+    return response;
 }
 async function parseAndValidateResponse(rawResponse, retryCount = 0) {
     const parsedObj = extractJSON(rawResponse);
@@ -189,6 +285,14 @@ async function parseAndValidateResponse(rawResponse, retryCount = 0) {
 }
 /**
  * Generate questions for a single file (with self‑critique)
+ */
+async function generateFinalQuestions(readme, projectName, model, hasReadme = true) {
+    const userPrompt = buildFinalPrompt(readme, projectName, hasReadme);
+    const finalSystem = `You are an expert technical interviewer generating final-slide interview questions. Follow the user's format strictly.`;
+    return await callGroq(finalSystem, userPrompt, model);
+}
+/**
+ * Generate questions for a single file as JSON array (with self‑critique, used by worker)
  */
 async function generateQuestionsForFile(code, filename, readmeContext, projectName, astAnalysis) {
     if (!code || !filename)
@@ -235,9 +339,9 @@ async function generateQuestionsForFile(code, filename, readmeContext, projectNa
     return bestQuestions;
 }
 /**
- * Final slide questions
+ * Final slide questions as JSON array (used by worker)
  */
-async function generateFinalQuestions(readme, projectName) {
+async function generateFinalQuestionsJson(readme, projectName) {
     const userPrompt = buildFinalPrompt(readme, projectName);
     const finalSystem = `You are an expert interviewer. Generate final slide questions as JSON only. Output ONLY JSON.`;
     const response = await callGroq(finalSystem, userPrompt);

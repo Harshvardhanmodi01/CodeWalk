@@ -40,7 +40,7 @@ function isValidQuestion(q: any): boolean {
   return true;
 }
 
-// ---------- Self‑critique (UNCHANGED) ----------
+// ---------- Self-critique ----------
 async function selfCritiqueQuestions(questionsArray: any[], code: string): Promise<number> {
   const critiquePrompt = `You are a strict judge. Score each question 1-10 based on:
 - Specificity (references exact line/block) [0-3]
@@ -63,7 +63,7 @@ Return only valid JSON: { "scores": [score1, score2, ...], "average": number }`;
   }
 }
 
-// ---------- System prompt (UPDATED — taxonomy enforced) ----------
+// ---------- System prompt (taxonomy enforced) ----------
 const SYSTEM_PROMPT = `You are an expert senior engineer conducting a technical interview. Generate EXACTLY 5 interview questions about the code below following a strict taxonomy.
 
 ### TAXONOMY (you MUST generate exactly these 5 question types, in this order):
@@ -87,11 +87,11 @@ const SYSTEM_PROMPT = `You are an expert senior engineer conducting a technical 
    - Adversarial → B (Bug) or S (Security) or P (Performance), whichever fits
 
 ### EXAMPLE GOOD QUESTIONS (one per type):
-Surface:   {"text":"[C★] Line 18: What value does processToken() return when the token has expired?","lineStart":18,"lineEnd":null,"category":"C","difficulty":"★","answer":"It returns null and sets the session flag to false."}
-Design:    {"text":"[A★★] Line 34: Why is a Map used here instead of a plain object for storing user sessions?","lineStart":34,"lineEnd":null,"category":"A","difficulty":"★★","answer":"Maps preserve insertion order and allow non-string keys, which is needed for the numeric user IDs used here."}
-Design:    {"text":"[A★★] Lines 51-55: Why does this function return early instead of using an else branch?","lineStart":51,"lineEnd":55,"category":"A","difficulty":"★★","answer":"Early return reduces nesting depth and makes the happy path easier to follow; it also avoids the dangling-else problem."}
-Edge Case: {"text":"[C★★] Line 72: What happens at the slice() call when the input array is empty?","lineStart":72,"lineEnd":null,"category":"C","difficulty":"★★","answer":"slice() on an empty array returns [], so the loop below it never executes — no error is thrown but the caller silently gets an empty result."}
-Adversarial:{"text":"[B★★★] Lines 88-91: What bug exists in this retry loop that could cause it to run indefinitely under certain conditions?","lineStart":88,"lineEnd":91,"category":"B","difficulty":"★★★","answer":"The retry counter is only incremented inside the success branch, so a persistent failure never increments it and the loop never terminates."}
+Surface:      {"text":"[C★] Line 18: What value does processToken() return when the token has expired?","lineStart":18,"lineEnd":null,"category":"C","difficulty":"★","answer":"It returns null and sets the session flag to false."}
+Design:       {"text":"[A★★] Line 34: Why is a Map used here instead of a plain object for storing user sessions?","lineStart":34,"lineEnd":null,"category":"A","difficulty":"★★","answer":"Maps preserve insertion order and allow non-string keys, which is needed for the numeric user IDs used here."}
+Design:       {"text":"[A★★] Lines 51-55: Why does this function return early instead of using an else branch?","lineStart":51,"lineEnd":55,"category":"A","difficulty":"★★","answer":"Early return reduces nesting depth and makes the happy path easier to follow; it also avoids the dangling-else problem."}
+Edge Case:    {"text":"[C★★] Line 72: What happens at the slice() call when the input array is empty?","lineStart":72,"lineEnd":null,"category":"C","difficulty":"★★","answer":"slice() on an empty array returns [], so the loop below it never executes — no error is thrown but the caller silently gets an empty result."}
+Adversarial:  {"text":"[B★★★] Lines 88-91: What bug exists in this retry loop that could cause it to run indefinitely under certain conditions?","lineStart":88,"lineEnd":91,"category":"B","difficulty":"★★★","answer":"The retry counter is only incremented inside the success branch, so a persistent failure never increments it and the loop never terminates."}
 
 ### OUTPUT JSON SCHEMA:
 {"questions":[{"text":"...","lineStart":42,"lineEnd":null,"category":"C","difficulty":"★★","answer":"..."}]}
@@ -101,10 +101,51 @@ Adversarial:{"text":"[B★★★] Lines 88-91: What bug exists in this retry loo
 
 ### INPUT CODE (with line numbers):`;
 
+// ---------- Executable line detection ----------
+/**
+ * Returns line numbers that contain actual executable logic,
+ * filtering out blank lines, comments, and bracket-only lines.
+ * Used to prevent the LLM from referencing meaningless lines.
+ */
+export function getExecutableLineNumbers(code: string): number[] {
+  const lines = code.split('\n');
+  const validLines: number[] = [];
+  let inBlockComment = false;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    const lineNum = i + 1;
+
+    if (inBlockComment) {
+      if (line.includes('*/')) inBlockComment = false;
+      continue;
+    }
+    if (line.startsWith('/*')) {
+      if (!line.includes('*/')) inBlockComment = true;
+      continue;
+    }
+    if (!line) continue;
+    if (line.startsWith('//') || line.startsWith('*') || line.startsWith('#')) continue;
+
+    // Skip lines that are only brackets/braces/punctuation
+    const cleanLine = line.replace(/[{}\[\]();,\s]/g, '');
+    if (cleanLine.length === 0) continue;
+
+    validLines.push(lineNum);
+  }
+
+  // Fallback: if nothing passes the filter, allow all lines
+  if (validLines.length === 0) {
+    return Array.from({ length: lines.length }, (_, idx) => idx + 1);
+  }
+
+  return validLines;
+}
+
+// ---------- Prompt builders ----------
 /**
  * Build prompt with optional AST hints.
- * UPDATED: taxonomy reminder injected at the end of the user prompt
- * so the model sees it immediately before generating output.
+ * Taxonomy reminder injected at end so it's salient immediately before JSON output.
  */
 function buildFilePrompt(
   code: string,
@@ -118,6 +159,8 @@ function buildFilePrompt(
     .map((line, i) => `${i + 1}: ${line}`)
     .join('\n');
 
+  const validLines = getExecutableLineNumbers(code);
+
   let prompt = `PROJECT: ${projectName || 'Unknown'}\nFILE: ${filename}\n\n`;
   if (readmeContext) prompt += `README EXCERPT:\n${readmeContext.slice(0, 1500)}\n\n`;
 
@@ -130,9 +173,7 @@ function buildFilePrompt(
   }
 
   prompt += `CODE:\n\`\`\`\n${numbered}\n\`\`\`\n\n`;
-
-  // Taxonomy reminder at point-of-generation — keeps the 5-question contract
-  // salient immediately before the model starts outputting JSON.
+  prompt += `VALID LINE NUMBERS (only reference these — they contain real executable logic):\n${validLines.join(', ')}\n\n`;
   prompt += `REQUIRED OUTPUT: Generate EXACTLY 5 questions in this order:
 1. SURFACE (★, category C) — specific return value or execution path
 2. DESIGN #1 (★★, category A) — why this approach vs an alternative
@@ -145,21 +186,67 @@ Output ONLY the JSON object. No markdown. No explanation.`;
   return prompt;
 }
 
-function buildFinalPrompt(readme: string, projectName?: string): string {
-  return `PROJECT: ${projectName || 'Unknown'}\nREADME:\n${readme.slice(0, 4000)}\n\nGenerate 3 final JSON questions. Output ONLY JSON.`;
+/**
+ * Build the prompt for the final slide (README + generic domain questions).
+ */
+function buildFinalPrompt(readme: string, projectName?: string, hasReadme: boolean = true): string {
+  if (!hasReadme || !readme.trim()) {
+    return `PROJECT: ${projectName || 'Unknown'}
+
+Generate the FINAL slide questions only. Format strictly:
+
+[G1] One generic domain/real-world question about how this kind of system is used
+A: Answer
+
+[G2] One more generic domain question (use cases, real-world application)
+A: Answer
+
+NO code line references here. Focus on domain knowledge.`;
+  }
+
+  return `PROJECT: ${projectName || 'Unknown'}
+
+README:
+${readme.slice(0, 4000)}
+
+Generate the FINAL slide questions only. Format strictly:
+
+[D] One question answerable from the README (under 20 words)
+A: Answer in 2-3 sentences
+
+[G1] One generic domain/real-world question about how this kind of system is used
+A: Answer
+
+[G2] One more generic domain question (use cases, real-world application)
+A: Answer
+
+NO code line references here. Focus on documentation and domain knowledge.`;
 }
 
+// ---------- Groq caller ----------
 /**
- * Call Groq with timeout (UNCHANGED)
+ * Call Groq with timeout and model mapping.
  */
-async function callGroq(systemPrompt: string, userPrompt: string): Promise<string> {
+async function callGroq(systemPrompt: string, userPrompt: string, customModel?: string): Promise<string> {
   const groq = getClient();
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
+
+  // Map any unsupported model strings to valid Groq models
+  let modelToUse = customModel || MODEL;
+  const lowerModel = modelToUse.toLowerCase();
+  if (lowerModel.includes('gpt-4') || lowerModel.includes('claude') || lowerModel.includes('gpt-3.5')) {
+    modelToUse = 'llama-3.3-70b-versatile';
+  } else if (lowerModel.includes('llama-3.1-8b') || lowerModel.includes('llama3-8b')) {
+    modelToUse = 'llama-3.1-8b-instant';
+  } else if (lowerModel.includes('mixtral')) {
+    modelToUse = 'mixtral-8x7b-32768';
+  }
+
   try {
     const completion = await groq.chat.completions.create(
       {
-        model: MODEL,
+        model: modelToUse,
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt },
@@ -180,9 +267,7 @@ async function callGroq(systemPrompt: string, userPrompt: string): Promise<strin
   }
 }
 
-/**
- * Extract JSON from LLM response (UNCHANGED)
- */
+// ---------- JSON extraction ----------
 function extractJSON(text: string): any | null {
   let cleaned = text.trim();
   if (cleaned.startsWith('```json')) cleaned = cleaned.slice(7);
@@ -201,6 +286,7 @@ function extractJSON(text: string): any | null {
   }
 }
 
+// ---------- Validation ----------
 async function parseAndValidateResponse(rawResponse: string, retryCount = 0): Promise<any[]> {
   const parsedObj = extractJSON(rawResponse);
   if (!parsedObj) throw new Error('No JSON object found');
@@ -215,8 +301,27 @@ async function parseAndValidateResponse(rawResponse: string, retryCount = 0): Pr
   return valid;
 }
 
+// ---------- Public API ----------
+
 /**
- * Generate questions for a single file (with self‑critique) (UNCHANGED)
+ * Generate raw LLM response string for a single file.
+ * Used by the dashboard / streaming endpoints.
+ */
+export async function generateQuestionsRaw(
+  code: string,
+  filename: string,
+  readmeContext?: string,
+  projectName?: string,
+  model?: string
+): Promise<string> {
+  if (!code || !filename) throw new Error('Code and filename are required');
+  const userPrompt = buildFilePrompt(code, filename, readmeContext, projectName);
+  return callGroq(SYSTEM_PROMPT, userPrompt, model);
+}
+
+/**
+ * Generate questions for a single file as a validated JSON array.
+ * Used by the background worker.
  */
 export async function generateQuestionsForFile(
   code: string,
@@ -254,24 +359,43 @@ export async function generateQuestionsForFile(
     if (score >= 7) break;
   }
 
-  // Fallback if still no questions (should not happen)
   if (bestQuestions.length === 0) {
     bestQuestions = [{
-      text: "[C★] Line 1: What is the purpose of this file?",
+      text: "[C★] Line 1: What is the entry point of this file?",
       lineStart: 1,
       lineEnd: null,
       category: "C",
       difficulty: "★",
-      answer: "This file contains the main logic of the module.",
+      answer: "Line 1 is the first executable statement; review the file to trace the control flow from here.",
     }];
   }
+
   return bestQuestions;
 }
 
 /**
- * Final slide questions (UNCHANGED)
+ * Generate final slide questions as a raw string.
+ * Used by dashboard / streaming endpoints.
  */
-export async function generateFinalQuestions(readme: string, projectName?: string): Promise<any[]> {
+export async function generateFinalQuestions(
+  readme: string,
+  projectName?: string,
+  model?: string,
+  hasReadme: boolean = true
+): Promise<string> {
+  const userPrompt = buildFinalPrompt(readme, projectName, hasReadme);
+  const finalSystem = `You are an expert technical interviewer generating final-slide interview questions. Follow the user's format strictly.`;
+  return callGroq(finalSystem, userPrompt, model);
+}
+
+/**
+ * Generate final slide questions as a validated JSON array.
+ * Used by the background worker.
+ */
+export async function generateFinalQuestionsJson(
+  readme: string,
+  projectName?: string
+): Promise<any[]> {
   const userPrompt = buildFinalPrompt(readme, projectName);
   const finalSystem = `You are an expert interviewer. Generate final slide questions as JSON only. Output ONLY JSON.`;
   const response = await callGroq(finalSystem, userPrompt);

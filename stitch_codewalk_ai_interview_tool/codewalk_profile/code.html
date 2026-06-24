@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>User Profile | CodeWalk</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&amp;family=Geist:wght@400;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          "colors": {
+                  "surface-container-highest": "#2e3637",
+                  "inverse-surface": "#dce4e5",
+                  "secondary": "#e0b6ff",
+                  "primary-fixed": "#7df4ff",
+                  "surface-container-low": "#151d1e",
+                  "surface-tint": "#00dbe9",
+                  "on-tertiary-container": "#715d00",
+                  "on-secondary-container": "#d7a4ff",
+                  "tertiary": "#fff5de",
+                  "primary-fixed-dim": "#00dbe9",
+                  "surface-variant": "#2e3637",
+                  "on-error-container": "#ffdad6",
+                  "secondary-fixed-dim": "#e0b6ff",
+                  "surface-container-lowest": "#080f10",
+                  "on-background": "#dce4e5",
+                  "on-primary-container": "#006970",
+                  "on-primary": "#00363a",
+                  "on-tertiary-fixed-variant": "#554500",
+                  "surface-container": "#192122",
+                  "surface": "#0d1515",
+                  "on-primary-fixed": "#002022",
+                  "outline-variant": "#3b494b",
+                  "tertiary-fixed": "#ffe179",
+                  "on-primary-fixed-variant": "#004f54",
+                  "inverse-primary": "#006970",
+                  "outline": "#849495",
+                  "tertiary-fixed-dim": "#eac324",
+                  "error-container": "#93000a",
+                  "on-secondary-fixed-variant": "#6a0baa",
+                  "inverse-on-surface": "#2a3233",
+                  "on-secondary-fixed": "#2e004e",
+                  "background": "#0d1515",
+                  "error": "#ffb4ab",
+                  "on-tertiary-fixed": "#231b00",
+                  "secondary-container": "#6d11ad",
+                  "surface-bright": "#333b3b",
+                  "surface-container-high": "#232b2c",
+                  "primary-container": "#00f0ff",
+                  "primary": "#dbfcff",
+                  "surface-dim": "#0d1515",
+                  "secondary-fixed": "#f2daff",
+                  "tertiary-container": "#fed639",
+                  "on-secondary": "#4c007d",
+                  "on-surface": "#dce4e5",
+                  "on-surface-variant": "#b9cacb",
+                  "on-tertiary": "#3b2f00",
+                  "on-error": "#690005"
+          },
+          "borderRadius": {
+                  "DEFAULT": "0.125rem",
+                  "lg": "0.25rem",
+                  "xl": "0.5rem",
+                  "full": "0.75rem"
+          },
+          "spacing": {
+                  "sidebar-width": "280px",
+                  "margin-mobile": "16px",
+                  "container-max": "1440px",
+                  "margin-desktop": "32px",
+                  "gutter": "16px",
+                  "unit": "4px"
+          },
+          "fontFamily": {
+                  "body-md": ["Geist"],
+                  "code-sm": ["JetBrains Mono"],
+                  "headline-lg": ["Geist"],
+                  "headline-md": ["Geist"],
+                  "code-md": ["JetBrains Mono"],
+                  "label-sm": ["Geist"]
+          },
+          "fontSize": {
+                  "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                  "code-sm": ["12px", {"lineHeight": "18px", "fontWeight": "400"}],
+                  "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                  "headline-md": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                  "code-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                  "label-sm": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600"}]
+          }
+        },
+      },
+    }
+  </script>
+<style>
+    body {
+      background-color: #0d1515;
+      color: #dce4e5;
+    }
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+    }
+    .glow-cyan {
+      box-shadow: 0px 0px 12px rgba(125, 244, 255, 0.3);
+    }
+    .pane-border {
+      border: 1px solid #30363D;
+    }
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 4px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: #0d1515;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: #2e3637;
+    }
+  </style>
+</head>
+<body class="font-body-md text-body-md antialiased overflow-hidden h-screen flex">
+<!-- SideNavBar (Shared Component) -->
+<aside class="fixed left-0 top-0 h-screen w-sidebar-width flex flex-col z-40 bg-surface-container border-r border-outline-variant transition-all duration-200 ease-in-out">
+<!-- Header -->
+<div class="p-6 border-b border-outline-variant">
+<div class="flex items-center gap-3 mb-6">
+<div class="w-8 h-8 bg-primary-fixed flex items-center justify-center rounded-sm">
+<span class="material-symbols-outlined text-on-primary font-bold">terminal</span>
+</div>
+<span class="font-headline-md text-headline-md text-primary-fixed font-bold tracking-tighter">CodeWalk</span>
+</div>
+<div class="flex items-center gap-3">
+<img class="w-10 h-10 rounded-full border border-primary-fixed/30 object-cover" data-alt="A close-up portrait of a professional software developer in a dark room illuminated by the teal and purple glow of multiple high-definition computer monitors. The developer is wearing a minimalist dark hoodie, and the background shows blurred lines of complex source code. The overall mood is focused, technical, and high-end modern developer aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBiaHrWiYUXe2IpJrBhMVXZs21vlvG3S-dNJ-CbMBKAvDrlgOVs81FQ4DSLF3kjJF9B_mVFAewC7Cp3EzA29WQGK5V5yWtC214sdUo5CWnxWpTRrBZtbWUq1uQ9ShV8gPiuhnHjsx2JlWkJa0Wnk5XCsmz5_72mFYgj7oMAdLdgRfhs6GKZ4vSm7mBMJQvsBwKkZFrd6ZHVgM-OlekA64wxO_KzT9St8FHTQ9E0s5sUgKepiEFPQRamzDjoTEduWnouVm0bfWpUe64"/>
+<div class="overflow-hidden">
+<p class="font-label-sm text-label-sm text-on-surface truncate">Developer Workspace</p>
+<p class="text-[10px] text-on-surface-variant truncate">Git-integrated Session</p>
+</div>
+</div>
+</div>
+<!-- Navigation -->
+<nav class="flex-1 py-4 overflow-y-auto custom-scrollbar">
+<ul class="space-y-1 px-2">
+<li>
+<a class="flex items-center gap-3 text-on-surface-variant px-4 py-3 hover:bg-surface-variant hover:text-on-surface rounded-sm transition-colors font-label-sm text-label-sm" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+<span>Dashboard</span>
+</a>
+</li>
+<li>
+<a class="flex items-center gap-3 text-on-surface-variant px-4 py-3 hover:bg-surface-variant hover:text-on-surface rounded-sm transition-colors font-label-sm text-label-sm" href="#">
+<span class="material-symbols-outlined">history</span>
+<span>History</span>
+</a>
+</li>
+<li>
+<a class="flex items-center gap-3 bg-surface-container-highest text-primary-fixed border-l-2 border-primary-fixed px-4 py-3 font-label-sm text-label-sm" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">settings</span>
+<span>Settings</span>
+</a>
+</li>
+<li>
+<a class="flex items-center gap-3 text-on-surface-variant px-4 py-3 hover:bg-surface-variant hover:text-on-surface rounded-sm transition-colors font-label-sm text-label-sm" href="#">
+<span class="material-symbols-outlined">help_outline</span>
+<span>Help</span>
+</a>
+</li>
+</ul>
+<div class="px-6 py-6">
+<button class="w-full bg-surface-container-highest border border-primary-fixed/20 text-primary-fixed font-label-sm text-label-sm py-2 px-4 rounded-sm flex items-center justify-center gap-2 hover:bg-primary-fixed/10 transition-all active:scale-95">
+<span class="material-symbols-outlined text-[18px]">add</span>
+          New Assessment
+        </button>
+</div>
+</nav>
+<!-- Footer -->
+<div class="p-4 border-t border-outline-variant">
+<a class="flex items-center gap-3 text-on-surface-variant px-4 py-3 hover:bg-error-container/20 hover:text-error rounded-sm transition-colors font-label-sm text-label-sm" href="#">
+<span class="material-symbols-outlined">logout</span>
+<span>Logout</span>
+</a>
+</div>
+</aside>
+<!-- Main Canvas -->
+<main class="ml-sidebar-width flex-1 flex flex-col relative">
+<!-- TopAppBar (Shared Component) -->
+<header class="flex justify-between items-center px-gutter py-2 bg-surface-container-low w-full border-b border-outline-variant">
+<div class="flex items-center gap-4">
+<span class="material-symbols-outlined text-primary-fixed">terminal</span>
+<h1 class="font-headline-md text-headline-md text-primary-fixed tracking-tight">Settings</h1>
+</div>
+<div class="flex items-center gap-2">
+<button class="p-2 text-on-surface-variant hover:text-primary-fixed transition-colors active:scale-95">
+<span class="material-symbols-outlined">share</span>
+</button>
+<button class="p-2 text-on-surface-variant hover:text-primary-fixed transition-colors active:scale-95">
+<span class="material-symbols-outlined">download</span>
+</button>
+<button class="p-2 text-on-surface-variant hover:text-primary-fixed transition-colors active:scale-95">
+<span class="material-symbols-outlined">more_vert</span>
+</button>
+</div>
+</header>
+<!-- Content Area -->
+<div class="flex-1 overflow-y-auto p-8 custom-scrollbar">
+<div class="max-w-4xl mx-auto space-y-8">
+<!-- Header Section -->
+<section class="flex flex-col md:flex-row md:items-end justify-between gap-6 pb-6 border-b border-outline-variant/30">
+<div class="flex items-center gap-6">
+<div class="relative group">
+<img class="w-24 h-24 rounded-sm border-2 border-primary-fixed/20 p-1 object-cover" data-alt="A portrait of a software engineer, with high-contrast sharp edges and vibrant neon cyan backlighting. The aesthetic is inspired by premium hacker interfaces and modern IDEs. The background is a very deep, near-black charcoal. The lighting is focused, casting dramatic shadows and highlighting the texture of a dark tech jacket." src="https://lh3.googleusercontent.com/aida-public/AB6AXuACQKeVsHQVhvvWHMyuwg1VxJIR4aI4_wXnPNBTHF_PmMvvK5bu4it8Qnq1_WySCdWyzE5o5N3paIeOybihf6OqX5xvgNVcU-5RyUwljor0w6p4-e7-Woxl_dt74qrf5Lo-R0zAmraq8aC7xUVEKTRkjLCxXBfA_KInudRet3ac3XnUljY3iX0-nwWIjtfwj0wg5WDgSasun9-jzeLPksskyuX5WnVh6rUseaJAqdvZ55tk1ehwyGzNkblaS1awv_W0qR6-uDnokEg"/>
+<button class="absolute -bottom-2 -right-2 bg-surface-container-highest border border-outline-variant p-1.5 rounded-sm text-primary-fixed hover:bg-primary-fixed hover:text-on-primary transition-all">
+<span class="material-symbols-outlined text-sm">edit</span>
+</button>
+</div>
+<div>
+<h2 class="font-headline-lg text-headline-lg text-on-surface tracking-tighter">Alex Chen</h2>
+<p class="font-body-md text-on-surface-variant">alex.chen@devmail.io</p>
+<div class="mt-2 inline-flex items-center gap-2 bg-surface-container-highest px-3 py-1 rounded-sm border border-outline-variant">
+<span class="w-2 h-2 rounded-full bg-primary-fixed glow-cyan"></span>
+<span class="font-label-sm text-label-sm text-primary-fixed">Free Plan</span>
+</div>
+</div>
+</div>
+<button class="bg-primary-fixed text-on-primary font-label-sm text-label-sm px-6 py-2.5 rounded-sm glow-cyan hover:opacity-90 transition-all active:scale-95">
+            Upgrade to Pro
+          </button>
+</section>
+<!-- Bento Grid Stats -->
+<section class="grid grid-cols-1 md:grid-cols-2 gap-4">
+<div class="pane-border bg-surface-container-low p-6 rounded-sm relative overflow-hidden group">
+<div class="absolute top-0 left-0 w-1 h-full bg-primary-fixed"></div>
+<div class="flex flex-col h-full justify-between">
+<div>
+<p class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-widest mb-1">Quota Usage</p>
+<h3 class="font-headline-md text-headline-md text-on-surface">Analyses this month</h3>
+</div>
+<div class="mt-6">
+<div class="flex justify-between items-end mb-2">
+<span class="font-headline-lg text-headline-lg text-primary-fixed">3<span class="text-on-surface-variant font-light">/5</span></span>
+<span class="font-code-sm text-code-sm text-on-surface-variant">60% Remaining</span>
+</div>
+<div class="w-full h-1.5 bg-surface-container-highest rounded-full overflow-hidden">
+<div class="h-full bg-primary-fixed w-[60%] transition-all duration-1000 ease-out"></div>
+</div>
+</div>
+</div>
+</div>
+<div class="pane-border bg-surface-container-low p-6 rounded-sm relative overflow-hidden group">
+<div class="absolute top-0 left-0 w-1 h-full bg-secondary"></div>
+<div class="flex flex-col h-full justify-between">
+<div>
+<p class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-widest mb-1">Lifetime Impact</p>
+<h3 class="font-headline-md text-headline-md text-on-surface">Total analyses</h3>
+</div>
+<div class="mt-6 flex items-baseline gap-2">
+<span class="font-headline-lg text-headline-lg text-secondary">12</span>
+<span class="font-code-sm text-code-sm text-on-surface-variant">sessions completed</span>
+</div>
+<div class="flex gap-1 mt-2">
+<div class="h-1 flex-1 bg-secondary opacity-20"></div>
+<div class="h-1 flex-1 bg-secondary opacity-40"></div>
+<div class="h-1 flex-1 bg-secondary opacity-60"></div>
+<div class="h-1 flex-1 bg-secondary opacity-80"></div>
+<div class="h-1 flex-1 bg-secondary"></div>
+</div>
+</div>
+</div>
+</section>
+<!-- Configuration Sections -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+<!-- Form Section -->
+<section class="lg:col-span-2 space-y-6">
+<div class="pane-border bg-surface-container-low p-6 rounded-sm">
+<h4 class="font-headline-md text-headline-md text-on-surface mb-6 flex items-center gap-2">
+<span class="material-symbols-outlined text-primary-fixed">key</span>
+                Change Password
+              </h4>
+<form class="space-y-4">
+<div class="space-y-1">
+<label class="font-label-sm text-label-sm text-on-surface-variant px-1">Current Password</label>
+<div class="relative">
+<span class="absolute left-3 top-1/2 -translate-y-1/2 text-primary-fixed/50 font-code-md text-code-md">$</span>
+<input class="w-full bg-surface-container-lowest border border-outline-variant focus:border-primary-fixed focus:ring-1 focus:ring-primary-fixed transition-all rounded-sm pl-8 text-on-surface font-code-md text-code-md placeholder:text-on-surface-variant/30 py-2.5" placeholder="••••••••" type="password"/>
+</div>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+<div class="space-y-1">
+<label class="font-label-sm text-label-sm text-on-surface-variant px-1">New Password</label>
+<div class="relative">
+<span class="absolute left-3 top-1/2 -translate-y-1/2 text-primary-fixed/50 font-code-md text-code-md">&gt;</span>
+<input class="w-full bg-surface-container-lowest border border-outline-variant focus:border-primary-fixed focus:ring-1 focus:ring-primary-fixed transition-all rounded-sm pl-8 text-on-surface font-code-md text-code-md placeholder:text-on-surface-variant/30 py-2.5" placeholder="New Secret" type="password"/>
+</div>
+</div>
+<div class="space-y-1">
+<label class="font-label-sm text-label-sm text-on-surface-variant px-1">Confirm New Password</label>
+<div class="relative">
+<span class="absolute left-3 top-1/2 -translate-y-1/2 text-primary-fixed/50 font-code-md text-code-md">&gt;</span>
+<input class="w-full bg-surface-container-lowest border border-outline-variant focus:border-primary-fixed focus:ring-1 focus:ring-primary-fixed transition-all rounded-sm pl-8 text-on-surface font-code-md text-code-md placeholder:text-on-surface-variant/30 py-2.5" placeholder="Confirm" type="password"/>
+</div>
+</div>
+</div>
+<div class="pt-4 flex justify-end">
+<button class="bg-surface-container-highest border border-outline-variant text-on-surface font-label-sm text-label-sm px-6 py-2 rounded-sm hover:border-primary-fixed transition-all" type="submit">
+                    Update Password
+                  </button>
+</div>
+</form>
+</div>
+<!-- Danger Zone -->
+<div class="border border-error/30 bg-error-container/5 p-6 rounded-sm">
+<div class="flex items-start justify-between gap-6">
+<div>
+<h4 class="font-headline-md text-headline-md text-error mb-2 flex items-center gap-2">
+<span class="material-symbols-outlined">warning</span>
+                    Danger Zone
+                  </h4>
+<p class="text-on-surface-variant font-body-md max-w-md">
+                    Deleting your account is permanent. All assessment history, progress, and AI-generated insights will be wiped from our secure servers.
+                  </p>
+</div>
+<button class="bg-transparent border border-error text-error font-label-sm text-label-sm px-6 py-2.5 rounded-sm hover:bg-error hover:text-on-error transition-all active:scale-95 whitespace-nowrap">
+                  Delete Account
+                </button>
+</div>
+</div>
+</section>
+<!-- Side Info Panel -->
+<section class="space-y-6">
+<div class="pane-border bg-surface-container-low p-6 rounded-sm">
+<h5 class="font-label-sm text-label-sm text-primary-fixed uppercase tracking-widest mb-4">Account Integrity</h5>
+<ul class="space-y-4">
+<li class="flex items-center justify-between">
+<span class="text-on-surface-variant text-sm">2FA Status</span>
+<span class="text-error text-sm font-bold flex items-center gap-1">
+<span class="material-symbols-outlined text-sm">lock_open</span>
+                    Disabled
+                  </span>
+</li>
+<li class="flex items-center justify-between">
+<span class="text-on-surface-variant text-sm">Git Linked</span>
+<span class="text-primary-fixed text-sm font-bold flex items-center gap-1">
+<span class="material-symbols-outlined text-sm">check_circle</span>
+                    GitHub
+                  </span>
+</li>
+<li class="flex items-center justify-between">
+<span class="text-on-surface-variant text-sm">Region</span>
+<span class="text-on-surface text-sm font-code-sm">us-east-1</span>
+</li>
+</ul>
+<button class="w-full mt-6 py-2 border border-outline-variant text-on-surface-variant text-sm rounded-sm hover:text-on-surface hover:border-on-surface-variant transition-all">
+                Security Audit Log
+              </button>
+</div>
+<div class="pane-border bg-surface-container-lowest p-6 rounded-sm border-dashed border-primary-fixed/20">
+<h5 class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-widest mb-4">Pro Benefits</h5>
+<ul class="space-y-3">
+<li class="flex gap-3 text-sm text-on-surface-variant">
+<span class="material-symbols-outlined text-primary-fixed text-[18px]">verified</span>
+                  Unlimited analyses
+                </li>
+<li class="flex gap-3 text-sm text-on-surface-variant">
+<span class="material-symbols-outlined text-primary-fixed text-[18px]">verified</span>
+                  Priority GPU queue
+                </li>
+<li class="flex gap-3 text-sm text-on-surface-variant">
+<span class="material-symbols-outlined text-primary-fixed text-[18px]">verified</span>
+                  Private report sharing
+                </li>
+</ul>
+</div>
+</section>
+</div>
+</div>
+</div>
+<!-- Background Atmospheric Effect -->
+<div class="absolute bottom-0 right-0 w-96 h-96 bg-primary-fixed/5 rounded-full blur-[120px] -z-10 pointer-events-none"></div>
+<div class="absolute top-1/4 left-1/4 w-64 h-64 bg-secondary/5 rounded-full blur-[100px] -z-10 pointer-events-none"></div>
+</main>
+<script>
+    // Micro-interactions
+    document.querySelectorAll('input').forEach(input => {
+      input.addEventListener('focus', () => {
+        input.parentElement.classList.add('glow-cyan');
+      });
+      input.addEventListener('blur', () => {
+        input.parentElement.classList.remove('glow-cyan');
+      });
+    });
+
+    // Simulated progress load
+    window.addEventListener('DOMContentLoaded', () => {
+      const bar = document.querySelector('.bg-primary-fixed.w-\\[60\\%\\]');
+      bar.style.width = '0%';
+      setTimeout(() => {
+        bar.style.width = '60%';
+      }, 300);
+    });
+  </script>
+</body></html>
