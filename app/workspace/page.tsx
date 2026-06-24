@@ -156,8 +156,8 @@ function CodeBlock({
   const startLine = highlightLine ? Math.max(1, highlightLine - 5) : 1;
 
   return (
-    <div className="rounded-xl overflow-hidden border border-border-main bg-[#060913] text-gray-300">
-      <div className="flex items-center gap-2 px-3 py-2 bg-[#0a0f1e] border-b border-border-main">
+    <div className="rounded-xl overflow-hidden border border-border-main bg-[#080f10] text-gray-300">
+      <div className="flex items-center gap-2 px-3 py-2 bg-[#0d1515] border-b border-border-main">
         <span className="w-3 h-3 rounded-full bg-[#ff5f57]" />
         <span className="w-3 h-3 rounded-full bg-[#febc2e]" />
         <span className="w-3 h-3 rounded-full bg-[#28c840]" />
@@ -356,7 +356,7 @@ export default function WorkspacePage() {
     if (!resultsRef.current) return;
     try {
       const canvas = await html2canvas(resultsRef.current, {
-        backgroundColor: '#0c1122',
+        backgroundColor: '#0d1515',
         scale: 2,
       });
       const link = document.createElement('a');

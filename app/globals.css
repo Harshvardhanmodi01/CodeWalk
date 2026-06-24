@@ -90,33 +90,33 @@ nextjs-portal,
   --card: #ffffff;
   --card-foreground: #0f172a;
   
-  --primary: #363cf2;
-  --primary-hover: #2127d1;
+  --primary: #007a87;
+  --primary-hover: #006970;
   
   --border: #e2e8f0;
   
   --muted: #64748b;
   --muted-background: #f8fafc;
   
-  --shadow-color: rgba(54, 60, 242, 0.05);
+  --shadow-color: rgba(0, 122, 135, 0.05);
 }
 
 .dark {
-  --background: #060913;
-  --foreground: #f8fafc;
+  --background: #0d1515;
+  --foreground: #dce4e5;
   
-  --card: #0c1122;
-  --card-foreground: #f8fafc;
+  --card: #151d1e;
+  --card-foreground: #dce4e5;
   
-  --primary: #555cff;
-  --primary-hover: #363cf2;
+  --primary: #00dbe9;
+  --primary-hover: #00b0bc;
   
-  --border: #1e293b;
+  --border: #2e3637;
   
-  --muted: #94a3b8;
-  --muted-background: #0e1426;
+  --muted: #849495;
+  --muted-background: #192122;
   
-  --shadow-color: rgba(0, 0, 0, 0.3);
+  --shadow-color: rgba(0, 219, 233, 0.05);
 }
 
 body {
