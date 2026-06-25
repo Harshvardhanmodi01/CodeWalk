@@ -72,6 +72,40 @@ async function fetchWithRetry(
 }
 
 /**
+ * Helper to fetch from GitHub API with automatic 401 (invalid token) retry fallback.
+ */
+export async function fetchGitHub(
+  url: string,
+  token?: string,
+  init?: RequestInit
+): Promise<Response> {
+  const actualToken = token || process.env.GITHUB_TOKEN;
+  
+  if (actualToken) {
+    const headers = {
+      ...buildHeaders(actualToken),
+      ...((init?.headers || {}) as Record<string, string>),
+    };
+    const response = await fetchWithRetry(url, { ...init, headers });
+    if (response.status !== 401) {
+      return response;
+    }
+    console.warn(`GitHub API returned 401 Unauthorized for token. Retrying without Authorization header for: ${url}`);
+  }
+
+  // Fallback: fetch without token
+  const headersWithoutAuth = {
+    Accept: 'application/vnd.github+json',
+    'X-GitHub-Api-Version': '2022-11-28',
+    'User-Agent': 'CodeWalk-App',
+    ...((init?.headers || {}) as Record<string, string>),
+  };
+  delete (headersWithoutAuth as any).Authorization;
+  
+  return fetchWithRetry(url, { ...init, headers: headersWithoutAuth });
+}
+
+/**
  * Extract owner and repo name from a GitHub URL.
  * Supports formats: https://github.com/owner/repo, github.com/owner/repo, owner/repo
  * @throws Error if URL is invalid
@@ -142,9 +176,7 @@ export async function fetchRepoContents(
       finalUrl += (finalUrl.includes('?') ? '&' : '?') + `ref=${encodeURIComponent(branch)}`;
     }
 
-    const response: Response = await fetchWithRetry(finalUrl, {
-      headers: buildHeaders(token),
-    });
+    const response: Response = await fetchGitHub(finalUrl, token);
 
     if (response.status === 404) {
       throw new Error(`Repository not found: ${owner}/${repo}`);
@@ -185,9 +217,7 @@ export async function fetchFileContent(url: string, token?: string): Promise<str
   }
 
   try {
-    const response = await fetchWithRetry(url, {
-      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-    });
+    const response = await fetchGitHub(url, token);
     if (!response.ok) {
       throw new Error(`Failed to fetch file: ${response.status}`);
     }
@@ -226,7 +256,7 @@ export async function getReadme(
     if (branch) {
       url += `?ref=${encodeURIComponent(branch)}`;
     }
-    const response = await fetchWithRetry(url, { headers: buildHeaders(token) });
+    const response = await fetchGitHub(url, token);
 
     if (response.status === 404) return null;
     if (!response.ok) return null;

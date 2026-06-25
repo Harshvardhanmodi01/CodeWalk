@@ -143,6 +143,41 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
   // Helper to load user profile and token logs from Supabase
   const loadUserData = async (userId: string, email: string) => {
     try {
+      // Fetch local overrides
+      let localName = '';
+      let localCompany = '';
+      try {
+        localName = localStorage.getItem(`cw_user_name_${userId}`) || '';
+        localCompany = localStorage.getItem(`cw_user_company_${userId}`) || '';
+      } catch (e) {}
+
+      // Try to fetch from recruiters table first
+      let { data: recruiter, error: recruiterErr } = await supabase
+        .from('recruiters')
+        .select('*')
+        .eq('id', userId)
+        .single();
+
+      if (recruiter) {
+        setUser({
+          id: userId,
+          email,
+          name: localName || recruiter.full_name || email.split('@')[0],
+          companyName: localCompany || recruiter.company || 'Acme Corp',
+        });
+        setCompany({
+          name: localCompany || recruiter.company || 'Acme Corp',
+          size: '10-50 employees',
+          domain: email.split('@')[1] || 'acme.com',
+          industry: 'Technology',
+          githubConnected: true,
+          gitlabConnected: false,
+          bitbucketConnected: false,
+        });
+        setTokenStats({ limit: 1000000, used: 0, history: [] });
+        return;
+      }
+
       // 1. Fetch profile from public.profiles
       let { data: profile, error: profileErr } = await supabase
         .from('profiles')
@@ -187,12 +222,12 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
         setUser({
           id: userId,
           email,
-          name: profile.name || email.split('@')[0],
-          companyName: profile.company_name || 'Acme Corp',
+          name: localName || profile.name || email.split('@')[0],
+          companyName: localCompany || profile.company_name || 'Acme Corp',
         });
 
         setCompany({
-          name: profile.company_name || 'Acme Corp',
+          name: localCompany || profile.company_name || 'Acme Corp',
           size: profile.company_size || '10-50 employees',
           domain: profile.domain || email.split('@')[1] || 'acme.com',
           industry: profile.industry || 'Technology',
@@ -214,8 +249,17 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
         setUser({
           id: userId,
           email,
-          name: email.split('@')[0],
-          companyName: 'Acme Corp',
+          name: localName || email.split('@')[0],
+          companyName: localCompany || 'Acme Corp',
+        });
+        setCompany({
+          name: localCompany || 'Acme Corp',
+          size: '10-50 employees',
+          domain: email.split('@')[1] || 'acme.com',
+          industry: 'Technology',
+          githubConnected: true,
+          gitlabConnected: false,
+          bitbucketConnected: false,
         });
       }
 

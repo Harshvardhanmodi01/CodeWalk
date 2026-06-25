@@ -2,13 +2,32 @@
 
 import React from 'react';
 import { useRouter } from 'next/navigation';
+import { useGlobal } from '@/app/context/GlobalContext';
 
 export default function PublicPricingPage() {
   const router = useRouter();
+  const { user, upgradeSubscription } = useGlobal();
 
-  const handleCheckout = (tier: string) => {
-    // For public page, if they click a plan, redirect them to sign up
-    router.push('/signup');
+  const handleCheckout = async (tier: string) => {
+    if (user) {
+      try {
+        if (tier === 'Pro Plan') {
+          await upgradeSubscription('Pro');
+          alert('Successfully upgraded to Pro Plan!');
+        } else if (tier === 'Business Tier') {
+          await upgradeSubscription('Enterprise');
+          alert('Successfully upgraded to Enterprise Business Plan!');
+        } else {
+          await upgradeSubscription('Free');
+          alert('Subscription set to Free Plan.');
+        }
+        router.push('/profile');
+      } catch (err) {
+        alert('Failed to upgrade subscription plan.');
+      }
+    } else {
+      router.push('/signup');
+    }
   };
 
   return (

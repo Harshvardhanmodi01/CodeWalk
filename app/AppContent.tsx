@@ -79,8 +79,11 @@ export default function AppContent({ children }: { children: React.ReactNode }) 
     pathname?.startsWith('/profile') || 
     pathname?.startsWith('/tokens') || 
     pathname?.startsWith('/login') || 
+    pathname?.startsWith('/register') || 
     pathname?.startsWith('/signup') || 
-    pathname?.startsWith('/verify-email');
+    pathname?.startsWith('/verify-email') ||
+    pathname?.startsWith('/session') ||
+    pathname?.startsWith('/candidate');
 
   if (isDashboardOrAuth) {
     return <>{children}</>;

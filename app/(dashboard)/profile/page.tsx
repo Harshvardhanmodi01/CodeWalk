@@ -2,25 +2,209 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { useGlobal } from '@/app/context/GlobalContext';
+import { supabase } from '@/app/lib/supabaseClient';
 
 export default function ProfilePage() {
   const router = useRouter();
-  const [name, setName] = useState('Alex Chen');
+  const { user, subscription } = useGlobal();
+
+  // Local editable states
+  const [name, setName] = useState('');
+  const [companyName, setCompanyName] = useState('');
   const [isEditing, setIsEditing] = useState(false);
-  const [analysesCount, setAnalysesCount] = useState(3);
+  const [savingName, setSavingName] = useState(false);
+  
+  // Custom Avatar state
+  const [avatarUrl, setAvatarUrl] = useState('https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=256&h=256&q=80');
+  const [showAvatarModal, setShowAvatarModal] = useState(false);
+  const [customAvatarInput, setCustomAvatarInput] = useState('');
 
+  // 2FA state
+  const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
+  const [show2faModal, setShow2faModal] = useState(false);
+  const [twoFactorCode, setTwoFactorCode] = useState('');
+  const [twoFactorError, setTwoFactorError] = useState('');
+
+  // Connected Repositories
+  const [repos, setRepos] = useState<string[]>([]);
+  const [newRepoUrl, setNewRepoUrl] = useState('');
+  const [showConnectModal, setShowConnectModal] = useState(false);
+
+  // Sync profile details on mount
   useEffect(() => {
-    const q = localStorage.getItem('cw_quota_analyses');
-    if (q) setAnalysesCount(parseInt(q));
-  }, []);
+    if (user) {
+      setName(user.name || '');
+      setCompanyName(user.companyName || '');
+      
+      // Load custom avatar from localStorage if set
+      const savedAvatar = localStorage.getItem(`cw_avatar_url_${user.id}`);
+      if (savedAvatar) setAvatarUrl(savedAvatar);
 
-  const handleNameSave = () => {
-    setIsEditing(false);
-    // Persist name if needed, else local state update is fine
+      // Load 2FA state
+      const saved2fa = localStorage.getItem(`cw_2fa_enabled_${user.id}`);
+      if (saved2fa === 'true') setTwoFactorEnabled(true);
+
+      // Load connected repos
+      const savedRepos = localStorage.getItem(`cw_connected_repos_${user.id}`);
+      if (savedRepos) {
+        setRepos(JSON.parse(savedRepos));
+      } else {
+        const defaultRepos = ['Harshvardhanmodi01/CodeWalk', 'Nikhilsingha01/garg-electronics'];
+        setRepos(defaultRepos);
+        localStorage.setItem(`cw_connected_repos_${user.id}`, JSON.stringify(defaultRepos));
+      }
+    }
+  }, [user]);
+
+  const handleNameSave = async () => {
+    if (!user) return;
+    setSavingName(true);
+    try {
+      // 1. Save to LocalStorage immediately so local changes are guaranteed to persist
+      localStorage.setItem(`cw_user_name_${user.id}`, name);
+      localStorage.setItem(`cw_user_company_${user.id}`, companyName);
+
+      // 2. Try to upsert into recruiters table
+      const { error: recErr } = await supabase
+        .from('recruiters')
+        .upsert({
+          id: user.id,
+          email: user.email,
+          full_name: name,
+          company: companyName,
+        }, { onConflict: 'id' });
+
+      if (recErr) console.warn('Could not update recruiters table:', recErr);
+
+      // 3. Try to upsert into profiles table fallback
+      const { error: profErr } = await supabase
+        .from('profiles')
+        .upsert({
+          id: user.id,
+          email: user.email,
+          name: name,
+          company_name: companyName,
+        }, { onConflict: 'id' });
+
+      if (profErr) console.warn('Could not update profiles table:', profErr);
+
+      // 4. Update Supabase Auth User Metadata to keep everything in sync
+      const { error: authErr } = await supabase.auth.updateUser({
+        data: {
+          name: name,
+          companyName: companyName,
+        }
+      });
+
+      if (authErr) console.warn('Could not update auth user metadata:', authErr);
+
+      setIsEditing(false);
+      window.location.reload();
+    } catch (err) {
+      console.error('Failed to update profile settings:', err);
+      // Even if network or database write completely throws an error, reload to apply LocalStorage
+      setIsEditing(false);
+      window.location.reload();
+    } finally {
+      setSavingName(false);
+    }
+  };
+
+  // Avatar selector functions
+  const selectAvatarPreset = (url: string) => {
+    if (!user) return;
+    setAvatarUrl(url);
+    localStorage.setItem(`cw_avatar_url_${user.id}`, url);
+    setShowAvatarModal(false);
+  };
+
+  const handleCustomAvatarSave = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user || !customAvatarInput.trim()) return;
+    setAvatarUrl(customAvatarInput.trim());
+    localStorage.setItem(`cw_avatar_url_${user.id}`, customAvatarInput.trim());
+    setCustomAvatarInput('');
+    setShowAvatarModal(false);
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 2 * 1024 * 1024) {
+      alert('File size exceeds 2MB limit. Please upload a smaller image.');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const base64 = event.target?.result as string;
+      if (base64 && user) {
+        setAvatarUrl(base64);
+        localStorage.setItem(`cw_avatar_url_${user.id}`, base64);
+        setShowAvatarModal(false);
+        window.location.reload();
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // 2FA functions
+  const handleEnable2fa = (e: React.FormEvent) => {
+    e.preventDefault();
+    setTwoFactorError('');
+    if (twoFactorCode.length !== 6 || isNaN(Number(twoFactorCode))) {
+      setTwoFactorError('Please enter a valid 6-digit verification code.');
+      return;
+    }
+
+    if (user) {
+      setTwoFactorEnabled(true);
+      localStorage.setItem(`cw_2fa_enabled_${user.id}`, 'true');
+    }
+    setTwoFactorCode('');
+    setShow2faModal(false);
+  };
+
+  const handleDisable2fa = () => {
+    if (confirm('Are you sure you want to disable Two-Factor Authentication? Your account security rating will decrease.')) {
+      if (user) {
+        setTwoFactorEnabled(false);
+        localStorage.setItem(`cw_2fa_enabled_${user.id}`, 'false');
+      }
+    }
+  };
+
+  // Connected Repos functions
+  const handleConnectRepo = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newRepoUrl.trim()) return;
+    let repoName = newRepoUrl.trim();
+    // Strip github prefix if present
+    repoName = repoName.replace(/https?:\/\/(?:www\.)?github\.com\//, '');
+    
+    const updated = [...repos, repoName];
+    setRepos(updated);
+    if (user) {
+      localStorage.setItem(`cw_connected_repos_${user.id}`, JSON.stringify(updated));
+    }
+    setNewRepoUrl('');
+    setShowConnectModal(false);
+  };
+
+  const handleDisconnectRepo = (repoName: string) => {
+    if (confirm(`Disconnect ${repoName}? This will prevent candidates from running assessments against it.`)) {
+      const updated = repos.filter(r => r !== repoName);
+      setRepos(updated);
+      if (user) {
+        localStorage.setItem(`cw_connected_repos_${user.id}`, JSON.stringify(updated));
+      }
+    }
   };
 
   const handleDeleteAccount = () => {
-    if (confirm('CAUTION: Deleting your account is permanent. All history and generated scorecards will be wiped. Proceed?')) {
+    if (confirm('CAUTION: Deleting your account is permanent. All recruiter history, session logs, and reports will be wiped. Proceed?')) {
       localStorage.clear();
       router.push('/');
     }
@@ -31,184 +215,174 @@ export default function ProfilePage() {
     alert('Password updated successfully!');
   };
 
+  if (!user) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-[#0F172A] text-white">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#06B6D4] mb-4"></div>
+        <p className="text-sm font-mono text-[#94A3B8]">Loading profile configurations...</p>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex-grow flex flex-col bg-surface overflow-hidden min-h-screen">
+    <div className="flex-grow flex flex-col bg-[#0F172A] text-[#F1F5F9] overflow-hidden min-h-screen">
       {/* Top Header Bar */}
-      <header className="flex justify-between items-center px-8 py-3 bg-surface-container-low w-full border-b border-outline-variant z-10 select-none">
+      <header className="flex justify-between items-center px-8 py-3 bg-[#1E293B] w-full border-b border-[#334155] z-10 select-none">
         <div className="flex items-center gap-3">
-          <span className="material-symbols-outlined text-primary-fixed text-xl">settings</span>
-          <h1 className="font-headline-md text-lg text-primary-fixed font-bold tracking-tight">Settings</h1>
-        </div>
-        <div className="flex items-center gap-2">
-          <button className="p-2 text-on-surface-variant hover:text-primary-fixed transition-colors active:scale-95">
-            <span className="material-symbols-outlined text-lg">share</span>
-          </button>
-          <button className="p-2 text-on-surface-variant hover:text-primary-fixed transition-colors active:scale-95">
-            <span className="material-symbols-outlined text-lg">download</span>
-          </button>
+          <span className="material-symbols-outlined text-[#06B6D4] text-xl">settings</span>
+          <h1 className="font-headline-md text-lg text-[#06B6D4] font-bold tracking-tight">Settings Workspace</h1>
         </div>
       </header>
 
-      {/* Profile Settings Contents */}
-      <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
-        <div className="max-w-4xl mx-auto space-y-8 pb-12">
+      {/* Settings Contents Wrapper */}
+      <div className="flex-grow overflow-y-auto p-8 custom-scrollbar">
+        <div className="max-w-4xl mx-auto space-y-8 pb-24">
           
-          {/* Header Details Card */}
-          <section className="flex flex-col md:flex-row md:items-end justify-between gap-6 pb-6 border-b border-outline-variant/30 select-none">
+          {/* Recruiter Details Card */}
+          <section className="flex flex-col md:flex-row md:items-end justify-between gap-6 pb-6 border-b border-[#334155] select-none">
             <div className="flex items-center gap-6">
               <div className="relative">
                 <img 
-                  className="w-24 h-24 rounded border border-outline-variant p-1 object-cover" 
-                  alt="Alex Profile"
-                  src="https://lh3.googleusercontent.com/aida-public/AB6AXuDXxCTO6xP8J12evgfDxdwQ5c5oj3zVRDNYdWJ5OBW5lyI0M3_z_bqW8vxUKtKSgv2dcgE6l2uWJIy9T-iHHnR_ugjxojc-8crvVHDDI-H6Ot7VqdbZOwYsTYu6jOnjm4WiDwMYli3Buel5mPwGPQt9yIwARCfitwjYRgu22ONf1r3InOI7XpZcvlEbozj6ochoL8zi5T7_67rrK0hJsk8o0s2fq3YYYmMCuW8HBW-HT1sMZ9gm7E3Htnx6XUKKvyNnRHXp6yWL9pQ"
+                  className="w-24 h-24 rounded border border-[#334155] p-1 object-cover hover:brightness-90 transition-all cursor-pointer" 
+                  alt="Profile Avatar"
+                  src={avatarUrl}
+                  onClick={() => setShowAvatarModal(true)}
                 />
-                <button className="absolute -bottom-1 -right-1 bg-surface-container-highest border border-outline-variant p-1 rounded text-primary-fixed hover:bg-primary-fixed hover:text-on-primary transition-all active:scale-95">
+                <button 
+                  onClick={() => setShowAvatarModal(true)}
+                  className="absolute -bottom-1 -right-1 bg-[#1E293B] border border-[#334155] p-1 rounded text-[#06B6D4] hover:bg-[#06B6D4] hover:text-[#0F172A] transition-all active:scale-95"
+                >
                   <span className="material-symbols-outlined text-xs font-bold">edit</span>
                 </button>
               </div>
-
-              <div className="space-y-1">
+ 
+              <div className="space-y-2">
                 {isEditing ? (
-                  <div className="flex items-center gap-2">
-                    <input 
-                      type="text" 
-                      value={name} 
-                      onChange={(e) => setName(e.target.value)}
-                      className="bg-surface-container-lowest border border-primary-fixed p-1 rounded font-headline-lg text-lg text-on-surface outline-none"
-                    />
-                    <button 
-                      onClick={handleNameSave}
-                      className="bg-primary-fixed text-on-primary px-3 py-1 text-xs font-bold font-label-sm uppercase rounded"
-                    >
-                      Save
-                    </button>
+                  <div className="flex flex-col gap-2 bg-[#1E293B] p-4 rounded-lg border border-[#334155] max-w-sm">
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[10px] text-[#94A3B8] font-bold uppercase tracking-wider block">Full Name</label>
+                      <input 
+                        type="text" 
+                        value={name} 
+                        onChange={(e) => setName(e.target.value)}
+                        className="bg-[#0F172A] border border-[#334155] focus:border-[#06B6D4] p-1.5 px-3 rounded text-sm text-white outline-none"
+                        placeholder="Your Name"
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[10px] text-[#94A3B8] font-bold uppercase tracking-wider block">Company Name</label>
+                      <input 
+                        type="text" 
+                        value={companyName} 
+                        onChange={(e) => setCompanyName(e.target.value)}
+                        className="bg-[#0F172A] border border-[#334155] focus:border-[#06B6D4] p-1.5 px-3 rounded text-sm text-white outline-none"
+                        placeholder="Company Name"
+                      />
+                    </div>
+                    <div className="flex gap-2 justify-end pt-2">
+                      <button 
+                        onClick={() => setIsEditing(false)}
+                        className="bg-[#334155] text-white px-3 py-1.5 text-xs font-bold rounded uppercase tracking-wider hover:bg-[#475569] transition-colors"
+                        disabled={savingName}
+                      >
+                        Cancel
+                      </button>
+                      <button 
+                        onClick={handleNameSave}
+                        disabled={savingName}
+                        className="bg-[#06B6D4] text-[#0F172A] px-3 py-1.5 text-xs font-bold rounded uppercase tracking-wider hover:bg-[#06B6D4]/80 transition-colors"
+                      >
+                        {savingName ? 'Saving...' : 'Save'}
+                      </button>
+                    </div>
                   </div>
                 ) : (
-                  <div className="flex items-center gap-2 group">
-                    <h2 className="font-headline-lg text-2xl text-on-surface font-extrabold tracking-tight">{name}</h2>
-                    <button 
-                      onClick={() => setIsEditing(true)}
-                      className="opacity-0 group-hover:opacity-100 text-on-surface-variant hover:text-primary-fixed transition-opacity p-0.5"
-                    >
-                      <span className="material-symbols-outlined text-sm">edit</span>
-                    </button>
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2 group">
+                      <h2 className="text-xl text-[#F1F5F9] font-extrabold tracking-tight">{name}</h2>
+                      <button 
+                        onClick={() => setIsEditing(true)}
+                        className="text-[#94A3B8] hover:text-[#06B6D4] p-1 rounded hover:bg-[#1E293B] transition-all"
+                        title="Edit Profile"
+                      >
+                        <span className="material-symbols-outlined text-sm">edit</span>
+                      </button>
+                    </div>
+                    {companyName && (
+                      <p className="text-sm text-[#06B6D4] font-semibold flex items-center gap-1">
+                        <span className="material-symbols-outlined text-xs">corporate_fare</span>
+                        {companyName}
+                      </p>
+                    )}
                   </div>
                 )}
                 
-                <p className="font-body-md text-sm text-on-surface-variant">alex.chen@devmail.io</p>
+                <p className="text-xs text-[#94A3B8] font-mono">{user.email}</p>
                 
-                <div className="inline-flex items-center gap-2 bg-surface-container-highest px-3 py-1 rounded border border-outline-variant">
-                  <span className="w-1.5 h-1.5 rounded-full bg-primary-fixed glow-cyan"></span>
-                  <span className="font-label-sm text-[10px] text-primary-fixed font-bold uppercase tracking-wider">Free Plan</span>
+                {/* Role and Plan Badges */}
+                <div className="flex gap-2 flex-wrap pt-0.5">
+                  <div className="inline-flex items-center gap-1.5 bg-[#1E293B] px-2.5 py-1 rounded border border-[#334155]">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#06B6D4] glow-cyan"></span>
+                    <span className="text-[9px] text-[#06B6D4] font-bold uppercase tracking-wider">{subscription} Plan</span>
+                  </div>
+                  <div className="inline-flex items-center gap-1.5 bg-[#06B6D4]/10 border border-[#06B6D4]/20 px-2.5 py-1 rounded">
+                    <span className="text-[9px] text-[#06B6D4] font-bold uppercase tracking-wider">Role: Recruiter</span>
+                  </div>
                 </div>
               </div>
             </div>
 
             <button 
               onClick={() => router.push('/pricing')}
-              className="bg-primary-fixed text-on-primary-fixed font-bold font-label-sm text-xs px-6 py-2.5 rounded glow-cyan hover:opacity-90 transition-all active:scale-95"
+              className="bg-[#06B6D4] text-[#0F172A] font-bold text-xs px-6 py-2.5 rounded hover:bg-[#06B6D4]/90 transition-all active:scale-95 shadow-lg shadow-[#06B6D4]/10"
             >
-              Upgrade to Pro
+              Upgrade Plan
             </button>
           </section>
 
-          {/* Quota & Lifetime statistics panel */}
-          <section className="grid grid-cols-1 md:grid-cols-2 gap-6 select-none">
-            
-            {/* Monthly Cap usage */}
-            <div className="border border-outline-variant bg-surface-container-low p-6 rounded-lg relative overflow-hidden group">
-              <div className="absolute top-0 left-0 w-1 h-full bg-primary-fixed"></div>
-              <div className="flex flex-col h-full justify-between">
-                <div>
-                  <p className="font-label-sm text-[10px] text-on-surface-variant uppercase tracking-widest font-bold mb-1">Quota Usage</p>
-                  <h3 className="font-headline-md text-base text-on-surface font-bold">Analyses this month</h3>
-                </div>
-                <div className="mt-6">
-                  <div className="flex justify-between items-end mb-2">
-                    <span className="font-headline-lg text-3xl font-extrabold text-primary-fixed">
-                      {analysesCount}<span className="text-on-surface-variant font-light text-xl">/5</span>
-                    </span>
-                    <span className="font-code-sm text-xs text-on-surface-variant font-mono">
-                      {Math.max(0, 100 - (analysesCount * 20))}% Remaining
-                    </span>
-                  </div>
-                  <div className="w-full h-1.5 bg-surface-container-highest rounded-full overflow-hidden">
-                    <div 
-                      className="h-full bg-primary-fixed transition-all duration-500" 
-                      style={{ width: `${(analysesCount / 5) * 100}%` }}
-                    ></div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Total usage */}
-            <div className="border border-outline-variant bg-surface-container-low p-6 rounded-lg relative overflow-hidden group">
-              <div className="absolute top-0 left-0 w-1 h-full bg-secondary"></div>
-              <div className="flex flex-col h-full justify-between">
-                <div>
-                  <p className="font-label-sm text-[10px] text-on-surface-variant uppercase tracking-widest font-bold mb-1">Lifetime Impact</p>
-                  <h3 className="font-headline-md text-base text-on-surface font-bold">Total analyses</h3>
-                </div>
-                <div className="mt-6 flex items-baseline gap-2">
-                  <span className="font-headline-lg text-3xl font-extrabold text-secondary">12</span>
-                  <span className="font-code-sm text-xs text-on-surface-variant font-mono">sessions completed</span>
-                </div>
-                <div className="flex gap-1 mt-3">
-                  <div className="h-1 flex-grow bg-secondary/20"></div>
-                  <div className="h-1 flex-grow bg-secondary/40"></div>
-                  <div className="h-1 flex-grow bg-secondary/60"></div>
-                  <div className="h-1 flex-grow bg-secondary/80"></div>
-                  <div className="h-1 flex-grow bg-secondary"></div>
-                </div>
-              </div>
-            </div>
-
-          </section>
-
-          {/* Form blocks configurations */}
+          {/* Account Security & GitHub Repos Grid */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             
-            {/* Password input block */}
+            {/* Form password change block */}
             <section className="lg:col-span-2 space-y-6">
-              <div className="border border-outline-variant bg-surface-container-low p-6 rounded-lg shadow-sm">
-                <h4 className="font-headline-md text-base text-on-surface font-bold mb-6 flex items-center gap-2 select-none">
-                  <span className="material-symbols-outlined text-primary-fixed">key</span>
+              <div className="border border-[#334155] bg-[#1E293B]/40 p-6 rounded-xl shadow-sm">
+                <h4 className="text-sm text-white font-bold mb-6 flex items-center gap-2 select-none">
+                  <span className="material-symbols-outlined text-[#06B6D4]">key</span>
                   Change Password
                 </h4>
                 <form onSubmit={handlePasswordSubmit} className="space-y-4">
-                  <div className="space-y-1">
-                    <label className="font-label-sm text-[10px] text-on-surface-variant px-1 font-bold uppercase tracking-wider">Current Password</label>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] text-[#94A3B8] font-bold uppercase tracking-wider block">Current Password</label>
                     <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-primary-fixed/50 font-code-md text-code-md font-mono select-none">$</span>
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#06B6D4]/50 font-mono select-none">$</span>
                       <input 
                         required
-                        className="w-full bg-surface-container-lowest border border-outline-variant focus:border-primary-fixed focus:ring-1 focus:ring-primary-fixed transition-all rounded pl-8 text-on-surface font-code-md text-code-md placeholder:text-on-surface-variant/30 py-2.5 font-mono text-sm" 
+                        className="w-full bg-[#0F172A] border border-[#334155] focus:border-[#06B6D4] transition-all rounded pl-8 text-white py-2.5 font-mono text-xs outline-none" 
                         placeholder="••••••••" 
                         type="password"
                       />
                     </div>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-1">
-                      <label className="font-label-sm text-[10px] text-on-surface-variant px-1 font-bold uppercase tracking-wider">New Password</label>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] text-[#94A3B8] font-bold uppercase tracking-wider block">New Password</label>
                       <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-primary-fixed/50 font-code-md text-code-md font-mono select-none">&gt;</span>
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#06B6D4]/50 font-mono select-none">&gt;</span>
                         <input 
                           required
-                          className="w-full bg-surface-container-lowest border border-outline-variant focus:border-primary-fixed focus:ring-1 focus:ring-primary-fixed transition-all rounded pl-8 text-on-surface font-code-md text-code-md placeholder:text-on-surface-variant/30 py-2.5 font-mono text-sm" 
+                          className="w-full bg-[#0F172A] border border-[#334155] focus:border-[#06B6D4] transition-all rounded pl-8 text-white py-2.5 font-mono text-xs outline-none" 
                           placeholder="New Secret" 
                           type="password"
                         />
                       </div>
                     </div>
-                    <div className="space-y-1">
-                      <label className="font-label-sm text-[10px] text-on-surface-variant px-1 font-bold uppercase tracking-wider">Confirm New Password</label>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] text-[#94A3B8] font-bold uppercase tracking-wider block">Confirm New Password</label>
                       <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-primary-fixed/50 font-code-md text-code-md font-mono select-none">&gt;</span>
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#06B6D4]/50 font-mono select-none">&gt;</span>
                         <input 
                           required
-                          className="w-full bg-surface-container-lowest border border-outline-variant focus:border-primary-fixed focus:ring-1 focus:ring-primary-fixed transition-all rounded pl-8 text-on-surface font-code-md text-code-md placeholder:text-on-surface-variant/30 py-2.5 font-mono text-sm" 
+                          className="w-full bg-[#0F172A] border border-[#334155] focus:border-[#06B6D4] transition-all rounded pl-8 text-white py-2.5 font-mono text-xs outline-none" 
                           placeholder="Confirm" 
                           type="password"
                         />
@@ -217,7 +391,7 @@ export default function ProfilePage() {
                   </div>
                   <div className="pt-4 flex justify-end">
                     <button 
-                      className="bg-surface-container-highest border border-outline-variant text-on-surface font-label-sm text-xs px-6 py-2.5 rounded hover:border-primary-fixed hover:text-primary-fixed transition-all select-none font-bold uppercase tracking-wider" 
+                      className="bg-[#1E293B] border border-[#334155] text-white hover:text-[#06B6D4] hover:border-[#06B6D4] text-xs px-6 py-2.5 rounded transition-all font-bold uppercase tracking-wider" 
                       type="submit"
                     >
                       Update Password
@@ -226,21 +400,57 @@ export default function ProfilePage() {
                 </form>
               </div>
 
+              {/* Connected Repos Management block */}
+              <div className="border border-[#334155] bg-[#1E293B]/40 p-6 rounded-xl shadow-sm">
+                <div className="flex justify-between items-center mb-6">
+                  <h4 className="text-sm text-white font-bold flex items-center gap-2 select-none">
+                    <span className="material-symbols-outlined text-[#06B6D4]">source</span>
+                    Connected GitHub Repositories
+                  </h4>
+                  <button 
+                    onClick={() => setShowConnectModal(true)}
+                    className="text-[10px] font-bold bg-[#06B6D4]/10 border border-[#06B6D4]/25 hover:bg-[#06B6D4]/20 text-[#06B6D4] px-2.5 py-1.5 rounded transition-colors"
+                  >
+                    + Connect Repo
+                  </button>
+                </div>
+                
+                <div className="divide-y divide-[#334155]/50">
+                  {repos.map((repo, idx) => (
+                    <div key={idx} className="flex justify-between items-center py-3 first:pt-0 last:pb-0">
+                      <div className="flex items-center gap-2">
+                        <span className="material-symbols-outlined text-xs text-[#06B6D4]">link</span>
+                        <span className="text-xs font-mono text-[#D1D5DB]">{repo}</span>
+                      </div>
+                      <button 
+                        onClick={() => handleDisconnectRepo(repo)}
+                        className="text-[10px] font-bold text-red-400 hover:text-red-500 transition-colors uppercase tracking-wider"
+                      >
+                        Disconnect
+                      </button>
+                    </div>
+                  ))}
+                  {repos.length === 0 && (
+                    <p className="text-xs text-[#94A3B8] py-2 italic">No repositories connected. Candidates cannot run assessments until a repo is connected.</p>
+                  )}
+                </div>
+              </div>
+
               {/* Danger Zone */}
-              <div className="border border-error/30 bg-error/5 p-6 rounded-lg shadow-sm">
+              <div className="border border-red-500/20 bg-red-500/5 p-6 rounded-xl shadow-sm">
                 <div className="flex flex-col sm:flex-row items-start justify-between gap-6">
                   <div className="space-y-2 select-none">
-                    <h4 className="font-headline-md text-base text-error font-bold flex items-center gap-2">
-                      <span className="material-symbols-outlined">warning</span>
+                    <h4 className="text-sm text-red-400 font-bold flex items-center gap-2">
+                      <span className="material-symbols-outlined text-red-500">warning</span>
                       Danger Zone
                     </h4>
-                    <p className="text-on-surface-variant/80 text-xs leading-relaxed max-w-md">
-                      Deleting your account is permanent. All assessment history, rating index scorecards, and token analytics logs will be wiped from our secure servers.
+                    <p className="text-[#94A3B8] text-xs leading-relaxed max-w-md">
+                      Deleting your account is permanent. All candidate screening session history, Q&A logs, and summary reports will be wiped.
                     </p>
                   </div>
                   <button 
                     onClick={handleDeleteAccount}
-                    className="bg-transparent border border-error text-error font-label-sm text-xs font-bold uppercase tracking-widest px-6 py-3 rounded hover:bg-error hover:text-surface-container-lowest transition-all active:scale-95 whitespace-nowrap shrink-0"
+                    className="bg-transparent border border-red-500/40 text-red-400 text-xs font-bold uppercase tracking-wider px-6 py-3 rounded hover:bg-red-500 hover:text-white transition-all active:scale-95 whitespace-nowrap"
                   >
                     Delete Account
                   </button>
@@ -248,53 +458,98 @@ export default function ProfilePage() {
               </div>
             </section>
 
-            {/* Right details sidebar section */}
+            {/* Right sidebars details */}
             <section className="space-y-6 select-none text-xs">
-              <div className="border border-outline-variant bg-surface-container-low p-6 rounded-lg shadow-sm">
-                <h5 className="font-label-sm text-[10px] text-primary-fixed uppercase tracking-widest font-bold mb-4">
+              {/* Account Integrity */}
+              <div className="border border-[#334155] bg-[#1E293B]/40 p-6 rounded-xl shadow-sm space-y-4">
+                <h5 className="text-[10px] text-[#06B6D4] uppercase tracking-widest font-bold">
                   Account Integrity
                 </h5>
                 <ul className="space-y-4">
                   <li className="flex items-center justify-between">
-                    <span className="text-on-surface-variant font-bold">2FA MFA Security</span>
-                    <span className="text-error font-bold flex items-center gap-1 font-mono">
-                      <span className="material-symbols-outlined text-sm font-bold">lock_open</span>
-                      DISABLED
-                    </span>
+                    <span className="text-[#94A3B8] font-semibold">2FA MFA Security</span>
+                    {twoFactorEnabled ? (
+                      <button 
+                        onClick={handleDisable2fa}
+                        className="text-emerald-400 font-bold flex items-center gap-1 font-mono bg-emerald-500/10 border border-emerald-500/25 px-2 py-0.5 rounded"
+                      >
+                        <span className="material-symbols-outlined text-xs">lock</span>
+                        ENABLED
+                      </button>
+                    ) : (
+                      <button 
+                        onClick={() => setShow2faModal(true)}
+                        className="text-red-400 font-bold flex items-center gap-1 font-mono bg-red-500/10 border border-red-500/25 px-2 py-0.5 rounded hover:bg-red-500/20 transition-colors"
+                      >
+                        <span className="material-symbols-outlined text-xs">lock_open</span>
+                        DISABLED
+                      </button>
+                    )}
                   </li>
                   <li className="flex items-center justify-between">
-                    <span className="text-on-surface-variant font-bold">Git Integration</span>
-                    <span className="text-primary-fixed font-bold flex items-center gap-1 font-mono">
-                      <span className="material-symbols-outlined text-sm font-bold">check_circle</span>
+                    <span className="text-[#94A3B8] font-semibold">Git Integration</span>
+                    <span className="text-[#06B6D4] font-bold flex items-center gap-1 font-mono">
+                      <span className="material-symbols-outlined text-xs">check_circle</span>
                       GITHUB
                     </span>
                   </li>
                   <li className="flex items-center justify-between">
-                    <span className="text-on-surface-variant font-bold">Region Node</span>
-                    <span className="text-on-surface font-semibold font-mono">us-east-1</span>
+                    <span className="text-[#94A3B8] font-semibold">Region Node</span>
+                    <span className="text-white font-semibold font-mono">us-east-1</span>
                   </li>
                 </ul>
-                <button className="w-full mt-6 py-2.5 border border-outline-variant text-on-surface-variant hover:text-on-surface hover:border-outline transition-all rounded text-xs font-bold uppercase tracking-wider">
-                  Security Audit Log
-                </button>
               </div>
 
-              <div className="border border-dashed border-primary-fixed/20 bg-surface-container-lowest p-6 rounded-lg">
-                <h5 className="font-label-sm text-[10px] text-on-surface-variant uppercase tracking-widest font-bold mb-4">
+              {/* Free Plan Details */}
+              <div className="border border-dashed border-[#334155] bg-[#1E293B]/20 p-6 rounded-xl space-y-4">
+                <h5 className="text-[10px] text-[#94A3B8] uppercase tracking-widest font-bold">
+                  Free Plan Details
+                </h5>
+                <ul className="space-y-3 text-[#94A3B8]">
+                  <li className="flex gap-2.5 items-center">
+                    <span className="material-symbols-outlined text-[#06B6D4] text-sm">check_circle</span>
+                    <span>5 analyses / month</span>
+                  </li>
+                  <li className="flex gap-2.5 items-center">
+                    <span className="material-symbols-outlined text-[#06B6D4] text-sm">check_circle</span>
+                    <span>50,000 token limit</span>
+                  </li>
+                  <li className="flex gap-2.5 items-center">
+                    <span className="material-symbols-outlined text-[#06B6D4] text-sm">check_circle</span>
+                    <span>Public repositories only</span>
+                  </li>
+                  <li className="flex gap-2.5 items-center">
+                    <span className="material-symbols-outlined text-[#06B6D4] text-sm">check_circle</span>
+                    <span>Basic Q&A scorecard tracking</span>
+                  </li>
+                </ul>
+              </div>
+
+              {/* Pro Plan Benefits */}
+              <div className="border border-[#06B6D4]/30 bg-[#06B6D4]/5 p-6 rounded-xl space-y-4">
+                <h5 className="text-[10px] text-[#06B6D4] uppercase tracking-widest font-bold">
                   Pro Benefits
                 </h5>
-                <ul className="space-y-3 text-on-surface-variant">
-                  <li className="flex gap-3 items-center">
-                    <span className="material-symbols-outlined text-primary-fixed text-sm font-bold">verified</span>
+                <ul className="space-y-3 text-[#D1D5DB]">
+                  <li className="flex gap-2.5 items-center">
+                    <span className="material-symbols-outlined text-[#06B6D4] text-sm">verified</span>
                     <span>50 analyses / month</span>
                   </li>
-                  <li className="flex gap-3 items-center">
-                    <span className="material-symbols-outlined text-primary-fixed text-sm font-bold">verified</span>
-                    <span>Priority Queue Processing</span>
+                  <li className="flex gap-2.5 items-center">
+                    <span className="material-symbols-outlined text-[#06B6D4] text-sm">verified</span>
+                    <span>1,000,000 token limit</span>
                   </li>
-                  <li className="flex gap-3 items-center">
-                    <span className="material-symbols-outlined text-primary-fixed text-sm font-bold">verified</span>
-                    <span>Full scorecard shares</span>
+                  <li className="flex gap-2.5 items-center">
+                    <span className="material-symbols-outlined text-[#06B6D4] text-sm">verified</span>
+                    <span>AI Copilot suggested follow-ups</span>
+                  </li>
+                  <li className="flex gap-2.5 items-center">
+                    <span className="material-symbols-outlined text-[#06B6D4] text-sm">verified</span>
+                    <span>PDF scorecard & print export</span>
+                  </li>
+                  <li className="flex gap-2.5 items-center">
+                    <span className="material-symbols-outlined text-[#06B6D4] text-sm">verified</span>
+                    <span>Private repo assessment rights</span>
                   </li>
                 </ul>
               </div>
@@ -303,6 +558,196 @@ export default function ProfilePage() {
           </div>
         </div>
       </div>
+
+      {/* MODAL 1: EDIT AVATAR */}
+      {showAvatarModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 animate-in fade-in duration-200">
+          <div className="bg-[#1E293B] border border-[#334155] rounded-xl p-6 w-full max-w-sm space-y-6 shadow-2xl">
+            <div>
+              <h3 className="text-base font-bold text-white">Select Profile Avatar</h3>
+              <p className="text-[11px] text-[#94A3B8] mt-1">Pick a preset or enter a custom picture URL.</p>
+            </div>
+            
+            {/* Presets */}
+            <div className="grid grid-cols-4 gap-4">
+              {[
+                'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=128&h=128&q=80',
+                'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=128&h=128&q=80',
+                'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=128&h=128&q=80',
+                'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=128&h=128&q=80'
+              ].map((url, i) => (
+                <img
+                  key={i}
+                  src={url}
+                  onClick={() => selectAvatarPreset(url)}
+                  className="h-14 w-14 rounded-full border-2 border-transparent hover:border-[#06B6D4] transition-all cursor-pointer object-cover"
+                />
+              ))}
+            </div>
+
+            {/* Upload from Local PC */}
+            <div className="space-y-2 pt-4 border-t border-[#334155]/50">
+              <label className="text-[10px] text-[#94A3B8] font-bold uppercase tracking-wider block">Upload from Local PC</label>
+              <div className="flex items-center justify-center w-full">
+                <label className="flex flex-col items-center justify-center w-full h-24 border-2 border-dashed border-[#334155] hover:border-[#06B6D4] rounded-lg cursor-pointer bg-[#0F172A] hover:bg-[#0F172A]/80 transition-colors">
+                  <div className="flex flex-col items-center justify-center pt-3 pb-3 text-center">
+                    <span className="material-symbols-outlined text-2xl text-[#94A3B8] mb-1">upload_file</span>
+                    <p className="text-[10px] text-[#94A3B8] uppercase font-bold tracking-wider">Choose Image File</p>
+                    <p className="text-[8px] text-[#475569] mt-0.5">PNG, JPG, GIF (Max 2MB)</p>
+                  </div>
+                  <input 
+                    type="file" 
+                    accept="image/*" 
+                    onChange={handleFileChange} 
+                    className="hidden" 
+                  />
+                </label>
+              </div>
+            </div>
+
+            {/* Custom URL form */}
+            <form onSubmit={handleCustomAvatarSave} className="space-y-3 pt-4 border-t border-[#334155]/50">
+              <label className="text-[10px] text-[#94A3B8] font-bold uppercase tracking-wider block">Custom Avatar URL</label>
+              <input
+                type="url"
+                required
+                value={customAvatarInput}
+                onChange={(e) => setCustomAvatarInput(e.target.value)}
+                placeholder="https://example.com/avatar.jpg"
+                className="w-full bg-[#0F172A] border border-[#334155] rounded px-3 py-2 text-xs text-white focus:outline-none focus:border-[#06B6D4] font-mono"
+              />
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAvatarModal(false)}
+                  className="px-3 py-1.5 bg-[#0F172A] border border-[#334155] text-xs font-bold uppercase tracking-wider rounded text-[#94A3B8] hover:text-white"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-3 py-1.5 bg-[#06B6D4] text-[#0F172A] text-xs font-bold uppercase tracking-wider rounded hover:bg-[#06B6D4]/80"
+                >
+                  Apply
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 2: 2FA MFA SECURE REGISTRATION */}
+      {show2faModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 animate-in fade-in duration-200">
+          <div className="bg-[#1E293B] border border-[#334155] rounded-xl p-6 w-full max-w-sm space-y-5 shadow-2xl">
+            <div>
+              <h3 className="text-base font-bold text-white">Enable Two-Factor Security</h3>
+              <p className="text-[11px] text-[#94A3B8] mt-1">Scan the QR code with your mobile authenticator app to enable Multi-Factor Authentication.</p>
+            </div>
+
+            {/* Mockup QR Code */}
+            <div className="flex justify-center p-4 bg-white rounded-lg border border-slate-200 w-44 mx-auto select-none">
+              <svg viewBox="0 0 100 100" className="w-36 h-36">
+                <rect width="100" height="100" fill="white" />
+                {/* Simulated QR Code patterns */}
+                <path d="M5,5 h30 v30 h-30 z M15,15 h10 v10 h-10 z" fill="black" />
+                <path d="M65,5 h30 v30 h-30 z M75,15 h10 v10 h-10 z" fill="black" />
+                <path d="M5,65 h30 v30 h-30 z M15,75 h10 v10 h-10 z" fill="black" />
+                <path d="M45,10 h10 v10 h-10 z M45,25 h10 v15 h-10 z" fill="black" />
+                <path d="M10,45 h15 v10 h-15 z M30,45 h10 v20 h-10 z" fill="black" />
+                <path d="M55,55 h10 v25 h-10 z M70,55 h25 v10 h-25 z" fill="black" />
+                <path d="M50,75 h15 v15 h-15 z M75,75 h20 v20 h-20 z" fill="black" />
+                <path d="M45,55 h5 v10 h-5 z M50,45 h15 v5 h-15 z" fill="black" />
+              </svg>
+            </div>
+
+            {twoFactorError && (
+              <div className="bg-red-500/10 border border-red-500/30 text-red-500 text-[10px] rounded p-2 text-center font-semibold">
+                {twoFactorError}
+              </div>
+            )}
+
+            <form onSubmit={handleEnable2fa} className="space-y-3.5 pt-2">
+              <div className="space-y-1">
+                <label className="text-[10px] text-[#94A3B8] font-bold uppercase tracking-wider block">MFA Activation Code</label>
+                <input
+                  type="text"
+                  required
+                  maxLength={6}
+                  value={twoFactorCode}
+                  onChange={(e) => setTwoFactorCode(e.target.value)}
+                  placeholder="000 000"
+                  className="w-full bg-[#0F172A] border border-[#334155] rounded px-3 py-2 text-center text-sm tracking-widest font-mono text-white focus:outline-none focus:border-[#06B6D4]"
+                />
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTwoFactorError('');
+                    setTwoFactorCode('');
+                    setShow2faModal(false);
+                  }}
+                  className="px-3 py-1.5 bg-[#0F172A] border border-[#334155] text-xs font-bold uppercase tracking-wider rounded text-[#94A3B8] hover:text-white"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-3 py-1.5 bg-[#06B6D4] text-[#0F172A] text-xs font-bold uppercase tracking-wider rounded hover:bg-[#06B6D4]/80"
+                >
+                  Confirm
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 3: CONNECT NEW REPOSITORY */}
+      {showConnectModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 animate-in fade-in duration-200">
+          <div className="bg-[#1E293B] border border-[#334155] rounded-xl p-6 w-full max-w-sm space-y-4 shadow-2xl">
+            <div>
+              <h3 className="text-base font-bold text-white">Connect Codebase Repository</h3>
+              <p className="text-[11px] text-[#94A3B8] mt-1">Specify target GitHub repository to index for screenings.</p>
+            </div>
+            
+            <form onSubmit={handleConnectRepo} className="space-y-4 pt-2">
+              <div className="space-y-1">
+                <label className="text-[10px] text-[#94A3B8] font-bold uppercase tracking-wider block">Repository URL</label>
+                <input
+                  type="text"
+                  required
+                  value={newRepoUrl}
+                  onChange={(e) => setNewRepoUrl(e.target.value)}
+                  placeholder="https://github.com/owner/repo"
+                  className="w-full bg-[#0F172A] border border-[#334155] rounded px-3 py-2 text-xs text-white focus:outline-none focus:border-[#06B6D4] font-mono"
+                />
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNewRepoUrl('');
+                    setShowConnectModal(false);
+                  }}
+                  className="px-3 py-1.5 bg-[#0F172A] border border-[#334155] text-xs font-bold uppercase tracking-wider rounded text-[#94A3B8] hover:text-white"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-3 py-1.5 bg-[#06B6D4] text-[#0F172A] text-xs font-bold uppercase tracking-wider rounded hover:bg-[#06B6D4]/80"
+                >
+                  Connect
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
