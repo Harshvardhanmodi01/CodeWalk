@@ -20,15 +20,15 @@ export default function VerifyEmailPage() {
     <div className="bg-background text-on-surface min-h-screen flex flex-col font-body-md selection:bg-primary-container selection:text-on-primary-container relative overflow-hidden">
       
       {/* Top Header */}
-      <header className="fixed top-0 w-full z-50 flex justify-center py-8">
-        <Link href="/" className="flex items-center gap-2 hover:opacity-90">
-          <span className="material-symbols-outlined text-primary-fixed text-4xl">terminal</span>
-          <span className="font-headline-md text-headline-md font-bold text-primary-fixed tracking-tight">CodeWalk</span>
+      <header className="w-full flex justify-center py-8 z-10">
+        <Link href="/" className="flex items-center gap-2 group transition-all duration-300">
+          <span className="material-symbols-outlined text-primary-fixed text-4xl group-hover:scale-110 group-hover:rotate-12 transition-all duration-300">terminal</span>
+          <span className="font-headline-md text-headline-md font-bold text-primary-fixed tracking-tight group-hover:text-primary-fixed-dim transition-all duration-300">CodeWalk</span>
         </Link>
       </header>
 
       {/* Main Panel */}
-      <main className="relative z-10 flex-grow flex items-center justify-center px-margin-mobile select-none text-center">
+      <main className="relative z-10 flex-grow flex items-center justify-center px-margin-mobile select-none text-center pb-12">
         <div className="w-full max-w-[420px] bg-surface-container border border-outline-variant p-8 relative overflow-hidden rounded-xl shadow-2xl space-y-6">
           {/* Top Decorative Scanner line */}
           <div className="absolute top-0 left-0 w-full h-[1px] bg-primary-fixed/30"></div>
