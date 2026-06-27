@@ -70,20 +70,8 @@ export default function RegisterPage() {
         throw new Error('Verification required or registration error.');
       }
 
-      // Automatically insert profile row immediately after account creation
-      try {
-        await supabase.from('profiles').insert({
-          id: authUser.id,
-          email: email,
-          full_name: fullName,
-          company: company,
-          name: fullName,
-          company_name: company,
-          created_at: new Date().toISOString()
-        });
-      } catch (dbErr) {
-        console.warn('Immediate profiles insert failed (possibly unauthenticated RLS):', dbErr);
-      }
+      // DO NOT insert profile here — no session yet, RLS will block it.
+      // Profile will be created after OTP verification via admin API.
 
       setTempUser(authUser);
       setStep('otp');
@@ -140,49 +128,26 @@ export default function RegisterPage() {
         const activeUser = authUser || tempUser;
         
         if (activeUser) {
-          // 2. Insert into the public.recruiters table
-          const { error: dbErr } = await supabase.from('recruiters').upsert({
-            id: activeUser.id,
-            email,
-            full_name: fullName,
-            company,
-          }, { onConflict: 'id' });
-
-          if (dbErr) {
-            console.error('Failed to create recruiter profile:', dbErr);
-          }
-
-          // 3. Insert into public.profiles table (resilient to missing columns)
+          // Use admin API route to bypass RLS and write profile + recruiter rows.
+          // Direct Supabase writes here fail because RLS requires auth.uid() == id
+          // and the session cookie may not be established yet right after OTP verify.
           try {
-            const { error: profErr } = await supabase.from('profiles').upsert({
-              id: activeUser.id,
-              email,
-              full_name: fullName,
-              company,
-              name: fullName,
-              company_name: company,
-              created_at: new Date().toISOString()
-            }, { onConflict: 'id' });
-
-            if (profErr) {
-              console.warn('Profiles upsert with new columns failed, trying old columns fallback:', profErr);
-              await supabase.from('profiles').upsert({
-                id: activeUser.id,
-                email,
+            const profileRes = await fetch('/api/auth/create-profile', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                userId: activeUser.id,
                 name: fullName,
-                company_name: company,
-                created_at: new Date().toISOString()
-              }, { onConflict: 'id' });
+                email,
+                company,
+              }),
+            });
+            if (!profileRes.ok) {
+              const profileData = await profileRes.json().catch(() => ({}));
+              console.error('Failed to create profile via admin API:', profileData.error);
             }
           } catch (err) {
-            console.warn('Profiles upsert with new columns threw error, trying old columns fallback:', err);
-            await supabase.from('profiles').upsert({
-              id: activeUser.id,
-              email,
-              name: fullName,
-              company_name: company,
-              created_at: new Date().toISOString()
-            }, { onConflict: 'id' });
+            console.error('Profile creation API call failed:', err);
           }
         }
 

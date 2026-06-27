@@ -222,7 +222,7 @@ async function analyzeRepo(repoUrl: string, jobId: string) {
 const worker = new Worker(
   'code-analysis',
   async (job) => {
-    const { repoUrl, jobId } = job.data;
+    const { repoUrl, jobId, sessionId } = job.data;  // ← added sessionId
     console.log(`[Worker] Processing ${jobId}: ${repoUrl}`);
     const startTime = Date.now();
 
@@ -230,6 +230,22 @@ const worker = new Worker(
       await supabase.from('jobs').update({ status: 'processing', updated_at: new Date().toISOString() }).eq('id', jobId);
       const result = await analyzeRepo(repoUrl, jobId);
       await supabase.from('jobs').update({ status: 'completed', result, updated_at: new Date().toISOString() }).eq('id', jobId);
+
+      // ── NEW: Store result in sessions table (JSONB) ──────────────────────
+      if (sessionId) {
+        const { error: updateSessionError } = await supabase
+          .from('sessions')
+          .update({ status: 'completed', result })
+          .eq('id', sessionId);
+        if (updateSessionError) {
+          console.error(`[Worker] Failed to update session ${sessionId}:`, updateSessionError);
+        } else {
+          console.log(`[Worker] Session ${sessionId} updated with result`);
+        }
+      } else {
+        console.warn('[Worker] No sessionId provided – skipping sessions update');
+      }
+
       console.log(`[Worker] Job ${jobId} completed in ${Date.now() - startTime}ms`);
     } catch (error: any) {
       console.error(`[Worker] Job ${jobId} failed:`, error);
