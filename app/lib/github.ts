@@ -87,10 +87,10 @@ export async function fetchGitHub(
       ...((init?.headers || {}) as Record<string, string>),
     };
     const response = await fetchWithRetry(url, { ...init, headers });
-    if (response.status !== 401) {
+    if (response.ok) {
       return response;
     }
-    console.warn(`GitHub API returned 401 Unauthorized for token. Retrying without Authorization header for: ${url}`);
+    console.warn(`GitHub API returned status ${response.status} for token. Retrying without Authorization header for: ${url}`);
   }
 
   // Fallback: fetch without token

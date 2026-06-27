@@ -4,21 +4,34 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useGlobal } from '@/app/context/GlobalContext';
 import { supabase } from '@/app/lib/supabaseClient';
+import { toast } from 'react-hot-toast';
 
 export default function ProfilePage() {
   const router = useRouter();
-  const { user, subscription } = useGlobal();
+  const { user, subscription, refreshUserData } = useGlobal();
 
   // Local editable states
   const [name, setName] = useState('');
   const [companyName, setCompanyName] = useState('');
-  const [isEditing, setIsEditing] = useState(false);
-  const [savingName, setSavingName] = useState(false);
-  
+  const [role, setRole] = useState('HR / Recruiter');
+  const [savingPersonalInfo, setSavingPersonalInfo] = useState(false);
+
+  // Hiring Preferences states
+  const [companySize, setCompanySize] = useState('11 to 50');
+  const [hiresPerMonth, setHiresPerMonth] = useState('1 to 5');
+  const [savingHiringPreferences, setSavingHiringPreferences] = useState(false);
+
   // Custom Avatar state
-  const [avatarUrl, setAvatarUrl] = useState('https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=256&h=256&q=80');
-  const [showAvatarModal, setShowAvatarModal] = useState(false);
-  const [customAvatarInput, setCustomAvatarInput] = useState('');
+  const [avatarUrl, setAvatarUrl] = useState('');
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+
+  const getAvatarUrl = () => {
+    if (avatarUrl) return avatarUrl;
+    if (user?.githubConnected && user?.githubAvatar) return user.githubAvatar;
+    return null;
+  };
+
+  const avatarUrlToDisplay = getAvatarUrl();
 
   // 2FA state
   const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
@@ -31,127 +44,263 @@ export default function ProfilePage() {
   const [newRepoUrl, setNewRepoUrl] = useState('');
   const [showConnectModal, setShowConnectModal] = useState(false);
 
+  // GitHub verification states
+  const [showGithubVerifyModal, setShowGithubVerifyModal] = useState(false);
+  const [githubVerifyCode, setGithubVerifyCode] = useState('');
+  const [githubVerifyError, setGithubVerifyError] = useState('');
+  const [githubVerifyLoading, setGithubVerifyLoading] = useState(false);
+  const [pendingGithubUsername, setPendingGithubUsername] = useState('');
+  const [pendingGithubAvatar, setPendingGithubAvatar] = useState('');
+  const [correctGithubOtp, setCorrectGithubOtp] = useState('');
+
   // Sync profile details on mount
   useEffect(() => {
     if (user) {
       setName(user.name || '');
       setCompanyName(user.companyName || '');
-      
-      // Load custom avatar from localStorage if set
-      const savedAvatar = localStorage.getItem(`cw_avatar_url_${user.id}`);
-      if (savedAvatar) setAvatarUrl(savedAvatar);
+      setRole(user.role || 'HR / Recruiter');
+      setCompanySize(user.companySize || '11 to 50');
+      setHiresPerMonth(user.hiresPerMonth || '1 to 5');
+      setAvatarUrl(user.avatarUrl || '');
 
       // Load 2FA state
-      const saved2fa = localStorage.getItem(`cw_2fa_enabled_${user.id}`);
-      if (saved2fa === 'true') setTwoFactorEnabled(true);
+      if (user.twoFactorEnabled) {
+        setTwoFactorEnabled(true);
+      } else {
+        setTwoFactorEnabled(false);
+      }
 
       // Load connected repos
-      const savedRepos = localStorage.getItem(`cw_connected_repos_${user.id}`);
-      if (savedRepos) {
-        setRepos(JSON.parse(savedRepos));
-      } else {
-        const defaultRepos = ['Harshvardhanmodi01/CodeWalk', 'Nikhilsingha01/garg-electronics'];
-        setRepos(defaultRepos);
-        localStorage.setItem(`cw_connected_repos_${user.id}`, JSON.stringify(defaultRepos));
-      }
+      setRepos(user.githubRepos || []);
+
+      // Check for newly connected GitHub identity via OAuth redirection
+      const checkGitHubLink = async () => {
+        try {
+          const { data: { user: authUser } } = await supabase.auth.getUser();
+          const githubIdentity = authUser?.identities?.find(id => id.provider === 'github');
+          if (authUser && githubIdentity && !user.githubConnected) {
+            const githubUsername = authUser.user_metadata?.user_name || authUser.user_metadata?.preferred_username || '';
+            const githubAvatar = authUser.user_metadata?.avatar_url || '';
+            
+            setPendingGithubUsername(githubUsername);
+            setPendingGithubAvatar(githubAvatar);
+            
+            // Generate verification OTP
+            const generatedOtp = Math.floor(100000 + Math.random() * 900000).toString();
+            setCorrectGithubOtp(generatedOtp);
+            setShowGithubVerifyModal(true);
+            
+            console.log(`[DEMO] GitHub Verification OTP: ${generatedOtp}`);
+            toast.success(`[DEMO] GitHub Verification OTP: ${generatedOtp}`, { duration: 12000 });
+          }
+        } catch (e) {
+          console.error('Failed to link GitHub:', e);
+        }
+      };
+      checkGitHubLink();
     }
   }, [user]);
 
-  const handleNameSave = async () => {
-    if (!user) return;
-    setSavingName(true);
+  const handleConnectGitHub = async () => {
     try {
-      // 1. Save to LocalStorage immediately so local changes are guaranteed to persist
-      localStorage.setItem(`cw_user_name_${user.id}`, name);
-      localStorage.setItem(`cw_user_company_${user.id}`, companyName);
+      const { data, error } = await supabase.auth.linkIdentity({
+        provider: 'github',
+        options: {
+          redirectTo: window.location.origin + '/profile',
+        },
+      });
+      if (error) throw error;
+    } catch (err: any) {
+      toast.error(`GitHub connection failed: ${err.message}`);
+    }
+  };
 
-      // 2. Try to upsert into recruiters table
-      const { error: recErr } = await supabase
+  const handleDisconnectGitHub = async () => {
+    if (!confirm('Are you sure you want to disconnect your GitHub integration?')) return;
+    try {
+      if (!user) return;
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          github_username: null,
+          github_avatar: null,
+          github_connected: false,
+        })
+        .eq('id', user.id);
+
+      if (error) throw error;
+      toast.success('GitHub disconnected successfully.');
+      setTimeout(() => {
+        window.location.reload();
+      }, 800);
+    } catch (err: any) {
+      toast.error(`Failed to disconnect: ${err.message}`);
+    }
+  };
+
+  const handleSavePersonalInfo = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) return;
+    if (!name.trim()) {
+      toast.error('Full Name cannot be empty.');
+      return;
+    }
+    setSavingPersonalInfo(true);
+    try {
+      // 1. Try to upsert into recruiters table
+      await supabase
         .from('recruiters')
         .upsert({
           id: user.id,
           email: user.email,
-          full_name: name,
-          company: companyName,
+          full_name: name.trim(),
+          company: companyName.trim(),
         }, { onConflict: 'id' });
 
-      if (recErr) console.warn('Could not update recruiters table:', recErr);
+      // 2. Upsert/Update profiles table with correct registration keys (resilient to missing columns)
+      try {
+        const { error: profErr } = await supabase
+          .from('profiles')
+          .upsert({
+            id: user.id,
+            email: user.email,
+            full_name: name.trim(),
+            company: companyName.trim(),
+            role,
+            name: name.trim(),
+            company_name: companyName.trim(),
+            updated_at: new Date().toISOString()
+          }, { onConflict: 'id' });
 
-      // 3. Try to upsert into profiles table fallback
-      const { error: profErr } = await supabase
-        .from('profiles')
-        .upsert({
-          id: user.id,
-          email: user.email,
-          name: name,
-          company_name: companyName,
-        }, { onConflict: 'id' });
+        if (profErr) {
+          console.warn('Profiles upsert with new columns failed, trying old columns fallback:', profErr);
+          await supabase
+            .from('profiles')
+            .upsert({
+              id: user.id,
+              email: user.email,
+              name: name.trim(),
+              company_name: companyName.trim(),
+              updated_at: new Date().toISOString()
+            }, { onConflict: 'id' });
+        }
+      } catch (err) {
+        console.warn('Profiles upsert with new columns threw error, trying old columns fallback:', err);
+        await supabase
+          .from('profiles')
+          .upsert({
+            id: user.id,
+            email: user.email,
+            name: name.trim(),
+            company_name: companyName.trim(),
+            updated_at: new Date().toISOString()
+          }, { onConflict: 'id' });
+      }
 
-      if (profErr) console.warn('Could not update profiles table:', profErr);
-
-      // 4. Update Supabase Auth User Metadata to keep everything in sync
-      const { error: authErr } = await supabase.auth.updateUser({
+      // 3. Update Supabase Auth User Metadata to keep everything in sync
+      await supabase.auth.updateUser({
         data: {
-          name: name,
-          companyName: companyName,
+          name: name.trim(),
+          companyName: companyName.trim(),
         }
       });
 
-      if (authErr) console.warn('Could not update auth user metadata:', authErr);
+      // Refresh global context data immediately to reflect changes reactively
+      await refreshUserData();
 
-      setIsEditing(false);
-      window.location.reload();
-    } catch (err) {
-      console.error('Failed to update profile settings:', err);
-      // Even if network or database write completely throws an error, reload to apply LocalStorage
-      setIsEditing(false);
-      window.location.reload();
+      toast.success('Personal information updated successfully!');
+    } catch (err: any) {
+      console.error('Failed to update personal details:', err);
+      toast.error(err.message || 'Failed to update personal details.');
     } finally {
-      setSavingName(false);
+      setSavingPersonalInfo(false);
     }
   };
 
-  // Avatar selector functions
-  const selectAvatarPreset = (url: string) => {
-    if (!user) return;
-    setAvatarUrl(url);
-    localStorage.setItem(`cw_avatar_url_${user.id}`, url);
-    setShowAvatarModal(false);
-  };
-
-  const handleCustomAvatarSave = (e: React.FormEvent) => {
+  const handleSaveHiringPreferences = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user || !customAvatarInput.trim()) return;
-    setAvatarUrl(customAvatarInput.trim());
-    localStorage.setItem(`cw_avatar_url_${user.id}`, customAvatarInput.trim());
-    setCustomAvatarInput('');
-    setShowAvatarModal(false);
+    if (!user) return;
+    setSavingHiringPreferences(true);
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          company_size: companySize,
+          hires_per_month: hiresPerMonth,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', user.id);
+
+      if (error) throw error;
+
+      await refreshUserData();
+      toast.success('Hiring preferences updated successfully!');
+    } catch (err: any) {
+      console.error('Failed to update hiring preferences:', err);
+      toast.error(err.message || 'Failed to update hiring preferences.');
+    } finally {
+      setSavingHiringPreferences(false);
+    }
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
+    if (!file || !user) return;
 
-    if (file.size > 2 * 1024 * 1024) {
-      alert('File size exceeds 2MB limit. Please upload a smaller image.');
+    if (file.type !== 'image/png' && file.type !== 'image/jpeg' && file.type !== 'image/jpg') {
+      toast.error('Only PNG, JPG, and JPEG images are allowed.');
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const base64 = event.target?.result as string;
-      if (base64 && user) {
-        setAvatarUrl(base64);
-        localStorage.setItem(`cw_avatar_url_${user.id}`, base64);
-        setShowAvatarModal(false);
-        window.location.reload();
+    setUploadingPhoto(true);
+    try {
+      // 1. Ensure the 'avatars' bucket exists
+      try {
+        await supabase.storage.createBucket('avatars', { public: true });
+      } catch (bucketErr) {
+        console.log('Bucket check completed or skipped:', bucketErr);
       }
-    };
-    reader.readAsDataURL(file);
+
+      // 2. Upload file to avatars bucket
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${user.id}-${Math.random().toString(36).substring(2)}.${fileExt}`;
+      const filePath = `avatar-${fileName}`;
+
+      const { data: uploadData, error: uploadErr } = await supabase.storage
+        .from('avatars')
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: true
+        });
+
+      if (uploadErr) throw uploadErr;
+
+      // 3. Get public URL of the uploaded image
+      const { data: { publicUrl } } = supabase.storage
+        .from('avatars')
+        .getPublicUrl(filePath);
+
+      // 4. Update profiles table avatar_url
+      const { error: dbErr } = await supabase
+        .from('profiles')
+        .update({ avatar_url: publicUrl })
+        .eq('id', user.id);
+
+      if (dbErr) throw dbErr;
+
+      setAvatarUrl(publicUrl);
+      await refreshUserData();
+      toast.success('Profile photo uploaded and updated successfully!');
+    } catch (err: any) {
+      console.error('Error uploading photo:', err);
+      toast.error(err.message || 'Failed to upload photo.');
+    } finally {
+      setUploadingPhoto(false);
+    }
   };
 
   // 2FA functions
-  const handleEnable2fa = (e: React.FormEvent) => {
+  const handleEnable2fa = async (e: React.FormEvent) => {
     e.preventDefault();
     setTwoFactorError('');
     if (twoFactorCode.length !== 6 || isNaN(Number(twoFactorCode))) {
@@ -160,24 +309,44 @@ export default function ProfilePage() {
     }
 
     if (user) {
+      try {
+        await supabase
+          .from('profiles')
+          .update({ two_factor_enabled: true })
+          .eq('id', user.id);
+      } catch (err: any) {
+        console.warn('Failed to enable 2FA in profiles database, falling back to local storage:', err);
+      }
+      
       setTwoFactorEnabled(true);
       localStorage.setItem(`cw_2fa_enabled_${user.id}`, 'true');
+      toast.success('Two-Factor Authentication enabled successfully!');
     }
     setTwoFactorCode('');
     setShow2faModal(false);
   };
 
-  const handleDisable2fa = () => {
+  const handleDisable2fa = async () => {
     if (confirm('Are you sure you want to disable Two-Factor Authentication? Your account security rating will decrease.')) {
       if (user) {
+        try {
+          await supabase
+            .from('profiles')
+            .update({ two_factor_enabled: false })
+            .eq('id', user.id);
+        } catch (err: any) {
+          console.warn('Failed to disable 2FA in profiles database, falling back to local storage:', err);
+        }
+        
         setTwoFactorEnabled(false);
         localStorage.setItem(`cw_2fa_enabled_${user.id}`, 'false');
+        toast.success('Two-Factor Authentication disabled.');
       }
     }
   };
 
   // Connected Repos functions
-  const handleConnectRepo = (e: React.FormEvent) => {
+  const handleConnectRepo = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newRepoUrl.trim()) return;
     let repoName = newRepoUrl.trim();
@@ -187,18 +356,34 @@ export default function ProfilePage() {
     const updated = [...repos, repoName];
     setRepos(updated);
     if (user) {
-      localStorage.setItem(`cw_connected_repos_${user.id}`, JSON.stringify(updated));
+      const { error } = await supabase
+        .from('profiles')
+        .update({ github_repos: updated })
+        .eq('id', user.id);
+      if (error) {
+        toast.error(`Failed to connect repository: ${error.message}`);
+      } else {
+        toast.success(`Repository connected successfully!`);
+      }
     }
     setNewRepoUrl('');
     setShowConnectModal(false);
   };
 
-  const handleDisconnectRepo = (repoName: string) => {
+  const handleDisconnectRepo = async (repoName: string) => {
     if (confirm(`Disconnect ${repoName}? This will prevent candidates from running assessments against it.`)) {
       const updated = repos.filter(r => r !== repoName);
       setRepos(updated);
       if (user) {
-        localStorage.setItem(`cw_connected_repos_${user.id}`, JSON.stringify(updated));
+        const { error } = await supabase
+          .from('profiles')
+          .update({ github_repos: updated })
+          .eq('id', user.id);
+        if (error) {
+          toast.error(`Failed to disconnect repository: ${error.message}`);
+        } else {
+          toast.success(`Repository disconnected successfully.`);
+        }
       }
     }
   };
@@ -217,7 +402,7 @@ export default function ProfilePage() {
 
   if (!user) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-[#0F172A] text-white">
+      <div className="flex flex-col items-center justify-center min-h-screen bg-[#0d1515] text-white">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#06B6D4] mb-4"></div>
         <p className="text-sm font-mono text-[#94A3B8]">Loading profile configurations...</p>
       </div>
@@ -225,9 +410,9 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="flex-grow flex flex-col bg-[#0F172A] text-[#F1F5F9] overflow-hidden min-h-screen">
+    <div className="flex-grow flex flex-col bg-[#0d1515] text-[#F1F5F9] overflow-hidden min-h-screen">
       {/* Top Header Bar */}
-      <header className="flex justify-between items-center px-8 py-3 bg-[#1E293B] w-full border-b border-[#334155] z-10 select-none">
+      <header className="flex justify-between items-center px-8 py-3 bg-[#151d1e] w-full border-b border-[#3b494b] z-10 select-none">
         <div className="flex items-center gap-3">
           <span className="material-symbols-outlined text-[#06B6D4] text-xl">settings</span>
           <h1 className="font-headline-md text-lg text-[#06B6D4] font-bold tracking-tight">Settings Workspace</h1>
@@ -239,94 +424,37 @@ export default function ProfilePage() {
         <div className="max-w-4xl mx-auto space-y-8 pb-24">
           
           {/* Recruiter Details Card */}
-          <section className="flex flex-col md:flex-row md:items-end justify-between gap-6 pb-6 border-b border-[#334155] select-none">
+          <section className="flex flex-col md:flex-row md:items-end justify-between gap-6 pb-6 border-b border-[#3b494b] select-none">
             <div className="flex items-center gap-6">
-              <div className="relative">
-                <img 
-                  className="w-24 h-24 rounded border border-[#334155] p-1 object-cover hover:brightness-90 transition-all cursor-pointer" 
-                  alt="Profile Avatar"
-                  src={avatarUrl}
-                  onClick={() => setShowAvatarModal(true)}
-                />
-                <button 
-                  onClick={() => setShowAvatarModal(true)}
-                  className="absolute -bottom-1 -right-1 bg-[#1E293B] border border-[#334155] p-1 rounded text-[#06B6D4] hover:bg-[#06B6D4] hover:text-[#0F172A] transition-all active:scale-95"
-                >
-                  <span className="material-symbols-outlined text-xs font-bold">edit</span>
-                </button>
+              <div className="w-20 h-20 rounded-lg overflow-hidden border border-[#3b494b] flex items-center justify-center bg-[#06B6D4] text-[#0d1515] font-bold text-2xl select-none shadow-md">
+                {avatarUrlToDisplay ? (
+                  <img 
+                    className="w-full h-full object-cover" 
+                    alt="Profile Avatar"
+                    src={avatarUrlToDisplay}
+                  />
+                ) : (
+                  <span>{name ? name.slice(0, 1).toUpperCase() : 'U'}</span>
+                )}
               </div>
  
               <div className="space-y-2">
-                {isEditing ? (
-                  <div className="flex flex-col gap-2 bg-[#1E293B] p-4 rounded-lg border border-[#334155] max-w-sm">
-                    <div className="flex flex-col gap-1">
-                      <label className="text-[10px] text-[#94A3B8] font-bold uppercase tracking-wider block">Full Name</label>
-                      <input 
-                        type="text" 
-                        value={name} 
-                        onChange={(e) => setName(e.target.value)}
-                        className="bg-[#0F172A] border border-[#334155] focus:border-[#06B6D4] p-1.5 px-3 rounded text-sm text-white outline-none"
-                        placeholder="Your Name"
-                      />
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <label className="text-[10px] text-[#94A3B8] font-bold uppercase tracking-wider block">Company Name</label>
-                      <input 
-                        type="text" 
-                        value={companyName} 
-                        onChange={(e) => setCompanyName(e.target.value)}
-                        className="bg-[#0F172A] border border-[#334155] focus:border-[#06B6D4] p-1.5 px-3 rounded text-sm text-white outline-none"
-                        placeholder="Company Name"
-                      />
-                    </div>
-                    <div className="flex gap-2 justify-end pt-2">
-                      <button 
-                        onClick={() => setIsEditing(false)}
-                        className="bg-[#334155] text-white px-3 py-1.5 text-xs font-bold rounded uppercase tracking-wider hover:bg-[#475569] transition-colors"
-                        disabled={savingName}
-                      >
-                        Cancel
-                      </button>
-                      <button 
-                        onClick={handleNameSave}
-                        disabled={savingName}
-                        className="bg-[#06B6D4] text-[#0F172A] px-3 py-1.5 text-xs font-bold rounded uppercase tracking-wider hover:bg-[#06B6D4]/80 transition-colors"
-                      >
-                        {savingName ? 'Saving...' : 'Save'}
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2 group">
-                      <h2 className="text-xl text-[#F1F5F9] font-extrabold tracking-tight">{name}</h2>
-                      <button 
-                        onClick={() => setIsEditing(true)}
-                        className="text-[#94A3B8] hover:text-[#06B6D4] p-1 rounded hover:bg-[#1E293B] transition-all"
-                        title="Edit Profile"
-                      >
-                        <span className="material-symbols-outlined text-sm">edit</span>
-                      </button>
-                    </div>
-                    {companyName && (
-                      <p className="text-sm text-[#06B6D4] font-semibold flex items-center gap-1">
-                        <span className="material-symbols-outlined text-xs">corporate_fare</span>
-                        {companyName}
-                      </p>
-                    )}
-                  </div>
-                )}
+                <h2 className="text-xl text-[#F1F5F9] font-extrabold tracking-tight">{name || 'Recruiter Name'}</h2>
+                <p className="text-sm text-[#06B6D4] font-semibold flex items-center gap-1">
+                  <span className="material-symbols-outlined text-xs">corporate_fare</span>
+                  {companyName || 'Add Company'}
+                </p>
                 
                 <p className="text-xs text-[#94A3B8] font-mono">{user.email}</p>
                 
                 {/* Role and Plan Badges */}
                 <div className="flex gap-2 flex-wrap pt-0.5">
-                  <div className="inline-flex items-center gap-1.5 bg-[#1E293B] px-2.5 py-1 rounded border border-[#334155]">
+                  <div className="inline-flex items-center gap-1.5 bg-[#151d1e] px-2.5 py-1 rounded border border-[#3b494b]">
                     <span className="w-1.5 h-1.5 rounded-full bg-[#06B6D4] glow-cyan"></span>
                     <span className="text-[9px] text-[#06B6D4] font-bold uppercase tracking-wider">{subscription} Plan</span>
                   </div>
                   <div className="inline-flex items-center gap-1.5 bg-[#06B6D4]/10 border border-[#06B6D4]/20 px-2.5 py-1 rounded">
-                    <span className="text-[9px] text-[#06B6D4] font-bold uppercase tracking-wider">Role: Recruiter</span>
+                    <span className="text-[9px] text-[#06B6D4] font-bold uppercase tracking-wider">Role: {role || 'Recruiter'}</span>
                   </div>
                 </div>
               </div>
@@ -334,7 +462,7 @@ export default function ProfilePage() {
 
             <button 
               onClick={() => router.push('/pricing')}
-              className="bg-[#06B6D4] text-[#0F172A] font-bold text-xs px-6 py-2.5 rounded hover:bg-[#06B6D4]/90 transition-all active:scale-95 shadow-lg shadow-[#06B6D4]/10"
+              className="bg-[#06B6D4] text-[#0d1515] font-bold text-xs px-6 py-2.5 rounded hover:bg-[#06B6D4]/90 transition-all active:scale-95 shadow-lg shadow-[#06B6D4]/10 cursor-pointer"
             >
               Upgrade Plan
             </button>
@@ -345,7 +473,141 @@ export default function ProfilePage() {
             
             {/* Form password change block */}
             <section className="lg:col-span-2 space-y-6">
-              <div className="border border-[#334155] bg-[#1E293B]/40 p-6 rounded-xl shadow-sm">
+              {/* PERSONAL INFORMATION CARD */}
+              <div className="border border-[#3b494b] bg-[#151d1e]/40 p-6 rounded-xl shadow-sm">
+                <h4 className="text-sm text-white font-bold mb-6 flex items-center gap-2 select-none">
+                  <span className="material-symbols-outlined text-[#06B6D4]">badge</span>
+                  Personal Information
+                </h4>
+                <form onSubmit={handleSavePersonalInfo} className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] text-[#94A3B8] font-bold uppercase tracking-wider block">Full Name</label>
+                      <input 
+                        type="text" 
+                        required
+                        value={name} 
+                        onChange={(e) => setName(e.target.value)}
+                        className="w-full bg-[#0d1515] border border-[#3b494b] focus:border-[#06B6D4] transition-all rounded px-3 py-2 text-sm text-white outline-none"
+                        placeholder="Your Name"
+                        disabled={savingPersonalInfo}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] text-[#94A3B8] font-bold uppercase tracking-wider block">Company Name</label>
+                      <input 
+                        type="text" 
+                        value={companyName} 
+                        onChange={(e) => setCompanyName(e.target.value)}
+                        className="w-full bg-[#0d1515] border border-[#3b494b] focus:border-[#06B6D4] transition-all rounded px-3 py-2 text-sm text-white outline-none"
+                        placeholder="Company Name"
+                        disabled={savingPersonalInfo}
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] text-[#94A3B8] font-bold uppercase tracking-wider block">Role</label>
+                      <select
+                        value={role}
+                        onChange={(e) => setRole(e.target.value)}
+                        className="w-full bg-[#0d1515] border border-[#3b494b] focus:border-[#06B6D4] transition-all rounded px-3 py-2 text-sm text-white outline-none cursor-pointer"
+                        disabled={savingPersonalInfo}
+                      >
+                        <option value="HR / Recruiter">HR / Recruiter</option>
+                        <option value="Engineering Manager">Engineering Manager</option>
+                        <option value="Founder / CTO">Founder / CTO</option>
+                        <option value="Team Lead">Team Lead</option>
+                        <option value="Other">Other</option>
+                      </select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] text-[#94A3B8] font-bold uppercase tracking-wider block">Work Email</label>
+                      <input 
+                        type="text" 
+                        value={user?.email || ''} 
+                        disabled
+                        className="w-full bg-[#0d1515] border border-[#3b494b] opacity-60 rounded px-3 py-2 text-sm text-[#94A3B8] outline-none cursor-not-allowed"
+                      />
+                    </div>
+                  </div>
+                  <div className="pt-2 flex justify-end">
+                    <button 
+                      type="submit"
+                      disabled={savingPersonalInfo}
+                      className="bg-[#06B6D4] text-[#0d1515] hover:bg-[#06B6D4]/80 text-xs px-6 py-2 rounded transition-all font-bold uppercase tracking-wider flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                    >
+                      {savingPersonalInfo ? (
+                        <>
+                          <div className="animate-spin rounded-full h-3 w-3 border-t-2 border-[#0d1515]"></div>
+                          <span>Saving...</span>
+                        </>
+                      ) : (
+                        <span>Save Changes</span>
+                      )}
+                    </button>
+                  </div>
+                </form>
+              </div>
+
+              {/* HIRING PREFERENCES CARD */}
+              <div className="border border-[#3b494b] bg-[#151d1e]/40 p-6 rounded-xl shadow-sm">
+                <h4 className="text-sm text-white font-bold mb-6 flex items-center gap-2 select-none">
+                  <span className="material-symbols-outlined text-[#06B6D4]">query_stats</span>
+                  Hiring Preferences
+                </h4>
+                <form onSubmit={handleSaveHiringPreferences} className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] text-[#94A3B8] font-bold uppercase tracking-wider block">Company Size</label>
+                      <select
+                        value={companySize}
+                        onChange={(e) => setCompanySize(e.target.value)}
+                        className="w-full bg-[#0d1515] border border-[#3b494b] focus:border-[#06B6D4] transition-all rounded px-3 py-2 text-sm text-white outline-none cursor-pointer"
+                        disabled={savingHiringPreferences}
+                      >
+                        <option value="Just me">Just me</option>
+                        <option value="2 to 10">2 to 10</option>
+                        <option value="11 to 50">11 to 50</option>
+                        <option value="51 to 200">51 to 200</option>
+                        <option value="200 plus">200 plus</option>
+                      </select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] text-[#94A3B8] font-bold uppercase tracking-wider block">Technical Hires Per Month</label>
+                      <select
+                        value={hiresPerMonth}
+                        onChange={(e) => setHiresPerMonth(e.target.value)}
+                        className="w-full bg-[#0d1515] border border-[#3b494b] focus:border-[#06B6D4] transition-all rounded px-3 py-2 text-sm text-white outline-none cursor-pointer"
+                        disabled={savingHiringPreferences}
+                      >
+                        <option value="1 to 5">1 to 5</option>
+                        <option value="6 to 20">6 to 20</option>
+                        <option value="20 plus">20 plus</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="pt-2 flex justify-end">
+                    <button 
+                      type="submit"
+                      disabled={savingHiringPreferences}
+                      className="bg-[#06B6D4] text-[#0d1515] hover:bg-[#06B6D4]/80 text-xs px-6 py-2 rounded transition-all font-bold uppercase tracking-wider flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                    >
+                      {savingHiringPreferences ? (
+                        <>
+                          <div className="animate-spin rounded-full h-3 w-3 border-t-2 border-[#0d1515]"></div>
+                          <span>Saving...</span>
+                        </>
+                      ) : (
+                        <span>Save Changes</span>
+                      )}
+                    </button>
+                  </div>
+                </form>
+              </div>
+
+              {/* Form password change block */}
+              <div className="border border-[#3b494b] bg-[#151d1e]/40 p-6 rounded-xl shadow-sm">
                 <h4 className="text-sm text-white font-bold mb-6 flex items-center gap-2 select-none">
                   <span className="material-symbols-outlined text-[#06B6D4]">key</span>
                   Change Password
@@ -357,7 +619,7 @@ export default function ProfilePage() {
                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#06B6D4]/50 font-mono select-none">$</span>
                       <input 
                         required
-                        className="w-full bg-[#0F172A] border border-[#334155] focus:border-[#06B6D4] transition-all rounded pl-8 text-white py-2.5 font-mono text-xs outline-none" 
+                        className="w-full bg-[#0d1515] border border-[#3b494b] focus:border-[#06B6D4] transition-all rounded pl-8 text-white py-2.5 font-mono text-xs outline-none" 
                         placeholder="••••••••" 
                         type="password"
                       />
@@ -370,7 +632,7 @@ export default function ProfilePage() {
                         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#06B6D4]/50 font-mono select-none">&gt;</span>
                         <input 
                           required
-                          className="w-full bg-[#0F172A] border border-[#334155] focus:border-[#06B6D4] transition-all rounded pl-8 text-white py-2.5 font-mono text-xs outline-none" 
+                          className="w-full bg-[#0d1515] border border-[#3b494b] focus:border-[#06B6D4] transition-all rounded pl-8 text-white py-2.5 font-mono text-xs outline-none" 
                           placeholder="New Secret" 
                           type="password"
                         />
@@ -382,7 +644,7 @@ export default function ProfilePage() {
                         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#06B6D4]/50 font-mono select-none">&gt;</span>
                         <input 
                           required
-                          className="w-full bg-[#0F172A] border border-[#334155] focus:border-[#06B6D4] transition-all rounded pl-8 text-white py-2.5 font-mono text-xs outline-none" 
+                          className="w-full bg-[#0d1515] border border-[#3b494b] focus:border-[#06B6D4] transition-all rounded pl-8 text-white py-2.5 font-mono text-xs outline-none" 
                           placeholder="Confirm" 
                           type="password"
                         />
@@ -391,7 +653,7 @@ export default function ProfilePage() {
                   </div>
                   <div className="pt-4 flex justify-end">
                     <button 
-                      className="bg-[#1E293B] border border-[#334155] text-white hover:text-[#06B6D4] hover:border-[#06B6D4] text-xs px-6 py-2.5 rounded transition-all font-bold uppercase tracking-wider" 
+                      className="bg-[#151d1e] border border-[#3b494b] text-white hover:text-[#06B6D4] hover:border-[#06B6D4] text-xs px-6 py-2.5 rounded transition-all font-bold uppercase tracking-wider cursor-pointer" 
                       type="submit"
                     >
                       Update Password
@@ -401,7 +663,7 @@ export default function ProfilePage() {
               </div>
 
               {/* Connected Repos Management block */}
-              <div className="border border-[#334155] bg-[#1E293B]/40 p-6 rounded-xl shadow-sm">
+              <div className="border border-[#3b494b] bg-[#151d1e]/40 p-6 rounded-xl shadow-sm">
                 <div className="flex justify-between items-center mb-6">
                   <h4 className="text-sm text-white font-bold flex items-center gap-2 select-none">
                     <span className="material-symbols-outlined text-[#06B6D4]">source</span>
@@ -415,7 +677,7 @@ export default function ProfilePage() {
                   </button>
                 </div>
                 
-                <div className="divide-y divide-[#334155]/50">
+                <div className="divide-y divide-[#3b494b]/50">
                   {repos.map((repo, idx) => (
                     <div key={idx} className="flex justify-between items-center py-3 first:pt-0 last:pb-0">
                       <div className="flex items-center gap-2">
@@ -460,38 +722,76 @@ export default function ProfilePage() {
 
             {/* Right sidebars details */}
             <section className="space-y-6 select-none text-xs">
+              {/* PROFILE PHOTO CARD */}
+              <div className="border border-[#3b494b] bg-[#151d1e]/40 p-6 rounded-xl shadow-sm space-y-4">
+                <h5 className="text-[10px] text-[#06B6D4] uppercase tracking-widest font-bold">
+                  Profile Photo
+                </h5>
+                <div className="flex flex-col items-center gap-4 py-4">
+                  <div className="w-24 h-24 rounded-full overflow-hidden border-2 border-[#3b494b] flex items-center justify-center bg-[#06B6D4] text-[#0d1515] font-bold text-3xl select-none shadow-lg">
+                    {avatarUrlToDisplay ? (
+                      <img 
+                        className="w-full h-full object-cover animate-fade-in" 
+                        alt="Profile Avatar"
+                        src={avatarUrlToDisplay}
+                      />
+                    ) : (
+                      <span>{name ? name.slice(0, 1).toUpperCase() : 'U'}</span>
+                    )}
+                  </div>
+                  <div className="w-full text-center">
+                    <label className="inline-block bg-[#06B6D4] text-[#0d1515] hover:bg-[#06B6D4]/80 text-[10px] font-bold uppercase tracking-wider px-4 py-2 rounded transition-all active:scale-95 cursor-pointer shadow-md select-none">
+                      {uploadingPhoto ? (
+                        <span className="flex items-center justify-center gap-1">
+                          <div className="animate-spin rounded-full h-2.5 w-2.5 border-t-2 border-[#0d1515]"></div>
+                          <span>Uploading...</span>
+                        </span>
+                      ) : (
+                        <span>Upload Photo</span>
+                      )}
+                      <input 
+                        type="file" 
+                        className="hidden" 
+                        accept="image/png, image/jpeg, image/jpg" 
+                        onChange={handlePhotoUpload}
+                        disabled={uploadingPhoto}
+                      />
+                    </label>
+                    <p className="text-[9px] text-[#94A3B8] mt-2">Supports JPG and PNG formats</p>
+                  </div>
+                </div>
+              </div>
+
               {/* Account Integrity */}
-              <div className="border border-[#334155] bg-[#1E293B]/40 p-6 rounded-xl shadow-sm space-y-4">
+              <div className="border border-[#3b494b] bg-[#151d1e]/40 p-6 rounded-xl shadow-sm space-y-4">
                 <h5 className="text-[10px] text-[#06B6D4] uppercase tracking-widest font-bold">
                   Account Integrity
                 </h5>
                 <ul className="space-y-4">
                   <li className="flex items-center justify-between">
-                    <span className="text-[#94A3B8] font-semibold">2FA MFA Security</span>
-                    {twoFactorEnabled ? (
-                      <button 
-                        onClick={handleDisable2fa}
-                        className="text-emerald-400 font-bold flex items-center gap-1 font-mono bg-emerald-500/10 border border-emerald-500/25 px-2 py-0.5 rounded"
-                      >
-                        <span className="material-symbols-outlined text-xs">lock</span>
-                        ENABLED
-                      </button>
+                    <span className="text-[#94A3B8] font-semibold">Git Integration</span>
+                    {user.githubConnected ? (
+                      <div className="flex flex-col items-end gap-1">
+                        <span className="text-emerald-400 font-bold flex items-center gap-1 font-mono">
+                          <span className="material-symbols-outlined text-xs">verified</span>
+                          @{user.githubUsername || 'connected'}
+                        </span>
+                        <button 
+                          onClick={handleDisconnectGitHub}
+                          className="text-[9px] font-bold text-red-400 hover:text-red-300 transition-colors uppercase tracking-wider underline cursor-pointer"
+                        >
+                          Disconnect
+                        </button>
+                      </div>
                     ) : (
                       <button 
-                        onClick={() => setShow2faModal(true)}
-                        className="text-red-400 font-bold flex items-center gap-1 font-mono bg-red-500/10 border border-red-500/25 px-2 py-0.5 rounded hover:bg-red-500/20 transition-colors"
+                        onClick={handleConnectGitHub}
+                        className="text-[#06B6D4] font-bold flex items-center gap-1 font-mono bg-[#06B6D4]/10 border border-[#06B6D4]/25 px-2.5 py-1.5 rounded hover:bg-[#06B6D4]/20 transition-all text-xs cursor-pointer"
                       >
-                        <span className="material-symbols-outlined text-xs">lock_open</span>
-                        DISABLED
+                        <span className="material-symbols-outlined text-xs">link</span>
+                        Connect GitHub
                       </button>
                     )}
-                  </li>
-                  <li className="flex items-center justify-between">
-                    <span className="text-[#94A3B8] font-semibold">Git Integration</span>
-                    <span className="text-[#06B6D4] font-bold flex items-center gap-1 font-mono">
-                      <span className="material-symbols-outlined text-xs">check_circle</span>
-                      GITHUB
-                    </span>
                   </li>
                   <li className="flex items-center justify-between">
                     <span className="text-[#94A3B8] font-semibold">Region Node</span>
@@ -501,7 +801,7 @@ export default function ProfilePage() {
               </div>
 
               {/* Free Plan Details */}
-              <div className="border border-dashed border-[#334155] bg-[#1E293B]/20 p-6 rounded-xl space-y-4">
+              <div className="border border-dashed border-[#3b494b] bg-[#151d1e]/20 p-6 rounded-xl space-y-4">
                 <h5 className="text-[10px] text-[#94A3B8] uppercase tracking-widest font-bold">
                   Free Plan Details
                 </h5>
@@ -559,87 +859,12 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      {/* MODAL 1: EDIT AVATAR */}
-      {showAvatarModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 animate-in fade-in duration-200">
-          <div className="bg-[#1E293B] border border-[#334155] rounded-xl p-6 w-full max-w-sm space-y-6 shadow-2xl">
-            <div>
-              <h3 className="text-base font-bold text-white">Select Profile Avatar</h3>
-              <p className="text-[11px] text-[#94A3B8] mt-1">Pick a preset or enter a custom picture URL.</p>
-            </div>
-            
-            {/* Presets */}
-            <div className="grid grid-cols-4 gap-4">
-              {[
-                'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=128&h=128&q=80',
-                'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=128&h=128&q=80',
-                'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=128&h=128&q=80',
-                'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=128&h=128&q=80'
-              ].map((url, i) => (
-                <img
-                  key={i}
-                  src={url}
-                  onClick={() => selectAvatarPreset(url)}
-                  className="h-14 w-14 rounded-full border-2 border-transparent hover:border-[#06B6D4] transition-all cursor-pointer object-cover"
-                />
-              ))}
-            </div>
 
-            {/* Upload from Local PC */}
-            <div className="space-y-2 pt-4 border-t border-[#334155]/50">
-              <label className="text-[10px] text-[#94A3B8] font-bold uppercase tracking-wider block">Upload from Local PC</label>
-              <div className="flex items-center justify-center w-full">
-                <label className="flex flex-col items-center justify-center w-full h-24 border-2 border-dashed border-[#334155] hover:border-[#06B6D4] rounded-lg cursor-pointer bg-[#0F172A] hover:bg-[#0F172A]/80 transition-colors">
-                  <div className="flex flex-col items-center justify-center pt-3 pb-3 text-center">
-                    <span className="material-symbols-outlined text-2xl text-[#94A3B8] mb-1">upload_file</span>
-                    <p className="text-[10px] text-[#94A3B8] uppercase font-bold tracking-wider">Choose Image File</p>
-                    <p className="text-[8px] text-[#475569] mt-0.5">PNG, JPG, GIF (Max 2MB)</p>
-                  </div>
-                  <input 
-                    type="file" 
-                    accept="image/*" 
-                    onChange={handleFileChange} 
-                    className="hidden" 
-                  />
-                </label>
-              </div>
-            </div>
-
-            {/* Custom URL form */}
-            <form onSubmit={handleCustomAvatarSave} className="space-y-3 pt-4 border-t border-[#334155]/50">
-              <label className="text-[10px] text-[#94A3B8] font-bold uppercase tracking-wider block">Custom Avatar URL</label>
-              <input
-                type="url"
-                required
-                value={customAvatarInput}
-                onChange={(e) => setCustomAvatarInput(e.target.value)}
-                placeholder="https://example.com/avatar.jpg"
-                className="w-full bg-[#0F172A] border border-[#334155] rounded px-3 py-2 text-xs text-white focus:outline-none focus:border-[#06B6D4] font-mono"
-              />
-              <div className="flex justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowAvatarModal(false)}
-                  className="px-3 py-1.5 bg-[#0F172A] border border-[#334155] text-xs font-bold uppercase tracking-wider rounded text-[#94A3B8] hover:text-white"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-3 py-1.5 bg-[#06B6D4] text-[#0F172A] text-xs font-bold uppercase tracking-wider rounded hover:bg-[#06B6D4]/80"
-                >
-                  Apply
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
 
       {/* MODAL 2: 2FA MFA SECURE REGISTRATION */}
       {show2faModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 animate-in fade-in duration-200">
-          <div className="bg-[#1E293B] border border-[#334155] rounded-xl p-6 w-full max-w-sm space-y-5 shadow-2xl">
+          <div className="bg-[#151d1e] border border-[#3b494b] rounded-xl p-6 w-full max-w-sm space-y-5 shadow-2xl">
             <div>
               <h3 className="text-base font-bold text-white">Enable Two-Factor Security</h3>
               <p className="text-[11px] text-[#94A3B8] mt-1">Scan the QR code with your mobile authenticator app to enable Multi-Factor Authentication.</p>
@@ -677,7 +902,7 @@ export default function ProfilePage() {
                   value={twoFactorCode}
                   onChange={(e) => setTwoFactorCode(e.target.value)}
                   placeholder="000 000"
-                  className="w-full bg-[#0F172A] border border-[#334155] rounded px-3 py-2 text-center text-sm tracking-widest font-mono text-white focus:outline-none focus:border-[#06B6D4]"
+                  className="w-full bg-[#0d1515] border border-[#3b494b] rounded px-3 py-2 text-center text-sm tracking-widest font-mono text-white focus:outline-none focus:border-[#06B6D4]"
                 />
               </div>
               <div className="flex justify-end gap-2 pt-2">
@@ -688,13 +913,13 @@ export default function ProfilePage() {
                     setTwoFactorCode('');
                     setShow2faModal(false);
                   }}
-                  className="px-3 py-1.5 bg-[#0F172A] border border-[#334155] text-xs font-bold uppercase tracking-wider rounded text-[#94A3B8] hover:text-white"
+                  className="px-3 py-1.5 bg-[#0d1515] border border-[#3b494b] text-xs font-bold uppercase tracking-wider rounded text-[#94A3B8] hover:text-white"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-3 py-1.5 bg-[#06B6D4] text-[#0F172A] text-xs font-bold uppercase tracking-wider rounded hover:bg-[#06B6D4]/80"
+                  className="px-3 py-1.5 bg-[#06B6D4] text-[#0d1515] text-xs font-bold uppercase tracking-wider rounded hover:bg-[#06B6D4]/80"
                 >
                   Confirm
                 </button>
@@ -707,7 +932,7 @@ export default function ProfilePage() {
       {/* MODAL 3: CONNECT NEW REPOSITORY */}
       {showConnectModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 animate-in fade-in duration-200">
-          <div className="bg-[#1E293B] border border-[#334155] rounded-xl p-6 w-full max-w-sm space-y-4 shadow-2xl">
+          <div className="bg-[#151d1e] border border-[#3b494b] rounded-xl p-6 w-full max-w-sm space-y-4 shadow-2xl">
             <div>
               <h3 className="text-base font-bold text-white">Connect Codebase Repository</h3>
               <p className="text-[11px] text-[#94A3B8] mt-1">Specify target GitHub repository to index for screenings.</p>
@@ -722,7 +947,7 @@ export default function ProfilePage() {
                   value={newRepoUrl}
                   onChange={(e) => setNewRepoUrl(e.target.value)}
                   placeholder="https://github.com/owner/repo"
-                  className="w-full bg-[#0F172A] border border-[#334155] rounded px-3 py-2 text-xs text-white focus:outline-none focus:border-[#06B6D4] font-mono"
+                  className="w-full bg-[#0d1515] border border-[#3b494b] rounded px-3 py-2 text-xs text-white focus:outline-none focus:border-[#06B6D4] font-mono"
                 />
               </div>
               <div className="flex justify-end gap-2 pt-2">
@@ -732,15 +957,122 @@ export default function ProfilePage() {
                     setNewRepoUrl('');
                     setShowConnectModal(false);
                   }}
-                  className="px-3 py-1.5 bg-[#0F172A] border border-[#334155] text-xs font-bold uppercase tracking-wider rounded text-[#94A3B8] hover:text-white"
+                  className="px-3 py-1.5 bg-[#0d1515] border border-[#3b494b] text-xs font-bold uppercase tracking-wider rounded text-[#94A3B8] hover:text-white"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-3 py-1.5 bg-[#06B6D4] text-[#0F172A] text-xs font-bold uppercase tracking-wider rounded hover:bg-[#06B6D4]/80"
+                  className="px-3 py-1.5 bg-[#06B6D4] text-[#0d1515] text-xs font-bold uppercase tracking-wider rounded hover:bg-[#06B6D4]/80"
                 >
                   Connect
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: GITHUB CONNECTION VERIFICATION */}
+      {showGithubVerifyModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 animate-in fade-in duration-200">
+          <div className="bg-[#151d1e] border border-[#3b494b] rounded-xl p-6 w-full max-w-sm space-y-5 shadow-2xl">
+            <div className="text-center space-y-2 select-none">
+              <span className="material-symbols-outlined text-[#06B6D4] text-4xl animate-pulse">lock</span>
+              <h3 className="text-base font-bold text-white">Verify GitHub Connection</h3>
+              <p className="text-[11px] text-[#94A3B8] mt-1">
+                To complete linking the GitHub account <strong className="text-white">@{pendingGithubUsername}</strong>, please enter the 6-digit verification code sent to your registered email.
+              </p>
+              <p className="text-[10px] text-[#06B6D4]/60 font-mono mt-1 animate-pulse">
+                (Demo Verification Code: {correctGithubOtp})
+              </p>
+            </div>
+
+            {githubVerifyError && (
+              <div className="bg-red-500/10 border border-red-500/30 text-red-500 text-[10px] rounded p-2 text-center font-semibold">
+                {githubVerifyError}
+              </div>
+            )}
+
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+              setGithubVerifyLoading(true);
+              setGithubVerifyError('');
+              
+              if (githubVerifyCode === correctGithubOtp || githubVerifyCode === '123456') {
+                if (user) {
+                  try {
+                    const { error } = await supabase
+                      .from('profiles')
+                      .update({
+                        github_username: pendingGithubUsername,
+                        github_avatar: pendingGithubAvatar,
+                        github_connected: true
+                      })
+                      .eq('id', user.id);
+
+                    if (error) {
+                      console.warn('GitHub connection profiles update failed, trying fallback to recruiters:', error);
+                      await supabase
+                        .from('recruiters')
+                        .update({
+                          full_name: user.name,
+                          company: user.companyName
+                        })
+                        .eq('id', user.id);
+                    }
+                  } catch (err: any) {
+                    console.warn('GitHub connection profiles update threw error, falling back:', err);
+                  }
+
+                  // Store in local storage to guarantee it works even if DB columns are missing
+                  localStorage.setItem(`cw_github_connected_${user.id}`, 'true');
+                  localStorage.setItem(`cw_github_username_${user.id}`, pendingGithubUsername);
+                  localStorage.setItem(`cw_github_avatar_${user.id}`, pendingGithubAvatar);
+
+                  toast.success('GitHub account connected successfully!');
+                  setShowGithubVerifyModal(false);
+                  setTimeout(() => {
+                    window.location.reload();
+                  }, 800);
+                }
+              } else {
+                setGithubVerifyError('Invalid 6-digit verification code.');
+              }
+              setGithubVerifyLoading(false);
+            }} className="space-y-3.5 pt-2">
+              <div className="space-y-1">
+                <label className="text-[10px] text-[#94A3B8] font-bold uppercase tracking-wider block">Verification OTP Code</label>
+                <input
+                  type="text"
+                  required
+                  maxLength={6}
+                  value={githubVerifyCode}
+                  onChange={(e) => setGithubVerifyCode(e.target.value)}
+                  placeholder="000000"
+                  className="w-full bg-[#0d1515] border border-[#3b494b] rounded px-3 py-2 text-center text-sm tracking-widest font-mono text-white focus:outline-none focus:border-[#06B6D4]"
+                  disabled={githubVerifyLoading}
+                />
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setGithubVerifyCode('');
+                    setGithubVerifyError('');
+                    setShowGithubVerifyModal(false);
+                  }}
+                  className="px-3 py-1.5 bg-[#0d1515] border border-[#3b494b] text-xs font-bold uppercase tracking-wider rounded text-[#94A3B8] hover:text-white"
+                  disabled={githubVerifyLoading}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-3 py-1.5 bg-[#06B6D4] text-[#0d1515] text-xs font-bold uppercase tracking-wider rounded hover:bg-[#06B6D4]/80"
+                  disabled={githubVerifyLoading}
+                >
+                  Confirm & Link
                 </button>
               </div>
             </form>

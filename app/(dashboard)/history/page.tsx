@@ -161,7 +161,7 @@ export default function HistoryPage() {
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-[#0F172A] text-white">
+      <div className="flex flex-col items-center justify-center min-h-screen bg-[#0d1515] text-white">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#06B6D4] mb-4"></div>
         <p className="text-sm font-mono text-[#94A3B8]">Loading screening history...</p>
       </div>
@@ -169,21 +169,21 @@ export default function HistoryPage() {
   }
 
   return (
-    <div className="flex-grow flex flex-col bg-[#0F172A] text-[#F1F5F9] overflow-hidden min-h-screen">
+    <div className="flex-grow flex flex-col bg-[#0d1515] text-[#F1F5F9] overflow-hidden min-h-screen">
       
       {/* Top Header Bar */}
-      <header className="flex justify-between items-center px-8 py-3 bg-[#1E293B] w-full border-b border-[#334155] z-10 select-none">
+      <header className="flex justify-between items-center px-8 py-3 bg-[#151d1e] w-full border-b border-[#3b494b] z-10 select-none">
         <div className="flex items-center gap-4">
           <span className="material-symbols-outlined text-[#06B6D4]">history</span>
           <h1 className="font-headline-md text-lg text-[#06B6D4] font-bold tracking-tight uppercase">Screening Session History</h1>
-          <span className="px-2 py-0.5 rounded border border-[#334155] bg-[#0F172A] font-code-sm text-[10px] text-[#94A3B8] font-mono">
+          <span className="px-2 py-0.5 rounded border border-[#3b494b] bg-[#0d1515] font-code-sm text-[10px] text-[#94A3B8] font-mono">
             SYNCED_DB
           </span>
         </div>
       </header>
 
       {/* Filter Drawer */}
-      <section className="p-6 bg-[#1E293B]/20 border-b border-[#334155] select-none">
+      <section className="p-6 bg-[#151d1e]/20 border-b border-[#3b494b] select-none">
         <div className="flex flex-col md:flex-row gap-4 items-center justify-between max-w-7xl mx-auto w-full">
           {/* Search bar */}
           <div className="relative w-full md:w-96">
@@ -192,35 +192,35 @@ export default function HistoryPage() {
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full bg-[#0F172A] border border-[#334155] rounded py-2 pl-10 pr-4 font-body-md text-sm text-white focus:outline-none focus:border-[#06B6D4] transition-all placeholder:text-[#475569]"
+              className="w-full bg-[#0d1515] border border-[#3b494b] rounded py-2 pl-10 pr-4 font-body-md text-sm text-white focus:outline-none focus:border-[#06B6D4] transition-all placeholder:text-[#475569]"
               placeholder="Search candidate or repository..."
             />
           </div>
 
           {/* Quick Filters */}
           <div className="flex items-center gap-3 w-full md:w-auto">
-            <div className="flex items-center bg-[#0F172A] border border-[#334155] rounded p-1 text-xs">
+            <div className="flex items-center bg-[#0d1515] border border-[#3b494b] rounded p-1 text-xs">
               <button 
                 onClick={() => setFilter('all')}
-                className={`px-3 py-1 rounded-sm font-bold transition-all ${filter === 'all' ? 'bg-[#06B6D4]/10 text-[#06B6D4] border border-[#06B6D4]/20' : 'text-[#94A3B8] hover:bg-[#1E293B]'}`}
+                className={`px-3 py-1 rounded-sm font-bold transition-all ${filter === 'all' ? 'bg-[#06B6D4]/10 text-[#06B6D4] border border-[#06B6D4]/20' : 'text-[#94A3B8] hover:bg-[#151d1e]'}`}
               >
                 All
               </button>
               <button 
                 onClick={() => setFilter('hire')}
-                className={`px-3 py-1 rounded-sm font-bold transition-all ${filter === 'hire' ? 'bg-[#06B6D4]/10 text-[#06B6D4] border border-[#06B6D4]/20' : 'text-[#94A3B8] hover:bg-[#1E293B]'}`}
+                className={`px-3 py-1 rounded-sm font-bold transition-all ${filter === 'hire' ? 'bg-[#06B6D4]/10 text-[#06B6D4] border border-[#06B6D4]/20' : 'text-[#94A3B8] hover:bg-[#151d1e]'}`}
               >
                 Hire
               </button>
               <button 
                 onClick={() => setFilter('maybe')}
-                className={`px-3 py-1 rounded-sm font-bold transition-all ${filter === 'maybe' ? 'bg-[#06B6D4]/10 text-[#06B6D4] border border-[#06B6D4]/20' : 'text-[#94A3B8] hover:bg-[#1E293B]'}`}
+                className={`px-3 py-1 rounded-sm font-bold transition-all ${filter === 'maybe' ? 'bg-[#06B6D4]/10 text-[#06B6D4] border border-[#06B6D4]/20' : 'text-[#94A3B8] hover:bg-[#151d1e]'}`}
               >
                 Maybe
               </button>
               <button 
                 onClick={() => setFilter('pass')}
-                className={`px-3 py-1 rounded-sm font-bold transition-all ${filter === 'pass' ? 'bg-[#06B6D4]/10 text-[#06B6D4] border border-[#06B6D4]/20' : 'text-[#94A3B8] hover:bg-[#1E293B]'}`}
+                className={`px-3 py-1 rounded-sm font-bold transition-all ${filter === 'pass' ? 'bg-[#06B6D4]/10 text-[#06B6D4] border border-[#06B6D4]/20' : 'text-[#94A3B8] hover:bg-[#151d1e]'}`}
               >
                 Pass
               </button>
@@ -234,7 +234,7 @@ export default function HistoryPage() {
         <div className="min-w-[900px] max-w-7xl mx-auto px-8 py-4 pb-24">
           <table className="w-full border-collapse">
             <thead>
-              <tr className="border-b border-[#334155] text-left select-none text-[10px] text-[#94A3B8] uppercase font-bold tracking-wider">
+              <tr className="border-b border-[#3b494b] text-left select-none text-[10px] text-[#94A3B8] uppercase font-bold tracking-wider">
                 <th className="py-4 px-3">Repository Context</th>
                 <th className="py-4 px-3">Candidate</th>
                 <th className="py-4 px-3">Date Screened</th>
@@ -243,9 +243,9 @@ export default function HistoryPage() {
                 <th className="py-4 px-3 text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#334155]/30 text-xs sm:text-sm">
+            <tbody className="divide-y divide-[#3b494b]/30 text-xs sm:text-sm">
               {filteredHistory.map((item) => (
-                <tr key={item.id} className="hover:bg-[#1E293B]/20 transition-colors group">
+                <tr key={item.id} className="hover:bg-[#151d1e]/20 transition-colors group">
                   {/* Repository name */}
                   <td className="py-4 px-3">
                     <div className="flex items-center gap-3">
@@ -264,7 +264,7 @@ export default function HistoryPage() {
                   {/* Candidate */}
                   <td className="py-4 px-3">
                     <div className="flex items-center gap-2">
-                      <div className="w-6 h-6 rounded bg-[#1E293B] border border-[#334155] flex items-center justify-center text-[10px] font-bold text-white font-mono uppercase">
+                      <div className="w-6 h-6 rounded bg-[#151d1e] border border-[#3b494b] flex items-center justify-center text-[10px] font-bold text-white font-mono uppercase">
                         {(item.candidate?.name || 'C').split(' ').map(n => n[0]).join('')}
                       </div>
                       <div>
@@ -281,7 +281,7 @@ export default function HistoryPage() {
 
                   {/* Questions count */}
                   <td className="py-4 px-3 text-center">
-                    <span className="bg-[#1E293B] px-2 py-0.5 border border-[#334155] font-mono text-xs rounded text-white">
+                    <span className="bg-[#151d1e] px-2 py-0.5 border border-[#3b494b] font-mono text-xs rounded text-white">
                       {item.report?.completed_questions ?? 0} / {item.report?.total_questions ?? 0}
                     </span>
                   </td>
@@ -298,7 +298,7 @@ export default function HistoryPage() {
                       {item.status === 'active' ? (
                         <button 
                           onClick={() => router.push(`/session/${item.id}`)}
-                          className="px-2.5 py-1 bg-[#06B6D4] text-[#0F172A] hover:bg-[#06B6D4]/80 text-[10px] font-bold rounded uppercase tracking-wider flex items-center gap-1 transition-all"
+                          className="px-2.5 py-1 bg-[#06B6D4] text-[#0d1515] hover:bg-[#06B6D4]/80 text-[10px] font-bold rounded uppercase tracking-wider flex items-center gap-1 transition-all"
                           title="Resume Live Interview"
                         >
                           <span className="material-symbols-outlined text-xs">play_arrow</span>
@@ -308,14 +308,14 @@ export default function HistoryPage() {
                         <>
                           <button 
                             onClick={() => router.push(`/session/${item.id}/report`)}
-                            className="p-1.5 text-[#94A3B8] hover:text-[#06B6D4] hover:bg-[#1E293B] rounded transition-all" 
+                            className="p-1.5 text-[#94A3B8] hover:text-[#06B6D4] hover:bg-[#151d1e] rounded transition-all" 
                             title="View Scorecard Report"
                           >
                             <span className="material-symbols-outlined text-lg">assignment</span>
                           </button>
                           <button 
                             onClick={() => router.push(`/session/${item.id}/code-story`)}
-                            className="p-1.5 text-[#94A3B8] hover:text-[#06B6D4] hover:bg-[#1E293B] rounded transition-all" 
+                            className="p-1.5 text-[#94A3B8] hover:text-[#06B6D4] hover:bg-[#151d1e] rounded transition-all" 
                             title="View Code Story"
                           >
                             <span className="material-symbols-outlined text-lg">analytics</span>
@@ -325,7 +325,7 @@ export default function HistoryPage() {
 
                       <button 
                         onClick={() => handleDeleteSession(item.id)}
-                        className="p-1.5 text-[#94A3B8] hover:text-red-400 hover:bg-[#1E293B] rounded transition-all" 
+                        className="p-1.5 text-[#94A3B8] hover:text-red-400 hover:bg-[#151d1e] rounded transition-all" 
                         title="Delete Session Record"
                       >
                         <span className="material-symbols-outlined text-lg">delete</span>

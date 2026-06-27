@@ -9,14 +9,13 @@ export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const { user, signOut } = useGlobal();
-  const [avatar, setAvatar] = useState('https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=256&h=256&q=80');
+  const getAvatarUrl = () => {
+    if (user?.avatarUrl) return user.avatarUrl;
+    if (user?.githubConnected && user?.githubAvatar) return user.githubAvatar;
+    return null;
+  };
 
-  useEffect(() => {
-    if (user) {
-      const saved = localStorage.getItem(`cw_avatar_url_${user.id}`);
-      if (saved) setAvatar(saved);
-    }
-  }, [user]);
+  const avatarUrlToDisplay = getAvatarUrl();
 
   const menuItems = [
     { name: 'Dashboard', path: '/dashboard', icon: 'dashboard' },
@@ -39,22 +38,38 @@ export default function Sidebar() {
 
   return (
     <aside className="fixed left-0 top-0 h-screen w-sidebar-width flex flex-col z-40 bg-[#192122] border-r border-[#3b494b] pt-4">
+      {/* Brand Logo with CW Icon */}
+      <div className="px-6 pb-4 mb-2 flex items-center select-none border-b border-[#3b494b]/60">
+        <Link href="/" className="flex items-center gap-2 hover:opacity-90 transition-opacity">
+          <span className="h-8 w-8 rounded-lg bg-gradient-to-tr from-cyan-500 to-indigo-400 flex items-center justify-center text-white font-extrabold text-sm shadow-md shadow-cyan-500/20">
+            CW
+          </span>
+          <span className="font-bold text-base tracking-tight text-white">
+            CodeWalk
+          </span>
+        </Link>
+      </div>
+
       {/* Workspace Header */}
       <div className="px-6 py-4 border-b border-[#3b494b]">
         <div className="flex items-center gap-3 mb-4">
-          <div className="w-10 h-10 rounded-lg overflow-hidden border border-[#3b494b]">
-            <img 
-              className="w-full h-full object-cover" 
-              alt="Recruiter Workspace Avatar"
-              src={avatar}
-            />
+          <div className="w-10 h-10 rounded-lg overflow-hidden border border-[#3b494b] flex items-center justify-center bg-[#06B6D4] text-[#0d1515] font-bold text-lg select-none">
+            {avatarUrlToDisplay ? (
+              <img 
+                className="w-full h-full object-cover" 
+                alt="Recruiter Workspace Avatar"
+                src={avatarUrlToDisplay}
+              />
+            ) : (
+              <span>{user?.name ? user.name.slice(0, 1).toUpperCase() : 'U'}</span>
+            )}
           </div>
           <div className="overflow-hidden">
             <p className="font-label-sm text-xs text-[#7df4ff] leading-tight font-bold truncate">
-              {user?.companyName ? `${user.companyName} Recopilot` : 'Recruiter Workspace'}
+              {user?.companyName ? `${user.companyName} Recopilot` : 'Add Company'}
             </p>
             <p className="text-[9px] text-[#b9cacb] uppercase tracking-tighter truncate">
-              {user?.name || 'AI Interview Screening'}
+              {user?.name || 'Recruiter'}
             </p>
           </div>
         </div>

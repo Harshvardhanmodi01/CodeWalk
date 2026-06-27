@@ -101,9 +101,9 @@ export default function RecruiterDashboard() {
   });
 
   return (
-    <div className="flex-1 flex flex-col bg-[#0F172A] text-[#F1F5F9] overflow-hidden min-h-screen">
+    <div className="flex-1 flex flex-col bg-[#0d1515] text-[#F1F5F9] overflow-hidden min-h-screen">
       {/* Dashboard Top Header Bar */}
-      <header className="flex justify-between items-center px-8 py-4 bg-[#1E293B] w-full border-b border-[#334155] z-10 select-none">
+      <header className="flex justify-between items-center px-8 py-4 bg-[#151d1e] w-full border-b border-[#3b494b] z-10 select-none">
         <div className="flex items-center gap-3">
           <span className="material-symbols-outlined text-[#06B6D4] text-2xl font-bold">terminal</span>
           <span className="font-extrabold text-lg text-[#06B6D4] tracking-tight">CodeWalk Recruiter</span>
@@ -114,7 +114,7 @@ export default function RecruiterDashboard() {
           </span>
           <button 
             onClick={handleLogout}
-            className="flex items-center gap-1.5 px-3 py-1.5 border border-[#334155] hover:border-red-500 hover:text-red-400 text-xs font-bold rounded-lg transition-all"
+            className="flex items-center gap-1.5 px-3 py-1.5 border border-[#3b494b] hover:border-red-500 hover:text-red-400 text-xs font-bold rounded-lg transition-all"
           >
             <span className="material-symbols-outlined text-sm">logout</span>
             <span>Sign Out</span>
@@ -129,12 +129,12 @@ export default function RecruiterDashboard() {
           {/* Top Banner Row */}
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div>
-              <h1 className="text-3xl font-extrabold tracking-tight">Recruiter Dashboard</h1>
+              <h1 className="text-3xl font-extrabold tracking-tight">Welcome back, {user?.name || 'Recruiter'}</h1>
               <p className="text-sm text-[#94A3B8] mt-1">Manage, trigger, and review AI-powered candidate code story interviews.</p>
             </div>
             <Link 
               href="/dashboard/new-session"
-              className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#06B6D4] text-[#0F172A] font-bold text-xs uppercase tracking-wider rounded-lg hover:brightness-110 transition-all shadow-[0_0_15px_rgba(6,182,212,0.3)] active:scale-95"
+              className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#06B6D4] text-[#0d1515] font-bold text-xs uppercase tracking-wider rounded-lg hover:brightness-110 transition-all shadow-[0_0_15px_rgba(6,182,212,0.3)] active:scale-95"
             >
               <span className="material-symbols-outlined text-sm font-bold">add</span>
               New Interview
@@ -143,22 +143,22 @@ export default function RecruiterDashboard() {
 
           {/* Stats Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            <div className="bg-[#1E293B] border border-[#334155] p-6 rounded-xl relative overflow-hidden">
+            <div className="bg-[#151d1e] border border-[#3b494b] p-6 rounded-xl relative overflow-hidden">
               <div className="absolute top-4 right-4 text-[#94A3B8]/20"><span className="material-symbols-outlined text-3xl">people</span></div>
               <p className="text-xs text-[#94A3B8] uppercase tracking-widest font-bold">Total Interviews</p>
               <h3 className="text-3xl font-extrabold mt-2">{totalSessions}</h3>
             </div>
-            <div className="bg-[#1E293B] border border-[#334155] p-6 rounded-xl relative overflow-hidden">
+            <div className="bg-[#151d1e] border border-[#3b494b] p-6 rounded-xl relative overflow-hidden">
               <div className="absolute top-4 right-4 text-[#94A3B8]/20"><span className="material-symbols-outlined text-3xl">timer</span></div>
               <p className="text-xs text-[#94A3B8] uppercase tracking-widest font-bold">Active Sessions</p>
               <h3 className="text-3xl font-extrabold mt-2 text-[#06B6D4]">{activeSessions}</h3>
             </div>
-            <div className="bg-[#1E293B] border border-[#334155] p-6 rounded-xl relative overflow-hidden">
+            <div className="bg-[#151d1e] border border-[#3b494b] p-6 rounded-xl relative overflow-hidden">
               <div className="absolute top-4 right-4 text-[#94A3B8]/20"><span className="material-symbols-outlined text-3xl">insights</span></div>
               <p className="text-xs text-[#94A3B8] uppercase tracking-widest font-bold">Average AI Score</p>
               <h3 className="text-3xl font-extrabold mt-2 text-emerald-400">{avgScore}%</h3>
             </div>
-            <div className="bg-[#1E293B] border border-[#334155] p-6 rounded-xl relative overflow-hidden">
+            <div className="bg-[#151d1e] border border-[#3b494b] p-6 rounded-xl relative overflow-hidden">
               <div className="absolute top-4 right-4 text-[#94A3B8]/20"><span className="material-symbols-outlined text-3xl">assignment_turned_in</span></div>
               <p className="text-xs text-[#94A3B8] uppercase tracking-widest font-bold">Candidates Interviewed</p>
               <h3 className="text-3xl font-extrabold mt-2">{candidatesInterviewed}</h3>
@@ -166,25 +166,25 @@ export default function RecruiterDashboard() {
           </div>
 
           {/* Sessions List Area */}
-          <div className="bg-[#1E293B] border border-[#334155] rounded-xl overflow-hidden shadow-xl">
+          <div className="bg-[#151d1e] border border-[#3b494b] rounded-xl overflow-hidden shadow-xl">
             {/* Filter Tabs Header */}
-            <div className="px-6 py-4 border-b border-[#334155] flex flex-col sm:flex-row gap-4 justify-between items-center bg-[#1E293B]/40">
-              <div className="flex gap-2 p-1 bg-[#0F172A] rounded-lg border border-[#334155]/60 text-xs font-bold">
+            <div className="px-6 py-4 border-b border-[#3b494b] flex flex-col sm:flex-row gap-4 justify-between items-center bg-[#151d1e]/40">
+              <div className="flex gap-2 p-1 bg-[#0d1515] rounded-lg border border-[#3b494b]/60 text-xs font-bold">
                 <button 
                   onClick={() => setFilter('all')}
-                  className={`px-4 py-1.5 rounded-md transition-colors ${filter === 'all' ? 'bg-[#06B6D4] text-[#0F172A]' : 'text-[#94A3B8] hover:text-[#F1F5F9]'}`}
+                  className={`px-4 py-1.5 rounded-md transition-colors ${filter === 'all' ? 'bg-[#06B6D4] text-[#0d1515]' : 'text-[#94A3B8] hover:text-[#F1F5F9]'}`}
                 >
                   All
                 </button>
                 <button 
                   onClick={() => setFilter('active')}
-                  className={`px-4 py-1.5 rounded-md transition-colors ${filter === 'active' ? 'bg-[#06B6D4] text-[#0F172A]' : 'text-[#94A3B8] hover:text-[#F1F5F9]'}`}
+                  className={`px-4 py-1.5 rounded-md transition-colors ${filter === 'active' ? 'bg-[#06B6D4] text-[#0d1515]' : 'text-[#94A3B8] hover:text-[#F1F5F9]'}`}
                 >
                   Active
                 </button>
                 <button 
                   onClick={() => setFilter('completed')}
-                  className={`px-4 py-1.5 rounded-md transition-colors ${filter === 'completed' ? 'bg-[#06B6D4] text-[#0F172A]' : 'text-[#94A3B8] hover:text-[#F1F5F9]'}`}
+                  className={`px-4 py-1.5 rounded-md transition-colors ${filter === 'completed' ? 'bg-[#06B6D4] text-[#0d1515]' : 'text-[#94A3B8] hover:text-[#F1F5F9]'}`}
                 >
                   Completed
                 </button>
@@ -199,7 +199,7 @@ export default function RecruiterDashboard() {
             ) : filteredSessions.length === 0 ? (
               /* Empty State Illustration */
               <div className="py-20 flex flex-col items-center justify-center text-center space-y-4 max-w-sm mx-auto px-4 select-none">
-                <div className="w-16 h-16 rounded-full bg-[#0F172A] flex items-center justify-center border border-[#334155]/60">
+                <div className="w-16 h-16 rounded-full bg-[#0d1515] flex items-center justify-center border border-[#3b494b]/60">
                   <span className="material-symbols-outlined text-[#06B6D4] text-3xl">question_answer</span>
                 </div>
                 <h4 className="text-lg font-bold">No Sessions Available</h4>
@@ -217,7 +217,7 @@ export default function RecruiterDashboard() {
               /* Sessions Table */
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse text-sm">
-                  <thead className="bg-[#1E293B]/60 border-b border-[#334155]/30">
+                  <thead className="bg-[#151d1e]/60 border-b border-[#3b494b]/30">
                     <tr>
                       <th className="px-6 py-4 text-xs font-bold text-[#94A3B8] uppercase tracking-wider">Candidate Name</th>
                       <th className="px-6 py-4 text-xs font-bold text-[#94A3B8] uppercase tracking-wider">GitHub Repo</th>
@@ -227,9 +227,9 @@ export default function RecruiterDashboard() {
                       <th className="px-6 py-4 text-xs font-bold text-[#94A3B8] uppercase tracking-wider text-right">Actions</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-[#334155]/20 text-[#F1F5F9]">
+                  <tbody className="divide-y divide-[#3b494b]/20 text-[#F1F5F9]">
                     {filteredSessions.map((session) => (
-                      <tr key={session.id} className="hover:bg-[#0F172A]/30 transition-colors">
+                      <tr key={session.id} className="hover:bg-[#0d1515]/30 transition-colors">
                         <td className="px-6 py-4 font-semibold text-sm">
                           <div className="flex flex-col">
                             <span>{session.candidate?.name || 'Unknown Candidate'}</span>
@@ -259,7 +259,7 @@ export default function RecruiterDashboard() {
                             {session.status === 'completed' && session.report && (
                               <button 
                                 onClick={() => router.push(`/session/${session.id}/report`)}
-                                className="px-3 py-1.5 bg-[#0F172A] border border-[#334155] hover:border-[#06B6D4] hover:text-[#06B6D4] text-xs font-bold rounded transition-all"
+                                className="px-3 py-1.5 bg-[#0d1515] border border-[#3b494b] hover:border-[#06B6D4] hover:text-[#06B6D4] text-xs font-bold rounded transition-all"
                               >
                                 View Report
                               </button>
@@ -268,13 +268,13 @@ export default function RecruiterDashboard() {
                               <>
                                 <button 
                                   onClick={() => router.push(`/session/${session.id}/code-story`)}
-                                  className="px-3 py-1.5 bg-[#0F172A] border border-[#334155] hover:border-emerald-500 hover:text-emerald-400 text-xs font-bold rounded transition-all"
+                                  className="px-3 py-1.5 bg-[#0d1515] border border-[#3b494b] hover:border-emerald-500 hover:text-emerald-400 text-xs font-bold rounded transition-all"
                                 >
                                   Code Story
                                 </button>
                                 <button 
                                   onClick={() => router.push(`/session/${session.id}`)}
-                                  className="px-3 py-1.5 bg-[#06B6D4] text-[#0F172A] font-bold hover:brightness-110 text-xs rounded transition-all"
+                                  className="px-3 py-1.5 bg-[#06B6D4] text-[#0d1515] font-bold hover:brightness-110 text-xs rounded transition-all"
                                 >
                                   Start
                                 </button>

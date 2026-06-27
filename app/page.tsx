@@ -6,7 +6,16 @@ import HeroSection from '@/components/landing/HeroSection';
 import SocialProof from '@/components/landing/SocialProof';
 import Link from 'next/link';
 
+import { useGlobal } from '@/app/context/GlobalContext';
+
 export default function LandingPage() {
+  const { user } = useGlobal();
+  const [mounted, setMounted] = React.useState(false);
+
+  React.useEffect(() => {
+    setMounted(true);
+  }, []);
+
   return (
     <div className="bg-background text-on-surface font-body-md min-h-screen flex flex-col selection:bg-primary-fixed selection:text-on-primary-fixed overflow-x-hidden">
       {/* Top Navbar */}
@@ -32,12 +41,22 @@ export default function LandingPage() {
           </div>
 
           <div className="relative z-10 flex flex-col sm:flex-row gap-4 items-center justify-center pt-2">
-            <Link 
-              href="/signup" 
-              className="w-full sm:w-auto px-8 py-3 bg-primary-fixed text-on-primary-fixed font-label-sm text-label-sm font-bold shadow-[0_0_15px_rgba(0,219,233,0.3)] hover:opacity-90 transition-all active:scale-95"
-            >
-              Get Started For Free
-            </Link>
+            {mounted && user ? (
+              <Link 
+                href="/dashboard" 
+                className="w-full sm:w-auto px-8 py-3 bg-primary-fixed text-on-primary-fixed font-label-sm text-label-sm font-bold shadow-[0_0_15px_rgba(0,219,233,0.3)] hover:opacity-90 transition-all active:scale-95 rounded-lg flex items-center justify-center gap-2"
+              >
+                <span className="material-symbols-outlined text-sm font-bold">dashboard</span>
+                Go to Recruiter Dashboard
+              </Link>
+            ) : (
+              <Link 
+                href="/register" 
+                className="w-full sm:w-auto px-8 py-3 bg-primary-fixed text-on-primary-fixed font-label-sm text-label-sm font-bold shadow-[0_0_15px_rgba(0,219,233,0.3)] hover:opacity-90 transition-all active:scale-95"
+              >
+                Get Started For Free
+              </Link>
+            )}
             <Link 
               href="/pricing" 
               className="w-full sm:w-auto px-8 py-3 border border-outline-variant text-on-surface hover:bg-surface-variant font-label-sm text-label-sm font-bold transition-all active:scale-95"

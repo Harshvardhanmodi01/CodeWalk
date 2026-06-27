@@ -18,12 +18,6 @@ export default function DashboardLayout({
     setMounted(true);
   }, []);
 
-  useEffect(() => {
-    if (mounted && !user) {
-      router.replace('/login');
-    }
-  }, [user, router, mounted]);
-
   if (!mounted || !user) {
     return (
       <div className="min-h-screen bg-[#0d1515] flex items-center justify-center">

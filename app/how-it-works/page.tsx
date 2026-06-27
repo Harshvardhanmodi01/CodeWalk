@@ -64,6 +64,41 @@ export default function HowItWorksPage() {
         </div>
       </div>
 
+      {/* Video Walkthrough Placeholder */}
+      <div className="space-y-6 max-w-4xl mx-auto px-4 sm:px-0 mt-8">
+        <div className="text-center space-y-2">
+          <span className="text-[10px] font-bold text-[#06B6D4] uppercase tracking-wider block">Interactive Walkthrough</span>
+          <h3 className="text-2xl font-extrabold text-on-surface tracking-tight">Product Walkthrough Video</h3>
+          <p className="text-xs text-on-surface-variant max-w-md mx-auto">
+            Watch our 2-minute product video to see CodeWalk in action.
+          </p>
+        </div>
+
+        <div className="relative rounded-3xl overflow-hidden border border-[#3b494b] bg-[#151d1e] p-4 shadow-2xl glow-cyan group">
+          <div className="aspect-video w-full rounded-2xl bg-[#0d1515] border border-[#3b494b] flex flex-col items-center justify-center relative overflow-hidden">
+            {/* Ambient background glow */}
+            <div className="absolute inset-0 bg-gradient-to-tr from-[#06B6D4]/5 to-transparent opacity-60 pointer-events-none" />
+            <div className="absolute -top-24 -left-24 w-48 h-48 bg-[#06B6D4]/10 rounded-full blur-3xl pointer-events-none" />
+            
+            {/* Play Button */}
+            <div className="z-10 w-20 h-20 rounded-full bg-[#06B6D4]/10 border border-[#06B6D4]/40 flex items-center justify-center text-[#06B6D4] group-hover:scale-110 group-hover:bg-[#06B6D4]/20 group-hover:border-[#06B6D4] transition-all duration-300 shadow-[0_0_20px_rgba(6,182,212,0.15)] group-hover:shadow-[0_0_30px_rgba(6,182,212,0.3)]">
+              <span className="material-symbols-outlined text-4xl select-none pl-1">play_arrow</span>
+            </div>
+
+            <div className="z-10 mt-6 text-center space-y-1">
+              <p className="text-sm font-bold text-white tracking-wide">Video Walkthrough Placeholder</p>
+              <p className="text-xs text-on-surface-variant font-mono">Future video element slot (replace with MP4 / YouTube embed)</p>
+            </div>
+            
+            {/* High-tech HUD grid representation */}
+            <div className="absolute inset-0 border border-[#06B6D4]/5 m-4 rounded-xl pointer-events-none flex items-end justify-between p-3">
+              <span className="text-[9px] font-mono text-[#06B6D4]/40">SYS.WALK_ACTIVE: TRUE</span>
+              <span className="text-[9px] font-mono text-[#06B6D4]/40">00:00 / 02:30</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Before / After Interactive Mockup */}
       <div className="mt-8 px-4 sm:px-0">
         <div className="text-center space-y-2 mb-10">

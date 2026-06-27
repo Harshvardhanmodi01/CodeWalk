@@ -2,12 +2,20 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { useGlobal } from '@/app/context/GlobalContext';
 
 export default function HeroSection() {
   const router = useRouter();
+  const { user } = useGlobal();
+  const [mounted, setMounted] = useState(false);
   const [inputValue, setInputValue] = useState('');
   const [typedPlaceholder, setTypedPlaceholder] = useState('https://github.com/');
   const [isFocused, setIsFocused] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Typewriter animation simulation
   useEffect(() => {
@@ -137,6 +145,19 @@ export default function HeroSection() {
               </div>
             </div>
           </form>
+
+          {/* Logged in shortcut */}
+          {mounted && user && (
+            <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+              <Link
+                href="/dashboard"
+                className="px-6 py-3 bg-[#06B6D4]/10 border border-[#06B6D4] text-[#06B6D4] hover:bg-[#06B6D4] hover:text-[#0F172A] font-bold text-xs rounded-lg transition-all flex items-center gap-2 shadow-[0_0_15px_rgba(6,182,212,0.15)] hover:shadow-[0_0_20px_rgba(6,182,212,0.3)] active:scale-95"
+              >
+                <span className="material-symbols-outlined text-sm font-bold">dashboard</span>
+                Go to Recruiter Dashboard
+              </Link>
+            </div>
+          )}
 
           {/* Social strip */}
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-6 text-on-surface-variant/60 font-label-sm text-label-sm uppercase tracking-widest pt-4">

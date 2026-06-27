@@ -17,17 +17,17 @@ export default function TokenUsageDashboard() {
   }, [user]);
 
   return (
-    <div className="flex-grow flex flex-col bg-surface overflow-hidden min-h-screen">
+    <div className="flex-grow flex flex-col bg-[#0d1515] overflow-hidden min-h-screen text-[#F1F5F9]">
       
       {/* Top Header Bar */}
-      <header className="flex justify-between items-center px-8 py-3 bg-surface-container-low w-full border-b border-outline-variant z-10 select-none">
+      <header className="flex justify-between items-center px-8 py-3 bg-[#151d1e] w-full border-b border-[#3b494b] z-10 select-none">
         <div className="flex items-center gap-3">
-          <span className="material-symbols-outlined text-primary-fixed text-xl">analytics</span>
-          <h1 className="font-headline-md text-lg text-primary-fixed font-bold tracking-tight">Token Usage</h1>
+          <span className="material-symbols-outlined text-[#06B6D4] text-xl">analytics</span>
+          <h1 className="text-lg text-[#06B6D4] font-bold tracking-tight">Token Usage</h1>
         </div>
         <button 
           onClick={() => router.push('/tokens/history')}
-          className="flex items-center gap-2 px-4 py-1.5 border border-outline-variant hover:border-primary-fixed hover:text-primary-fixed text-xs font-bold rounded-lg transition-all active:scale-95"
+          className="flex items-center gap-2 px-4 py-1.5 border border-[#3b494b] hover:border-[#06B6D4] hover:text-[#06B6D4] text-xs font-bold rounded-lg transition-all active:scale-95 text-[#94A3B8]"
         >
           <span className="material-symbols-outlined text-sm font-bold">history</span>
           <span>View Full Logs</span>

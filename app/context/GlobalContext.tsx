@@ -2,12 +2,27 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '@/app/lib/supabase';
+import { toast } from 'react-hot-toast';
 
 export interface User {
   id: string;
   email: string;
   name: string;
   companyName: string;
+  plan?: string;
+  tokensTotal?: number;
+  tokensUsed?: number;
+  githubUsername?: string;
+  githubConnected?: boolean;
+  githubAvatar?: string;
+  githubRepos?: string[];
+  twoFactorEnabled?: boolean;
+  role?: string;
+  companySize?: string;
+  hiresPerMonth?: string;
+  referralSource?: string;
+  onboardingCompleted?: boolean;
+  avatarUrl?: string;
 }
 
 export interface Company {
@@ -49,6 +64,7 @@ interface GlobalContextType {
   saveAssessment: (assessment: any) => Promise<void>;
   updateAssessmentRatings: (jobId: string, ratings: any) => Promise<void>;
   updateAssessmentNotes: (jobId: string, notes: any) => Promise<void>;
+  refreshUserData: () => Promise<void>;
 }
 
 const GlobalContext = createContext<GlobalContextType | undefined>(undefined);
@@ -57,16 +73,22 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
   // Theme state
   const [theme, setTheme] = useState<'light' | 'dark'>('dark');
 
+  // 2FA Challenge states
+  const [twoFactorChallenged, setTwoFactorChallenged] = useState(false);
+  const [twoFactorCode, setTwoFactorCode] = useState('');
+  const [twoFactorError, setTwoFactorError] = useState('');
+  const [verifying2fa, setVerifying2fa] = useState(false);
+
   // User state
   const [user, setUser] = useState<User | null>(null);
 
   // Company state
   const [company, setCompany] = useState<Company>({
-    name: 'Acme Corp',
-    size: '10-50 employees',
-    domain: 'acme.com',
-    industry: 'Technology',
-    githubConnected: true,
+    name: '',
+    size: '',
+    domain: '',
+    industry: '',
+    githubConnected: false,
     gitlabConnected: false,
     bitbucketConnected: false,
   });
@@ -112,6 +134,7 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
         } else {
           // Reset states on logout
           setUser(null);
+          setTwoFactorChallenged(false);
           setCompany({
             name: 'Acme Corp',
             size: '10-50 employees',
@@ -143,41 +166,6 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
   // Helper to load user profile and token logs from Supabase
   const loadUserData = async (userId: string, email: string) => {
     try {
-      // Fetch local overrides
-      let localName = '';
-      let localCompany = '';
-      try {
-        localName = localStorage.getItem(`cw_user_name_${userId}`) || '';
-        localCompany = localStorage.getItem(`cw_user_company_${userId}`) || '';
-      } catch (e) {}
-
-      // Try to fetch from recruiters table first
-      let { data: recruiter, error: recruiterErr } = await supabase
-        .from('recruiters')
-        .select('*')
-        .eq('id', userId)
-        .single();
-
-      if (recruiter) {
-        setUser({
-          id: userId,
-          email,
-          name: localName || recruiter.full_name || email.split('@')[0],
-          companyName: localCompany || recruiter.company || 'Acme Corp',
-        });
-        setCompany({
-          name: localCompany || recruiter.company || 'Acme Corp',
-          size: '10-50 employees',
-          domain: email.split('@')[1] || 'acme.com',
-          industry: 'Technology',
-          githubConnected: true,
-          gitlabConnected: false,
-          bitbucketConnected: false,
-        });
-        setTokenStats({ limit: 1000000, used: 0, history: [] });
-        return;
-      }
-
       // 1. Fetch profile from public.profiles
       let { data: profile, error: profileErr } = await supabase
         .from('profiles')
@@ -188,76 +176,200 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
       if (profileErr && profileErr.code === 'PGRST116') {
         console.warn('Profile not found, attempting to create one...');
         
-        // Auto-create profile if missing (e.g. if signup was done before database triggers were set up)
-        const defaultProfile = {
+        let registeredName = email.split('@')[0];
+        let registeredCompany = '';
+
+        try {
+          const { data: recData } = await supabase
+            .from('recruiters')
+            .select('full_name, company')
+            .eq('id', userId)
+            .single();
+
+          if (recData?.full_name) registeredName = recData.full_name;
+          if (recData?.company) registeredCompany = recData.company;
+        } catch (e) {
+          console.warn('Could not load recruiter data for default profile:', e);
+        }
+
+        try {
+          const { data: { user: authUser } } = await supabase.auth.getUser();
+          if (authUser?.user_metadata?.name) registeredName = authUser.user_metadata.name;
+          if (authUser?.user_metadata?.companyName) registeredCompany = authUser.user_metadata.companyName;
+        } catch (e) {}
+
+        // Auto-create profile if missing
+        const defaultProfile: any = {
           id: userId,
-          name: email.split('@')[0],
           email: email,
-          company_name: 'Acme Corp',
+          name: registeredName,
+          company_name: registeredCompany,
           company_size: '1-10 employees',
           domain: email.split('@')[1] || 'acme.com',
           industry: 'Technology',
-          subscription: 'Free',
-          token_limit: 50000,
-          token_used: 12500,
-          github_connected: true,
-          gitlab_connected: false,
-          bitbucket_connected: false,
+          plan: 'free',
+          tokens_total: 5,
+          tokens_used: 0,
+          github_connected: false,
+          created_at: new Date().toISOString()
         };
 
-        const { data: newProfile, error: insertErr } = await supabase
-          .from('profiles')
-          .insert(defaultProfile)
-          .select()
-          .single();
+        // Try to insert with new columns if they exist
+        try {
+          const { data: newProfile, error: insertErr } = await supabase
+            .from('profiles')
+            .insert({
+              ...defaultProfile,
+              full_name: registeredName,
+              company: registeredCompany
+            })
+            .select()
+            .single();
 
-        if (!insertErr && newProfile) {
-          profile = newProfile;
-        } else {
-          console.error('Failed to auto-create missing profile:', insertErr);
+          if (!insertErr && newProfile) {
+            profile = newProfile;
+          } else {
+            console.warn('Insert with new columns failed, trying fallback with old columns only:', insertErr);
+            const { data: fallbackProfile, error: fallbackErr } = await supabase
+              .from('profiles')
+              .insert(defaultProfile)
+              .select()
+              .single();
+
+            if (!fallbackErr && fallbackProfile) {
+              profile = fallbackProfile;
+            } else {
+              console.error('Failed to auto-create missing profile fallback:', fallbackErr);
+            }
+          }
+        } catch (err) {
+          console.warn('Profiles insert with new columns threw error, trying fallback:', err);
+          const { data: fallbackProfile, error: fallbackErr } = await supabase
+            .from('profiles')
+            .insert(defaultProfile)
+            .select()
+            .single();
+
+          if (!fallbackErr && fallbackProfile) {
+            profile = fallbackProfile;
+          }
         }
       }
 
       if (profile) {
+        const local2fa = localStorage.getItem(`cw_2fa_enabled_${userId}`) === 'true';
+        const is2faEnabled = profile.two_factor_enabled || local2fa;
+        const needs2fa = is2faEnabled && sessionStorage.getItem(`cw_2fa_verified_${userId}`) !== 'true';
+        setTwoFactorChallenged(needs2fa);
+      } else {
+        const local2fa = localStorage.getItem(`cw_2fa_enabled_${userId}`) === 'true';
+        const needs2fa = local2fa && sessionStorage.getItem(`cw_2fa_verified_${userId}`) !== 'true';
+        setTwoFactorChallenged(needs2fa);
+      }
+
+      // 2. Try to fetch from recruiters table (for additional metadata)
+      let { data: recruiter, error: recruiterErr } = await supabase
+        .from('recruiters')
+        .select('*')
+        .eq('id', userId)
+        .single();
+
+      if (recruiterErr && recruiterErr.code === 'PGRST116') {
+        console.warn('Recruiter profile not found, auto-creating one...');
+        const { data: newRecruiter, error: recInsertErr } = await supabase
+          .from('recruiters')
+          .insert({
+            id: userId,
+            email: email,
+            full_name: email.split('@')[0],
+            company: 'Acme Corp'
+          })
+          .select()
+          .single();
+        if (!recInsertErr && newRecruiter) {
+          recruiter = newRecruiter;
+        } else {
+          console.error('Failed to auto-create missing recruiter:', recInsertErr);
+        }
+      }
+
+      // 3. Count sessions dynamically to auto-sync tokens_used
+      const { count: sessionCount, error: countErr } = await supabase
+        .from('sessions')
+        .select('*', { count: 'exact', head: true })
+        .eq('recruiter_id', userId);
+
+      let actualTokensUsed = profile?.tokens_used ?? 0;
+      if (profile && !countErr && sessionCount !== null && sessionCount !== profile.tokens_used) {
+        actualTokensUsed = sessionCount;
+        // Run update query to sync the count in the database
+        await supabase
+          .from('profiles')
+          .update({ tokens_used: sessionCount })
+          .eq('id', userId);
+      }
+
+      if (profile) {
+        const local2fa = localStorage.getItem(`cw_2fa_enabled_${userId}`) === 'true';
+        const is2faEnabled = profile.two_factor_enabled || local2fa;
+
         setUser({
           id: userId,
           email,
-          name: localName || profile.name || email.split('@')[0],
-          companyName: localCompany || profile.company_name || 'Acme Corp',
+          name: profile.full_name || profile.name || email.split('@')[0],
+          companyName: profile.company || profile.company_name || '',
+          plan: profile.plan || 'free',
+          tokensTotal: profile.tokens_total ?? 5,
+          tokensUsed: actualTokensUsed,
+          githubUsername: profile.github_username || localStorage.getItem(`cw_github_username_${userId}`) || '',
+          githubConnected: profile.github_connected || localStorage.getItem(`cw_github_connected_${userId}`) === 'true' || false,
+          githubAvatar: profile.github_avatar || localStorage.getItem(`cw_github_avatar_${userId}`) || '',
+          githubRepos: profile.github_repos || [],
+          twoFactorEnabled: is2faEnabled,
+          role: profile.role || '',
+          companySize: profile.company_size || '',
+          hiresPerMonth: profile.hires_per_month || '',
+          referralSource: profile.referral_source || '',
+          onboardingCompleted: profile.onboarding_completed || false,
+          avatarUrl: profile.avatar_url || '',
         });
 
         setCompany({
-          name: localCompany || profile.company_name || 'Acme Corp',
-          size: profile.company_size || '10-50 employees',
-          domain: profile.domain || email.split('@')[1] || 'acme.com',
-          industry: profile.industry || 'Technology',
-          githubConnected: profile.github_connected ?? true,
-          gitlabConnected: profile.gitlab_connected ?? false,
-          bitbucketConnected: profile.bitbucket_connected ?? false,
+          name: profile.company || profile.company_name || '',
+          size: profile.company_size || '',
+          domain: profile.domain || email.split('@')[1] || '',
+          industry: profile.industry || '',
+          githubConnected: profile.github_connected || localStorage.getItem(`cw_github_connected_${userId}`) === 'true' || false,
+          gitlabConnected: false,
+          bitbucketConnected: false,
         });
 
-        setSubscription((profile.subscription as any) || 'Free');
+        setSubscription((profile.plan === 'pro' ? 'Pro' : profile.plan === 'enterprise' ? 'Enterprise' : 'Free') as any);
 
         // Load token stats
         setTokenStats((prev) => ({
           ...prev,
-          limit: profile.token_limit ?? 50000,
-          used: profile.token_used ?? 0,
+          limit: profile.tokens_total ?? 5,
+          used: actualTokensUsed,
         }));
       } else {
-        // Fallback profile representation
+        // Fallback representation
         setUser({
           id: userId,
           email,
-          name: localName || email.split('@')[0],
-          companyName: localCompany || 'Acme Corp',
+          name: recruiter?.full_name || email.split('@')[0],
+          companyName: recruiter?.company || '',
+          plan: 'free',
+          tokensTotal: 5,
+          tokensUsed: 0,
+          githubConnected: false,
         });
         setCompany({
-          name: localCompany || 'Acme Corp',
-          size: '10-50 employees',
-          domain: email.split('@')[1] || 'acme.com',
-          industry: 'Technology',
-          githubConnected: true,
+          name: recruiter?.company || '',
+          size: '',
+          domain: email.split('@')[1] || '',
+          industry: '',
+          githubConnected: false,
           gitlabConnected: false,
           bitbucketConnected: false,
         });
@@ -341,6 +453,13 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const refreshUserData = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.user) {
+      await loadUserData(session.user.id, session.user.email || '');
+    }
+  };
+
   const toggleTheme = () => {
     setTheme((prev) => (prev === 'light' ? 'dark' : 'light'));
   };
@@ -407,7 +526,7 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
         const nextUsed = Math.min(tokenStats.limit, tokenStats.used + amount);
         await supabase
           .from('profiles')
-          .update({ token_used: nextUsed })
+          .update({ tokens_used: nextUsed })
           .eq('id', user.id);
       } catch (e) {
         console.error('Failed to log token usage to Supabase:', e);
@@ -429,8 +548,8 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
         await supabase
           .from('profiles')
           .update({
-            subscription: tier,
-            token_limit: limit,
+            plan: tier.toLowerCase(),
+            tokens_total: limit,
           })
           .eq('id', user.id);
       } catch (e) {
@@ -555,9 +674,84 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
         saveAssessment,
         updateAssessmentRatings,
         updateAssessmentNotes,
+        refreshUserData,
       }}
     >
-      {children}
+      {twoFactorChallenged ? (
+        <div className="min-h-screen bg-[#0d1515] text-[#F1F5F9] flex flex-col font-body-md items-center justify-center p-6 relative overflow-hidden select-none">
+          {/* Top Decorative Scanner line */}
+          <div className="absolute top-0 left-0 w-full h-[1px] bg-[#06B6D4]/30 animate-[scan_4s_linear_infinite]"></div>
+          
+          <div className="w-full max-w-[400px] bg-[#151d1e] border border-[#3b494b] p-8 rounded-xl shadow-2xl space-y-6">
+            <div className="text-center space-y-2">
+              <span className="material-symbols-outlined text-[#06B6D4] text-4xl animate-pulse">lock</span>
+              <h2 className="font-headline-md text-headline-md text-white font-extrabold">2FA Verification</h2>
+              <p className="text-xs text-on-surface-variant">
+                Your account is protected by Two-Factor Authentication. Please enter your 6-digit verification code.
+              </p>
+            </div>
+
+            {twoFactorError && (
+              <div className="bg-red-500/10 border border-red-500/30 text-red-500 text-xs rounded-xl p-3 text-center">
+                {twoFactorError}
+              </div>
+            )}
+
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+              setVerifying2fa(true);
+              setTwoFactorError('');
+              // Brief delay for visual effect
+              await new Promise(resolve => setTimeout(resolve, 600));
+              if (twoFactorCode.length === 6 && !isNaN(Number(twoFactorCode))) {
+                sessionStorage.setItem(`cw_2fa_verified_${user?.id}`, 'true');
+                setTwoFactorChallenged(false);
+                setTwoFactorCode('');
+                toast.success('Account unlocked successfully!');
+              } else {
+                setTwoFactorError('Invalid 6-digit verification code.');
+              }
+              setVerifying2fa(false);
+            }} className="space-y-4">
+              <div className="space-y-1.5">
+                <input 
+                  required 
+                  value={twoFactorCode}
+                  onChange={(e) => setTwoFactorCode(e.target.value)}
+                  className="w-full bg-[#0d1515] border border-[#3b494b] px-4 py-3 text-center text-sm font-mono tracking-widest text-white rounded focus:outline-none focus:border-[#06B6D4]" 
+                  placeholder="000000" 
+                  maxLength={6}
+                  type="text"
+                  disabled={verifying2fa}
+                />
+              </div>
+
+              <button 
+                className="w-full bg-[#06B6D4] text-[#0d1515] font-bold font-label-sm text-xs py-4 glow-cyan hover:opacity-90 active:scale-[0.97] transition-all flex items-center justify-center gap-2 uppercase tracking-widest rounded" 
+                type="submit"
+                disabled={verifying2fa}
+              >
+                <span>{verifying2fa ? 'Verifying...' : 'Unlock Account'}</span>
+                <span className="material-symbols-outlined text-lg font-bold">lock_open</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={async () => {
+                  setTwoFactorCode('');
+                  setTwoFactorError('');
+                  await signOut();
+                }}
+                className="w-full text-center text-xs text-red-400 hover:text-red-300 transition-colors pt-2 block"
+              >
+                Cancel & Sign Out
+              </button>
+            </form>
+          </div>
+        </div>
+      ) : (
+        children
+      )}
     </GlobalContext.Provider>
   );
 }

@@ -96,6 +96,7 @@ export async function POST(req: Request) {
 
     const systemPrompt = `You are a senior technical interviewer. Analyze the provided codebase file snippets and generate 10 to 12 relevant interview questions.
 For each question, extract a specific code snippet from the file, and specify its lines.
+CRITICAL: The "file_path" field MUST match exactly one of the file paths provided in the codebase snippets. Do NOT invent new files or file paths.
 Your output must be a valid JSON object matching this schema:
 {
   "questions": [
@@ -107,6 +108,7 @@ Your output must be a valid JSON object matching this schema:
       "line_end": 20,
       "difficulty": "easy" | "medium" | "hard",
       "category": "frontend" | "backend" | "dsa" | "system-design",
+      "expected_answer": "Concise key points or explanation of what a correct answer should include.",
       "follow_up_questions": ["follow-up 1", "follow-up 2"]
     }
   ]

@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useGlobal } from '@/app/context/GlobalContext';
 import { supabase } from '@/app/lib/supabaseClient';
+import { toast } from 'react-hot-toast';
 
 interface QuestionItem {
   question_text: string;
@@ -14,6 +15,7 @@ interface QuestionItem {
   difficulty: 'easy' | 'medium' | 'hard';
   category: 'frontend' | 'backend' | 'dsa' | 'system-design';
   follow_up_questions?: string[];
+  expected_answer?: string;
 }
 
 export default function NewSessionFlow() {
@@ -32,6 +34,57 @@ export default function NewSessionFlow() {
   const [duration, setDuration] = useState('45');
   const [difficulty, setDifficulty] = useState<'easy' | 'medium' | 'hard' | 'mixed'>('medium');
   const [focus, setFocus] = useState<string[]>(['All']);
+
+  // Git repositories list state
+  const [gitRepos, setGitRepos] = useState<any[]>([]);
+  const [fetchingRepos, setFetchingRepos] = useState(false);
+  const [repoSource, setRepoSource] = useState<'dropdown' | 'custom'>('custom');
+
+  useEffect(() => {
+    if (user?.githubConnected && user?.githubUsername) {
+      setRepoSource('dropdown');
+      const fetchRepos = async () => {
+        setFetchingRepos(true);
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          const token = session?.provider_token;
+          let headers: HeadersInit = {};
+          let url = `https://api.github.com/users/${user.githubUsername}/repos?sort=updated&per_page=100`;
+          if (token) {
+            headers['Authorization'] = `token ${token}`;
+            url = `https://api.github.com/user/repos?sort=updated&per_page=100`;
+          }
+          const res = await fetch(url, { headers });
+          if (res.ok) {
+            const data = await res.json();
+            if (Array.isArray(data)) {
+              setGitRepos(data);
+              if (data.length > 0) {
+                setRepoUrl(data[0].html_url);
+              }
+            }
+          } else {
+            console.error('Failed to fetch from primary repo url, trying public user repos');
+            const fbRes = await fetch(`https://api.github.com/users/${user.githubUsername}/repos?sort=updated&per_page=100`);
+            if (fbRes.ok) {
+              const data = await fbRes.json();
+              if (Array.isArray(data)) {
+                setGitRepos(data);
+                if (data.length > 0) {
+                  setRepoUrl(data[0].html_url);
+                }
+              }
+            }
+          }
+        } catch (e) {
+          console.error('Error fetching repos:', e);
+        } finally {
+          setFetchingRepos(false);
+        }
+      };
+      fetchRepos();
+    }
+  }, [user]);
   
   // Step 2 Code Story State
   const [analysisData, setAnalysisData] = useState<any>(null);
@@ -76,6 +129,18 @@ export default function NewSessionFlow() {
     if (!validateGithubUrl(repoUrl)) {
       setError('Invalid GitHub URL. Must match https://github.com/owner/repo');
       return;
+    }
+
+    // Token limit validation
+    if (user && user.tokensUsed !== undefined && user.tokensTotal !== undefined) {
+      if (user.tokensUsed >= user.tokensTotal) {
+        toast.error('Session limit exceeded for your plan. Please upgrade to create more sessions.');
+        router.push('/pricing');
+        return;
+      }
+      if (user.tokensTotal - user.tokensUsed === 1) {
+        toast.success('Warning: This is your last remaining session on your current plan!');
+      }
     }
 
     setLoading(true);
@@ -170,6 +235,13 @@ export default function NewSessionFlow() {
       return;
     }
 
+    // Token limit validation
+    if (user && user.tokensUsed !== undefined && user.tokensTotal !== undefined && user.tokensUsed >= user.tokensTotal) {
+      toast.error('Session limit exceeded for your plan. Please upgrade to create more sessions.');
+      router.push('/pricing');
+      return;
+    }
+
     setLoading(true);
     try {
       // 1. Create Candidate record
@@ -193,7 +265,8 @@ export default function NewSessionFlow() {
           candidate_id: candData.id,
           repo_url: repoUrl.trim(),
           status: 'active',
-          timer_duration_minutes: parseInt(duration)
+          timer_duration_minutes: parseInt(duration),
+          remaining_seconds: parseInt(duration) * 60 // initialize remaining_seconds
         })
         .select()
         .single();
@@ -224,7 +297,8 @@ export default function NewSessionFlow() {
         line_end: q.line_end,
         difficulty: q.difficulty,
         category: q.category,
-        order_index: idx
+        order_index: idx,
+        expected_answer: q.expected_answer
       }));
 
       const { error: qsErr } = await supabase
@@ -232,6 +306,14 @@ export default function NewSessionFlow() {
         .insert(formattedQs);
 
       if (qsErr) throw qsErr;
+
+      // 5. Increment tokens_used in profiles
+      const { error: tokenErr } = await supabase
+        .from('profiles')
+        .update({ tokens_used: (user?.tokensUsed || 0) + 1 })
+        .eq('id', user?.id);
+
+      if (tokenErr) console.warn('Failed to increment tokens_used:', tokenErr);
 
       // Redirect to live recruiter interview workspace
       router.push(`/session/${sessData.id}`);
@@ -242,13 +324,13 @@ export default function NewSessionFlow() {
   };
 
   return (
-    <div className="flex-1 flex flex-col bg-[#0F172A] text-[#F1F5F9] min-h-screen">
+    <div className="flex-1 flex flex-col bg-[#0d1515] text-[#F1F5F9] min-h-screen">
       {/* Top Header Bar */}
-      <header className="flex justify-between items-center px-8 py-4 bg-[#1E293B] w-full border-b border-[#334155] z-10 select-none">
+      <header className="flex justify-between items-center px-8 py-4 bg-[#151d1e] w-full border-b border-[#3b494b] z-10 select-none">
         <div className="flex items-center gap-3">
           <button 
             onClick={() => router.push('/dashboard')}
-            className="text-[#94A3B8] hover:text-[#06B6D4] p-1 rounded hover:bg-[#0F172A] transition-colors"
+            className="text-[#94A3B8] hover:text-[#06B6D4] p-1 rounded hover:bg-[#0d1515] transition-colors"
           >
             <span className="material-symbols-outlined text-lg font-bold">arrow_back</span>
           </button>
@@ -275,8 +357,8 @@ export default function NewSessionFlow() {
 
           {/* STEP 1: CANDIDATE DETAILS FORM */}
           {step === 1 && (
-            <div className="bg-[#1E293B] border border-[#334155] p-8 rounded-xl shadow-xl space-y-6">
-              <div className="border-b border-[#334155] pb-4">
+            <div className="bg-[#151d1e] border border-[#3b494b] p-8 rounded-xl shadow-xl space-y-6">
+              <div className="border-b border-[#3b494b] pb-4">
                 <h2 className="text-xl font-bold">Step 1 — Candidate & Repo Details</h2>
                 <p className="text-xs text-[#94A3B8] mt-1">Configure candidate parameters and target repository URL to parse.</p>
               </div>
@@ -289,7 +371,7 @@ export default function NewSessionFlow() {
                       required
                       value={candidateName}
                       onChange={(e) => setCandidateName(e.target.value)}
-                      className="w-full bg-[#0F172A] border border-[#334155] px-4 py-2.5 rounded-lg text-sm focus:outline-none focus:border-[#06B6D4] transition-colors"
+                      className="w-full bg-[#0d1515] border border-[#3b494b] px-4 py-2.5 rounded-lg text-sm focus:outline-none focus:border-[#06B6D4] transition-colors"
                       placeholder="Jane Doe"
                       type="text"
                     />
@@ -300,23 +382,83 @@ export default function NewSessionFlow() {
                       required
                       value={candidateEmail}
                       onChange={(e) => setCandidateEmail(e.target.value)}
-                      className="w-full bg-[#0F172A] border border-[#334155] px-4 py-2.5 rounded-lg text-sm focus:outline-none focus:border-[#06B6D4] transition-colors"
+                      className="w-full bg-[#0d1515] border border-[#3b494b] px-4 py-2.5 rounded-lg text-sm focus:outline-none focus:border-[#06B6D4] transition-colors"
                       placeholder="jane.doe@email.com"
                       type="email"
                     />
                   </div>
                 </div>
 
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-[#94A3B8] uppercase tracking-wider block">GitHub Repository URL</label>
-                  <input 
-                    required
-                    value={repoUrl}
-                    onChange={(e) => setRepoUrl(e.target.value)}
-                    className="w-full bg-[#0F172A] border border-[#334155] px-4 py-2.5 rounded-lg text-sm font-mono focus:outline-none focus:border-[#06B6D4] transition-colors"
-                    placeholder="https://github.com/owner/repo"
-                    type="text"
-                  />
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center">
+                    <label className="text-xs font-bold text-[#94A3B8] uppercase tracking-wider block">GitHub Repository URL</label>
+                    {user?.githubConnected && (
+                      <div className="flex bg-[#0d1515] p-0.5 rounded border border-[#3b494b] text-[10px] font-bold">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setRepoSource('dropdown');
+                            if (gitRepos.length > 0) setRepoUrl(gitRepos[0].html_url);
+                          }}
+                          className={`px-2.5 py-1 rounded transition-all ${
+                            repoSource === 'dropdown'
+                              ? 'bg-[#06B6D4] text-[#0d1515]'
+                              : 'text-[#94A3B8] hover:text-[#F1F5F9]'
+                          }`}
+                        >
+                          Select Repo
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setRepoSource('custom');
+                            setRepoUrl('');
+                          }}
+                          className={`px-2.5 py-1 rounded transition-all ${
+                            repoSource === 'custom'
+                              ? 'bg-[#06B6D4] text-[#0d1515]'
+                              : 'text-[#94A3B8] hover:text-[#F1F5F9]'
+                          }`}
+                        >
+                          Custom URL
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {user?.githubConnected && repoSource === 'dropdown' ? (
+                    fetchingRepos ? (
+                      <div className="w-full bg-[#0d1515] border border-[#3b494b] px-4 py-3 rounded-lg flex items-center justify-center gap-2 text-xs text-[#94A3B8]">
+                        <span className="material-symbols-outlined text-sm animate-spin">sync</span>
+                        Fetching repositories from GitHub...
+                      </div>
+                    ) : gitRepos.length === 0 ? (
+                      <div className="w-full bg-[#0d1515] border border-dashed border-[#3b494b] px-4 py-3 rounded-lg text-center text-xs text-[#94A3B8]">
+                        No repositories found. Ensure your GitHub account has repositories or use a Custom URL.
+                      </div>
+                    ) : (
+                      <select
+                        value={repoUrl}
+                        onChange={(e) => setRepoUrl(e.target.value)}
+                        className="w-full bg-[#0d1515] border border-[#3b494b] px-4 py-2.5 rounded-lg text-sm focus:outline-none focus:border-[#06B6D4] transition-colors"
+                      >
+                        {gitRepos.map((repo: any) => (
+                          <option key={repo.id} value={repo.html_url}>
+                            {repo.full_name} {repo.language ? `(${repo.language})` : ''}
+                          </option>
+                        ))}
+                      </select>
+                    )
+                  ) : (
+                    <input 
+                      required
+                      value={repoUrl}
+                      onChange={(e) => setRepoUrl(e.target.value)}
+                      className="w-full bg-[#0d1515] border border-[#3b494b] px-4 py-2.5 rounded-lg text-sm font-mono focus:outline-none focus:border-[#06B6D4] transition-colors"
+                      placeholder="https://github.com/owner/repo"
+                      type="text"
+                    />
+                  )}
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -325,7 +467,7 @@ export default function NewSessionFlow() {
                     <select 
                       value={duration}
                       onChange={(e) => setDuration(e.target.value)}
-                      className="w-full bg-[#0F172A] border border-[#334155] px-4 py-2.5 rounded-lg text-sm focus:outline-none focus:border-[#06B6D4] transition-colors"
+                      className="w-full bg-[#0d1515] border border-[#3b494b] px-4 py-2.5 rounded-lg text-sm focus:outline-none focus:border-[#06B6D4] transition-colors"
                     >
                       <option value="30">30 Minutes</option>
                       <option value="45">45 Minutes</option>
@@ -335,13 +477,13 @@ export default function NewSessionFlow() {
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-xs font-bold text-[#94A3B8] uppercase tracking-wider block">Difficulty</label>
-                    <div className="grid grid-cols-4 gap-2 bg-[#0F172A] p-1 border border-[#334155] rounded-lg text-xs font-bold text-center">
+                    <div className="grid grid-cols-4 gap-2 bg-[#0d1515] p-1 border border-[#3b494b] rounded-lg text-xs font-bold text-center">
                       {(['easy', 'medium', 'hard', 'mixed'] as const).map((d) => (
                         <button
                           key={d}
                           type="button"
                           onClick={() => setDifficulty(d)}
-                          className={`py-2 rounded capitalize transition-all ${difficulty === d ? 'bg-[#06B6D4] text-[#0F172A]' : 'text-[#94A3B8] hover:text-[#F1F5F9]'}`}
+                          className={`py-2 rounded capitalize transition-all ${difficulty === d ? 'bg-[#06B6D4] text-[#0d1515]' : 'text-[#94A3B8] hover:text-[#F1F5F9]'}`}
                         >
                           {d}
                         </button>
@@ -363,7 +505,7 @@ export default function NewSessionFlow() {
                           className={`px-4 py-2 border rounded-full text-xs font-bold transition-all ${
                             active 
                               ? 'bg-[#06B6D4]/10 border-[#06B6D4] text-[#06B6D4]' 
-                              : 'bg-[#0F172A]/40 border-[#334155] text-[#94A3B8] hover:border-[#94A3B8]/50'
+                              : 'bg-[#0d1515]/40 border-[#3b494b] text-[#94A3B8] hover:border-[#94A3B8]/50'
                           }`}
                         >
                           {area}
@@ -373,11 +515,11 @@ export default function NewSessionFlow() {
                   </div>
                 </div>
 
-                <div className="pt-4 border-t border-[#334155]/60 flex justify-end">
+                <div className="pt-4 border-t border-[#3b494b]/60 flex justify-end">
                   <button
                     type="submit"
                     disabled={loading}
-                    className="px-6 py-3 bg-[#06B6D4] text-[#0F172A] font-bold text-xs uppercase tracking-wider rounded-lg flex items-center justify-center gap-2 hover:brightness-110 disabled:opacity-50 transition-all shadow-[0_0_15px_rgba(6,182,212,0.3)] active:scale-95"
+                    className="px-6 py-3 bg-[#06B6D4] text-[#0d1515] font-bold text-xs uppercase tracking-wider rounded-lg flex items-center justify-center gap-2 hover:brightness-110 disabled:opacity-50 transition-all shadow-[0_0_15px_rgba(6,182,212,0.3)] active:scale-95"
                   >
                     {loading ? (
                       <>
@@ -399,13 +541,13 @@ export default function NewSessionFlow() {
           {/* STEP 2: CODE STORY PREVIEW */}
           {step === 2 && analysisData && (
             <div className="space-y-6">
-              <div className="bg-[#1E293B] border border-[#334155] p-8 rounded-xl shadow-xl space-y-6">
-                <div className="border-b border-[#334155] pb-4 flex justify-between items-center">
+              <div className="bg-[#151d1e] border border-[#3b494b] p-8 rounded-xl shadow-xl space-y-6">
+                <div className="border-b border-[#3b494b] pb-4 flex justify-between items-center">
                   <div>
                     <h2 className="text-xl font-bold">Step 2 — Code Story Card</h2>
                     <p className="text-xs text-[#94A3B8] mt-1">Review the AI repository overview and architecture analysis.</p>
                   </div>
-                  <img src={githubAvatar} className="w-12 h-12 rounded-full border border-[#334155]" alt="Avatar" />
+                  <img src={githubAvatar} className="w-12 h-12 rounded-full border border-[#3b494b]" alt="Avatar" />
                 </div>
 
                 {/* Candidate Overview */}
@@ -428,14 +570,14 @@ export default function NewSessionFlow() {
                       <h4 className="text-xs font-bold text-[#94A3B8] uppercase tracking-wider">Languages Used</h4>
                       <div className="flex flex-wrap gap-1.5">
                         {(analysisData.languages_used || []).map((l: string) => (
-                          <span key={l} className="px-2 py-0.5 bg-[#334155] text-xs rounded font-medium">{l}</span>
+                          <span key={l} className="px-2 py-0.5 bg-[#3b494b] text-xs rounded font-medium">{l}</span>
                         ))}
                       </div>
                     </div>
                     <div className="space-y-2">
                       <h4 className="text-xs font-bold text-[#94A3B8] uppercase tracking-wider">Code Complexity</h4>
                       <div className="flex items-center gap-3">
-                        <div className="flex-grow bg-[#0F172A] h-2 rounded-full overflow-hidden border border-[#334155]">
+                        <div className="flex-grow bg-[#0d1515] h-2 rounded-full overflow-hidden border border-[#3b494b]">
                           <div className={`h-full rounded-full ${
                             analysisData.code_complexity === 'high' ? 'w-[90%] bg-red-500' :
                             analysisData.code_complexity === 'medium' ? 'w-[60%] bg-[#F59E0B]' :
@@ -447,15 +589,15 @@ export default function NewSessionFlow() {
                     </div>
                   </div>
 
-                  <div className="pt-4 border-t border-[#334155]/60 space-y-3">
+                  <div className="pt-4 border-t border-[#3b494b]/60 space-y-3">
                     <h4 className="text-xs font-bold text-[#94A3B8] uppercase tracking-wider">Candidate Brief</h4>
-                    <blockquote className="border-l-4 border-[#06B6D4] bg-[#0F172A] p-4 text-xs italic text-[#94A3B8] leading-relaxed rounded-r-lg">
+                    <blockquote className="border-l-4 border-[#06B6D4] bg-[#0d1515] p-4 text-xs italic text-[#94A3B8] leading-relaxed rounded-r-lg">
                       "{analysisData.candidate_brief}"
                     </blockquote>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4">
-                    <div className="bg-[#0F172A]/40 border border-[#334155] p-4 rounded-lg space-y-2">
+                    <div className="bg-[#0d1515]/40 border border-[#3b494b] p-4 rounded-lg space-y-2">
                       <h5 className="text-xs font-bold text-[#06B6D4] uppercase tracking-wider">Notable Patterns</h5>
                       <ul className="text-xs space-y-1.5 list-disc pl-4 text-[#94A3B8]">
                         {(analysisData.notable_patterns || []).map((p: string, idx: number) => (
@@ -463,7 +605,7 @@ export default function NewSessionFlow() {
                         ))}
                       </ul>
                     </div>
-                    <div className="bg-[#0F172A]/40 border border-[#334155] p-4 rounded-lg space-y-2">
+                    <div className="bg-[#0d1515]/40 border border-[#3b494b] p-4 rounded-lg space-y-2">
                       <h5 className="text-xs font-bold text-red-400 uppercase tracking-wider">Areas to Probe</h5>
                       <ul className="text-xs space-y-1.5 list-disc pl-4 text-[#94A3B8]">
                         {(analysisData.potential_weaknesses || []).map((w: string, idx: number) => (
@@ -474,17 +616,17 @@ export default function NewSessionFlow() {
                   </div>
                 </div>
 
-                <div className="pt-6 border-t border-[#334155]/60 flex justify-between items-center">
+                <div className="pt-6 border-t border-[#3b494b]/60 flex justify-between items-center">
                   <button
                     onClick={() => setStep(1)}
-                    className="px-4 py-2.5 border border-[#334155] hover:border-[#94A3B8] text-[#94A3B8] hover:text-[#F1F5F9] font-bold text-xs uppercase tracking-wider rounded-lg transition-colors"
+                    className="px-4 py-2.5 border border-[#3b494b] hover:border-[#94A3B8] text-[#94A3B8] hover:text-[#F1F5F9] font-bold text-xs uppercase tracking-wider rounded-lg transition-colors"
                   >
                     Back
                   </button>
                   <button
                     onClick={handleGenerateQuestions}
                     disabled={loading}
-                    className="px-6 py-3 bg-[#06B6D4] text-[#0F172A] font-bold text-xs uppercase tracking-wider rounded-lg flex items-center justify-center gap-2 hover:brightness-110 disabled:opacity-50 transition-all shadow-[0_0_15px_rgba(6,182,212,0.3)] active:scale-95"
+                    className="px-6 py-3 bg-[#06B6D4] text-[#0d1515] font-bold text-xs uppercase tracking-wider rounded-lg flex items-center justify-center gap-2 hover:brightness-110 disabled:opacity-50 transition-all shadow-[0_0_15px_rgba(6,182,212,0.3)] active:scale-95"
                   >
                     {loading ? (
                       <>
@@ -505,8 +647,8 @@ export default function NewSessionFlow() {
 
           {/* STEP 3: QUESTIONS PREVIEW */}
           {step === 3 && (
-            <div className="bg-[#1E293B] border border-[#334155] p-8 rounded-xl shadow-xl space-y-6">
-              <div className="border-b border-[#334155] pb-4 flex justify-between items-center">
+            <div className="bg-[#151d1e] border border-[#3b494b] p-8 rounded-xl shadow-xl space-y-6">
+              <div className="border-b border-[#3b494b] pb-4 flex justify-between items-center">
                 <div>
                   <h2 className="text-xl font-bold">Step 3 — Questions Preview</h2>
                   <p className="text-xs text-[#94A3B8] mt-1">Audit, edit, and order questions generated from candidate code.</p>
@@ -521,13 +663,13 @@ export default function NewSessionFlow() {
 
               {/* Add Custom Question Form */}
               {showAddCustom && (
-                <form onSubmit={handleAddCustomQuestion} className="bg-[#0F172A] border border-[#334155] p-4 rounded-lg space-y-3 animate-in slide-in-from-top duration-300">
+                <form onSubmit={handleAddCustomQuestion} className="bg-[#0d1515] border border-[#3b494b] p-4 rounded-lg space-y-3 animate-in slide-in-from-top duration-300">
                   <h4 className="text-xs font-bold uppercase text-[#06B6D4]">Custom Question details</h4>
                   <textarea
                     required
                     value={customQuestionText}
                     onChange={(e) => setCustomQuestionText(e.target.value)}
-                    className="w-full bg-[#1E293B] border border-[#334155] p-3 rounded-lg text-xs focus:outline-none focus:border-[#06B6D4] text-[#F1F5F9]"
+                    className="w-full bg-[#151d1e] border border-[#3b494b] p-3 rounded-lg text-xs focus:outline-none focus:border-[#06B6D4] text-[#F1F5F9]"
                     placeholder="Type your custom question here..."
                     rows={3}
                   />
@@ -541,7 +683,7 @@ export default function NewSessionFlow() {
                     </button>
                     <button 
                       type="submit" 
-                      className="px-4 py-1.5 bg-[#06B6D4] text-[#0F172A] font-bold rounded"
+                      className="px-4 py-1.5 bg-[#06B6D4] text-[#0d1515] font-bold rounded"
                     >
                       Add Question
                     </button>
@@ -552,18 +694,18 @@ export default function NewSessionFlow() {
               {/* Questions List */}
               <div className="space-y-4">
                 {questions.map((q, idx) => (
-                  <div key={idx} className="bg-[#0F172A]/40 border border-[#334155] p-4 rounded-lg space-y-3 relative group">
+                  <div key={idx} className="bg-[#0d1515]/40 border border-[#3b494b] p-4 rounded-lg space-y-3 relative group">
                     <div className="flex justify-between items-start">
                       <div className="space-y-1 pr-12">
                         <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider">
                           <span className="text-[#06B6D4]">Q{idx + 1}</span>
-                          <span className="text-[#334155]">•</span>
+                          <span className="text-[#3b494b]">•</span>
                           <span className={`px-1.5 py-0.5 rounded text-[8px] ${
                             q.difficulty === 'hard' ? 'bg-red-500/10 text-red-400 border border-red-500/20' :
                             q.difficulty === 'medium' ? 'bg-[#F59E0B]/10 text-[#F59E0B] border border-[#F59E0B]/20' :
                             'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
                           }`}>{q.difficulty}</span>
-                          <span className="text-[#334155]">•</span>
+                          <span className="text-[#3b494b]">•</span>
                           <span className="text-[#94A3B8]">{q.category}</span>
                         </div>
                         <p className="text-sm font-semibold pt-1">{q.question_text}</p>
@@ -603,7 +745,7 @@ export default function NewSessionFlow() {
                     </div>
 
                     {q.code_snippet && (
-                      <div className="bg-[#0F172A] p-3 rounded border border-[#334155] overflow-x-auto text-[11px] font-mono text-[#F1F5F9]">
+                      <div className="bg-[#0d1515] p-3 rounded border border-[#3b494b] overflow-x-auto text-[11px] font-mono text-[#F1F5F9]">
                         <pre><code>{q.code_snippet}</code></pre>
                       </div>
                     )}
@@ -611,17 +753,17 @@ export default function NewSessionFlow() {
                 ))}
               </div>
 
-              <div className="pt-6 border-t border-[#334155]/60 flex justify-between items-center">
+              <div className="pt-6 border-t border-[#3b494b]/60 flex justify-between items-center">
                 <button
                   onClick={() => setStep(2)}
-                  className="px-4 py-2.5 border border-[#334155] hover:border-[#94A3B8] text-[#94A3B8] hover:text-[#F1F5F9] font-bold text-xs uppercase tracking-wider rounded-lg transition-colors"
+                  className="px-4 py-2.5 border border-[#3b494b] hover:border-[#94A3B8] text-[#94A3B8] hover:text-[#F1F5F9] font-bold text-xs uppercase tracking-wider rounded-lg transition-colors"
                 >
                   Back
                 </button>
                 <button
                   onClick={handleStartInterview}
                   disabled={loading}
-                  className="px-6 py-3 bg-[#06B6D4] text-[#0F172A] font-bold text-xs uppercase tracking-wider rounded-lg flex items-center justify-center gap-2 hover:brightness-110 disabled:opacity-50 transition-all shadow-[0_0_15px_rgba(6,182,212,0.3)] active:scale-95"
+                  className="px-6 py-3 bg-[#06B6D4] text-[#0d1515] font-bold text-xs uppercase tracking-wider rounded-lg flex items-center justify-center gap-2 hover:brightness-110 disabled:opacity-50 transition-all shadow-[0_0_15px_rgba(6,182,212,0.3)] active:scale-95"
                 >
                   {loading ? (
                     <>

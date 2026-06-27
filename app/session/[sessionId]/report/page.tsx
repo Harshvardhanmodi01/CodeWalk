@@ -208,7 +208,7 @@ export default function ReportPage() {
 
   if (loading || compiling) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-[#0F172A] text-white">
+      <div className="flex flex-col items-center justify-center min-h-screen bg-[#0d1515] text-white">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#06B6D4] mb-4"></div>
         <p className="text-sm font-mono text-[#94A3B8]">
           {compiling ? 'Compiling AI screening metrics...' : 'Loading summary report...'}
@@ -219,13 +219,13 @@ export default function ReportPage() {
 
   if (error || !report || !session) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-[#0F172A] text-white p-8">
+      <div className="flex flex-col items-center justify-center min-h-screen bg-[#0d1515] text-white p-8">
         <div className="bg-red-500/10 border border-red-500/30 text-red-500 text-xs rounded-xl p-4 max-w-md text-center">
           <span className="material-symbols-outlined text-3xl font-bold mb-2">warning</span>
           <p className="font-semibold">{error || 'Data missing'}</p>
           <button
             onClick={() => router.push('/dashboard')}
-            className="mt-4 px-4 py-2 bg-[#1E293B] border border-[#334155] rounded-lg text-xs hover:bg-[#0F172A] transition-colors inline-flex items-center gap-2"
+            className="mt-4 px-4 py-2 bg-[#151d1e] border border-[#3b494b] rounded-lg text-xs hover:bg-[#0d1515] transition-colors inline-flex items-center gap-2"
           >
             <span className="material-symbols-outlined text-xs">arrow_back</span>
             Back to Dashboard
@@ -236,7 +236,7 @@ export default function ReportPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0F172A] text-[#F1F5F9] pb-24 print:bg-white print:text-black">
+    <div className="min-h-screen bg-[#0d1515] text-[#F1F5F9] pb-24 print:bg-white print:text-black">
       {/* Custom print CSS styles injected */}
       <style jsx global>{`
         @media print {
@@ -255,7 +255,7 @@ export default function ReportPage() {
             box-shadow: none !important;
           }
           .print-text-dark {
-            color: #1e293b !important;
+            color: #151d1e !important;
           }
           .print-text-light {
             color: #475569 !important;
@@ -272,11 +272,11 @@ export default function ReportPage() {
       `}</style>
 
       {/* Top Header Bar */}
-      <header className="flex justify-between items-center px-8 py-4 bg-[#1E293B] border-b border-[#334155] no-print">
+      <header className="flex justify-between items-center px-8 py-4 bg-[#151d1e] border-b border-[#3b494b] no-print">
         <div className="flex items-center gap-3">
           <button 
             onClick={() => router.push('/dashboard')}
-            className="text-[#94A3B8] hover:text-[#06B6D4] p-1.5 rounded hover:bg-[#0F172A] transition-colors"
+            className="text-[#94A3B8] hover:text-[#06B6D4] p-1.5 rounded hover:bg-[#0d1515] transition-colors"
           >
             <span className="material-symbols-outlined text-lg font-bold">arrow_back</span>
           </button>
@@ -289,7 +289,7 @@ export default function ReportPage() {
         <div className="flex items-center gap-3">
           <button
             onClick={() => compileReportFromAnswers(sessionId)}
-            className="text-xs px-3.5 py-1.5 font-bold rounded-lg bg-[#1E293B] border border-[#334155] text-[#94A3B8] hover:bg-[#0F172A] hover:text-white transition-colors inline-flex items-center gap-1.5"
+            className="text-xs px-3.5 py-1.5 font-bold rounded-lg bg-[#151d1e] border border-[#3b494b] text-[#94A3B8] hover:bg-[#0d1515] hover:text-white transition-colors inline-flex items-center gap-1.5"
           >
             <span className="material-symbols-outlined text-sm">refresh</span>
             Recompile Report
@@ -297,7 +297,7 @@ export default function ReportPage() {
           
           <button
             onClick={handlePrint}
-            className="text-xs px-4 py-1.5 font-bold bg-[#06B6D4] text-[#0F172A] hover:bg-[#06B6D4]/90 rounded-lg shadow-lg shadow-[#06B6D4]/10 transition-colors inline-flex items-center gap-1.5"
+            className="text-xs px-4 py-1.5 font-bold bg-[#06B6D4] text-[#0d1515] hover:bg-[#06B6D4]/90 rounded-lg shadow-lg shadow-[#06B6D4]/10 transition-colors inline-flex items-center gap-1.5"
           >
             <span className="material-symbols-outlined text-sm font-bold">picture_as_pdf</span>
             Export to PDF / Print
@@ -315,7 +315,7 @@ export default function ReportPage() {
         </div>
 
         {/* Candidate Profile Summary card */}
-        <div className="bg-[#1E293B] border border-[#334155] rounded-xl p-8 shadow-xl print-card flex flex-col md:flex-row md:items-center justify-between gap-6">
+        <div className="bg-[#151d1e] border border-[#3b494b] rounded-xl p-8 shadow-xl print-card flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="space-y-2">
             <span className="text-[10px] font-bold text-[#06B6D4] uppercase tracking-wider block print-text-light">Candidate Details</span>
             <h2 className="text-2xl font-extrabold text-white tracking-tight print-text-dark">{candidate?.name}</h2>
@@ -325,7 +325,7 @@ export default function ReportPage() {
             </p>
           </div>
           
-          <div className="flex items-center gap-6 pt-4 md:pt-0 border-t md:border-t-0 border-[#334155]">
+          <div className="flex items-center gap-6 pt-4 md:pt-0 border-t md:border-t-0 border-[#3b494b]">
             <div className="text-right">
               <span className="text-[9px] font-bold text-[#94A3B8] uppercase tracking-wider block mb-1 print-text-light">Recommendation</span>
               {getRecommendationBadge(report.hire_recommendation)}
@@ -339,7 +339,7 @@ export default function ReportPage() {
                   cy="40" 
                   r="34" 
                   strokeWidth="6" 
-                  stroke="#0F172A" 
+                  stroke="#0d1515" 
                   fill="transparent" 
                   className="print:stroke-slate-100"
                 />
@@ -365,14 +365,14 @@ export default function ReportPage() {
         </div>
 
         {/* AI Final Summary Brief */}
-        <div className="bg-[#1E293B] border border-[#334155] rounded-xl p-8 shadow-xl print-card space-y-4">
-          <h3 className="text-sm font-bold text-white uppercase tracking-wider border-b border-[#334155] pb-2 print-text-dark print:border-slate-300">
+        <div className="bg-[#151d1e] border border-[#3b494b] rounded-xl p-8 shadow-xl print-card space-y-4">
+          <h3 className="text-sm font-bold text-white uppercase tracking-wider border-b border-[#3b494b] pb-2 print-text-dark print:border-slate-300">
             Hiring Executive Reasoning
           </h3>
           <p className="text-sm leading-relaxed text-[#D1D5DB] italic font-serif print-text-light">
             "{report.recommendation_reasoning}"
           </p>
-          <div className="text-xs text-[#94A3B8] print-text-light leading-relaxed pt-4 border-t border-[#334155] print:border-slate-300">
+          <div className="text-xs text-[#94A3B8] print-text-light leading-relaxed pt-4 border-t border-[#3b494b] print:border-slate-300">
             <span className="font-bold text-white block mb-1 print-text-dark">Technical Analysis Summary</span>
             {report.final_summary}
           </div>
@@ -382,8 +382,8 @@ export default function ReportPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           
           {/* Strengths Card */}
-          <div className="bg-[#1E293B] border border-[#334155] rounded-xl p-6 shadow-xl print-card space-y-4">
-            <h4 className="text-xs font-bold text-[#06B6D4] uppercase tracking-wider block pb-2 border-b border-[#334155] print-text-dark print:border-slate-300 flex items-center gap-1.5">
+          <div className="bg-[#151d1e] border border-[#3b494b] rounded-xl p-6 shadow-xl print-card space-y-4">
+            <h4 className="text-xs font-bold text-[#06B6D4] uppercase tracking-wider block pb-2 border-b border-[#3b494b] print-text-dark print:border-slate-300 flex items-center gap-1.5">
               <span className="material-symbols-outlined text-sm">verified</span>
               Candidate Strengths
             </h4>
@@ -401,8 +401,8 @@ export default function ReportPage() {
           </div>
 
           {/* Areas of Improvement Card */}
-          <div className="bg-[#1E293B] border border-[#334155] rounded-xl p-6 shadow-xl print-card space-y-4">
-            <h4 className="text-xs font-bold text-amber-500 uppercase tracking-wider block pb-2 border-b border-[#334155] print-text-dark print:border-slate-300 flex items-center gap-1.5">
+          <div className="bg-[#151d1e] border border-[#3b494b] rounded-xl p-6 shadow-xl print-card space-y-4">
+            <h4 className="text-xs font-bold text-amber-500 uppercase tracking-wider block pb-2 border-b border-[#3b494b] print-text-dark print:border-slate-300 flex items-center gap-1.5">
               <span className="material-symbols-outlined text-sm">explore</span>
               Areas of Improvement
             </h4>
@@ -423,7 +423,7 @@ export default function ReportPage() {
 
         {/* Detailed Question Analysis list */}
         <div className="space-y-6">
-          <h3 className="text-sm font-bold text-white uppercase tracking-wider pb-2 border-b border-[#334155] print-text-dark print:border-slate-300">
+          <h3 className="text-sm font-bold text-white uppercase tracking-wider pb-2 border-b border-[#3b494b] print-text-dark print:border-slate-300">
             Detailed Question Breakdown
           </h3>
 
@@ -431,7 +431,7 @@ export default function ReportPage() {
             {report.question_analysis.map((qa, idx) => (
               <div 
                 key={idx} 
-                className="bg-[#1E293B] border border-[#334155] rounded-xl p-6 shadow-xl print-card space-y-3 page-break-inside-avoid"
+                className="bg-[#151d1e] border border-[#3b494b] rounded-xl p-6 shadow-xl print-card space-y-3 page-break-inside-avoid"
               >
                 <div className="flex justify-between items-start gap-4">
                   <span className="text-[10px] font-mono text-[#06B6D4] uppercase tracking-wider font-bold print-text-light">
@@ -447,7 +447,7 @@ export default function ReportPage() {
                   {qa.question}
                 </h4>
 
-                <div className="bg-[#0F172A]/50 border border-[#334155] rounded-lg p-4 text-xs text-[#94A3B8] print-card print-text-light space-y-1.5 mt-2">
+                <div className="bg-[#0d1515]/50 border border-[#3b494b] rounded-lg p-4 text-xs text-[#94A3B8] print-card print-text-light space-y-1.5 mt-2">
                   <span className="font-extrabold text-[10px] uppercase text-white block print-text-dark">AI Evaluation</span>
                   <p className="leading-relaxed">{qa.feedback}</p>
                 </div>

@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { supabase } from '@/app/lib/supabaseClient';
 import { useGlobal } from '@/app/context/GlobalContext';
+import { toast } from 'react-hot-toast';
 
 interface Question {
   id: string;
@@ -15,6 +16,8 @@ interface Question {
   difficulty: 'easy' | 'medium' | 'hard';
   category: 'frontend' | 'backend' | 'dsa' | 'system-design';
   order_index: number;
+  expected_answer?: string;
+  show_expected_answer?: boolean;
 }
 
 interface Answer {
@@ -39,6 +42,8 @@ interface Session {
   status: 'active' | 'completed' | 'cancelled';
   timer_duration_minutes: number;
   started_at: string;
+  is_paused?: boolean;
+  remaining_seconds?: number;
 }
 
 interface FileTreeNode {
@@ -80,9 +85,16 @@ export default function LiveSessionPage() {
   const [copilotLoading, setCopilotLoading] = useState(false);
   const [copilotFollowUp, setCopilotFollowUp] = useState('');
 
+  // Ideal answer states
+  const [showIdealAnswer, setShowIdealAnswer] = useState(false);
+  const [idealAnswerText, setIdealAnswerText] = useState('');
+  const [idealAnswerLoading, setIdealAnswerLoading] = useState(false);
+
   // Timer States
   const [timeLeftSeconds, setTimeLeftSeconds] = useState(0);
   const [timerWarning, setTimerWarning] = useState(false);
+  const [toast10Shown, setToast10Shown] = useState(false);
+  const [toast5Shown, setToast5Shown] = useState(false);
 
   // Public candidate link copied alert
   const [copiedLink, setCopiedLink] = useState(false);
@@ -90,12 +102,50 @@ export default function LiveSessionPage() {
   // Ref to highlighted line for scroll
   const codeViewerRef = useRef<HTMLDivElement>(null);
 
+  // Ref for scroll-based question navigation cooldown
+  const scrollCooldownRef = useRef(false);
+
+  const handleQuestionCardWheel = (e: React.WheelEvent) => {
+    // Only trigger if vertical delta is significant to prevent accidental shifts
+    if (Math.abs(e.deltaY) < 30) return;
+    if (scrollCooldownRef.current) return;
+
+    if (e.deltaY > 0) {
+      // Scroll Down -> Next Question
+      if (activeQIndex < questions.length - 1) {
+        scrollCooldownRef.current = true;
+        setActiveQIndex(prev => prev + 1);
+        setTimeout(() => {
+          scrollCooldownRef.current = false;
+        }, 600); // 600ms transition cooldown
+      }
+    } else {
+      // Scroll Up -> Previous Question
+      if (activeQIndex > 0) {
+        scrollCooldownRef.current = true;
+        setActiveQIndex(prev => prev - 1);
+        setTimeout(() => {
+          scrollCooldownRef.current = false;
+        }, 600);
+      }
+    }
+  };
+
+  // Auth Restoration & Reconnect States
+  const [authChecking, setAuthChecking] = useState(true);
+
   // Check auth
   useEffect(() => {
-    if (!user) {
-      router.push('/login');
-    }
-  }, [user, router]);
+    const checkSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        router.push('/login');
+      } else {
+        setAuthChecking(false);
+      }
+    };
+    checkSession();
+  }, [router]);
 
   // Load Session and Question Details
   useEffect(() => {
@@ -115,9 +165,18 @@ export default function LiveSessionPage() {
         setSession(sessData);
 
         // Calculate timer
-        const durationSeconds = sessData.timer_duration_minutes * 60;
-        const elapsedSeconds = Math.floor((Date.now() - new Date(sessData.started_at).getTime()) / 1000);
-        const remaining = Math.max(0, durationSeconds - elapsedSeconds);
+        let remaining = 0;
+        if (sessData.is_paused) {
+          remaining = sessData.remaining_seconds ?? (sessData.timer_duration_minutes * 60);
+        } else {
+          if (sessData.remaining_seconds !== null && sessData.remaining_seconds !== undefined) {
+            remaining = sessData.remaining_seconds;
+          } else {
+            const durationSeconds = sessData.timer_duration_minutes * 60;
+            const elapsedSeconds = Math.floor((Date.now() - new Date(sessData.started_at).getTime()) / 1000);
+            remaining = Math.max(0, durationSeconds - elapsedSeconds);
+          }
+        }
         setTimeLeftSeconds(remaining);
 
         // 2. Fetch Candidate
@@ -170,23 +229,177 @@ export default function LiveSessionPage() {
     fetchSessionData();
   }, [sessionId]);
 
+  // Auto-end interview when timer hits zero (compiled and saved report without recruiter confirmation prompt)
+  const autoEndInterview = async () => {
+    setLoading(true);
+    try {
+      toast.loading('Interview duration expired. Compiling AI summary report...', { id: 'autoend' });
+      // 1. Gather all compiled answers
+      const consolidatedAnswers = questions.map(q => ({
+        id: q.id,
+        question_text: q.question_text,
+        file_path: q.file_path,
+        category: q.category,
+        difficulty: q.difficulty,
+        answer_text: notes[q.id] || '',
+        score: scores[q.id] || 5
+      }));
+
+      // 2. Fetch AI compilation report
+      const repRes = await fetch('/api/session/report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ answers: consolidatedAnswers })
+      });
+      const repData = await repRes.json();
+
+      // 3. Update session report
+      await supabase
+        .from('session_reports')
+        .upsert({
+          session_id: sessionId,
+          overall_score: repData.overall_score || 50,
+          hire_recommendation: repData.hire_recommendation || 'maybe',
+          code_story_summary: repData.final_summary || '',
+          total_questions: questions.length,
+          completed_questions: consolidatedAnswers.filter(a => a.answer_text.trim().length > 0).length,
+          generated_at: new Date().toISOString()
+        }, { onConflict: 'session_id' });
+
+      // 4. Update session status
+      await supabase
+        .from('sessions')
+        .update({
+          status: 'completed',
+          ended_at: new Date().toISOString(),
+          remaining_seconds: 0
+        })
+        .eq('id', sessionId);
+
+      toast.success('Interview successfully completed!', { id: 'autoend' });
+      router.push(`/session/${sessionId}/report`);
+    } catch (err: any) {
+      console.error('Auto-end failed:', err);
+      toast.dismiss('autoend');
+      setLoading(false);
+    }
+  };
+
+  // Pause / Resume Timer
+  const handlePauseResume = async () => {
+    if (!session) return;
+    const nextPaused = !session.is_paused;
+    try {
+      const updateData: any = {
+        is_paused: nextPaused,
+        remaining_seconds: timeLeftSeconds
+      };
+      if (nextPaused) {
+        updateData.paused_at = new Date().toISOString();
+      } else {
+        updateData.paused_at = null;
+      }
+
+      const { error } = await supabase
+        .from('sessions')
+        .update(updateData)
+        .eq('id', sessionId);
+
+      if (error) throw error;
+
+      setSession(prev => prev ? { ...prev, is_paused: nextPaused } : null);
+      toast.success(nextPaused ? 'Interview timer paused.' : 'Interview timer resumed.');
+    } catch (err: any) {
+      toast.error(`Failed to toggle timer: ${err.message}`);
+    }
+  };
+
+  // Extend Timer duration
+  const handleExtendTimer = async (minutes: number) => {
+    if (!session) return;
+    try {
+      const newSeconds = timeLeftSeconds + minutes * 60;
+      const { error } = await supabase
+        .from('sessions')
+        .update({
+          remaining_seconds: newSeconds,
+          timer_duration_minutes: session.timer_duration_minutes + minutes
+        })
+        .eq('id', sessionId);
+
+      if (error) throw error;
+
+      setTimeLeftSeconds(newSeconds);
+      setSession(prev => prev ? {
+        ...prev,
+        timer_duration_minutes: prev.timer_duration_minutes + minutes
+      } : null);
+
+      // Reset toast alerts if extended beyond warnings thresholds
+      if (newSeconds > 600) setToast10Shown(false);
+      if (newSeconds > 300) setToast5Shown(false);
+      setTimerWarning(newSeconds <= 300);
+
+      toast.success(`Extended interview timer by ${minutes} minutes.`);
+    } catch (err: any) {
+      toast.error(`Failed to extend timer: ${err.message}`);
+    }
+  };
+
   // Timer countdown hook
   useEffect(() => {
-    if (timeLeftSeconds <= 0) return;
+    if (timeLeftSeconds <= 0 || session?.is_paused) return;
+
     const interval = setInterval(() => {
       setTimeLeftSeconds(prev => {
-        if (prev <= 1) {
+        const nextVal = prev - 1;
+        if (nextVal <= 0) {
           clearInterval(interval);
+          autoEndInterview();
           return 0;
         }
-        if (prev <= 300) {
-          setTimerWarning(true);
+
+        // Warning alerts
+        if (nextVal === 600 && !toast10Shown) {
+          toast('Warning: 10 minutes remaining in the interview!', {
+            icon: '⏰',
+            style: {
+              background: '#FEF3C7',
+              color: '#92400E',
+            },
+          });
+          setToast10Shown(true);
         }
-        return prev - 1;
+        if (nextVal === 300 && !toast5Shown) {
+          toast.error('Critical Warning: Only 5 minutes remaining in the interview!', {
+            duration: 6000
+          });
+          setToast5Shown(true);
+        }
+
+        if (nextVal <= 300) {
+          setTimerWarning(true);
+        } else {
+          setTimerWarning(false);
+        }
+
+        // Sync to database remaining_seconds every 5 seconds to reduce writes
+        if (nextVal % 5 === 0) {
+          supabase
+            .from('sessions')
+            .update({ remaining_seconds: nextVal })
+            .eq('id', sessionId)
+            .then(({ error }) => {
+              if (error) console.error('Failed to sync remaining seconds:', error);
+            });
+        }
+
+        return nextVal;
       });
     }, 1000);
+
     return () => clearInterval(interval);
-  }, [timeLeftSeconds]);
+  }, [timeLeftSeconds, session?.is_paused, toast10Shown, toast5Shown, sessionId]);
 
   // Convert flat files into hierarchical structure
   const fetchRepositoryTree = async (repoUrl: string) => {
@@ -251,7 +464,13 @@ export default function LiveSessionPage() {
       if (!res.ok) throw new Error(data.error || 'Failed to fetch file content.');
       setFileContent(data.content || '');
     } catch (err: any) {
-      setFileContent(`// Error loading file contents: ${err.message}`);
+      // Fallback: If we have a code snippet for the current question, use it!
+      const currentQ = questions[activeQIndex];
+      if (currentQ && currentQ.file_path === filePath && currentQ.code_snippet) {
+        setFileContent(`// Loaded from generated snippet (File not found in repo)\n\n` + currentQ.code_snippet);
+      } else {
+        setFileContent(`// Error loading file contents: ${err.message}`);
+      }
     } finally {
       setFetchingContent(false);
     }
@@ -264,6 +483,10 @@ export default function LiveSessionPage() {
     
     // Clear copilot follow up when changing questions
     setCopilotFollowUp('');
+
+    // Reset ideal answer state
+    setShowIdealAnswer(false);
+    setIdealAnswerText(currentQ.expected_answer || '');
 
     if (currentQ.file_path && currentQ.file_path !== 'Custom Question') {
       loadFileContent(currentQ.file_path);
@@ -375,6 +598,73 @@ export default function LiveSessionPage() {
     }
   };
 
+  // Fetch Ideal Answer dynamically if not present
+  const fetchIdealAnswer = async (q: Question) => {
+    if (idealAnswerText) {
+      setShowIdealAnswer(prev => !prev);
+      return;
+    }
+
+    setIdealAnswerLoading(true);
+    setShowIdealAnswer(true);
+    try {
+      const res = await fetch('/api/session/ideal-answer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          questionText: q.question_text,
+          codeSnippet: q.code_snippet || fileContent
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to fetch ideal answer.');
+      setIdealAnswerText(data.ideal_answer);
+      
+      // Cache it back to the database
+      supabase
+        .from('questions')
+        .update({ expected_answer: data.ideal_answer })
+        .eq('id', q.id)
+        .then(({ error }) => {
+          if (error) console.warn('Failed to cache ideal answer:', error);
+          else {
+            // Update local questions state
+            setQuestions(prev => prev.map(item => item.id === q.id ? { ...item, expected_answer: data.ideal_answer } : item));
+          }
+        });
+    } catch (err: any) {
+      setIdealAnswerText(`Error generating ideal answer: ${err.message}`);
+    } finally {
+      setIdealAnswerLoading(false);
+    }
+  };
+
+  // Toggle sharing of the ideal answer with the candidate
+  const toggleShareAnswer = async (q: Question) => {
+    const currentSharedState = !!q.show_expected_answer;
+    const newSharedState = !currentSharedState;
+
+    // Optimistically update the UI questions state
+    setQuestions(prev => prev.map(item => item.id === q.id ? { ...item, show_expected_answer: newSharedState } : item));
+
+    try {
+      const { error } = await supabase
+        .from('questions')
+        .update({ show_expected_answer: newSharedState })
+        .eq('id', q.id);
+
+      if (error) throw error;
+
+      toast.success(newSharedState ? 'Ideal answer shared with candidate' : 'Ideal answer hidden from candidate');
+    } catch (err: any) {
+      console.error(err);
+      toast.error(`Failed to update sharing: ${err.message}`);
+      // Rollback local state
+      setQuestions(prev => prev.map(item => item.id === q.id ? { ...item, show_expected_answer: currentSharedState } : item));
+    }
+  };
+
+
   // Copy candidate link
   const copyCandidateLink = () => {
     const link = `${window.location.origin}/candidate/${sessionId}`;
@@ -478,7 +768,7 @@ export default function LiveSessionPage() {
               <li key={child.path} className="select-none">
                 <button
                   onClick={() => toggleFolder(child.path)}
-                  className="flex items-center gap-1.5 py-1 px-1.5 rounded hover:bg-[#334155]/30 w-full text-left font-medium text-[#94A3B8] transition-colors"
+                  className="flex items-center gap-1.5 py-1 px-1.5 rounded hover:bg-[#3b494b]/30 w-full text-left font-medium text-[#94A3B8] transition-colors"
                 >
                   <span className="material-symbols-outlined text-sm font-bold text-yellow-500/80">
                     {isExpanded ? 'folder_open' : 'folder'}
@@ -496,7 +786,7 @@ export default function LiveSessionPage() {
                   className={`flex items-center gap-1.5 py-1 px-1.5 rounded w-full text-left transition-colors truncate ${
                     isSelected
                       ? 'bg-[#06B6D4]/10 text-[#06B6D4] font-semibold border-l-2 border-[#06B6D4]'
-                      : 'text-[#F1F5F9] hover:bg-[#334155]/20 hover:text-white'
+                      : 'text-[#F1F5F9] hover:bg-[#3b494b]/20 hover:text-white'
                   }`}
                 >
                   <span className="material-symbols-outlined text-sm text-[#06B6D4]/70">description</span>
@@ -510,9 +800,19 @@ export default function LiveSessionPage() {
     );
   };
 
+  if (authChecking || !user) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-[#0d1515] text-white">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#06B6D4] mb-4"></div>
+        <h2 className="text-base font-bold text-slate-200">Reconnecting...</h2>
+        <p className="text-xs font-mono text-[#94A3B8] mt-2">Restoring live interview session context...</p>
+      </div>
+    );
+  }
+
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-[#0F172A] text-white">
+      <div className="flex flex-col items-center justify-center min-h-screen bg-[#0d1515] text-white">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#06B6D4] mb-4"></div>
         <p className="text-sm font-mono text-[#94A3B8]">Loading screening workspace...</p>
       </div>
@@ -521,13 +821,13 @@ export default function LiveSessionPage() {
 
   if (error) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-[#0F172A] text-white p-8">
+      <div className="flex flex-col items-center justify-center min-h-screen bg-[#0d1515] text-white p-8">
         <div className="bg-red-500/10 border border-red-500/30 text-red-500 text-xs rounded-xl p-4 max-w-md text-center">
           <span className="material-symbols-outlined text-3xl font-bold mb-2">warning</span>
           <p className="font-semibold">{error}</p>
           <button
             onClick={() => router.push('/dashboard')}
-            className="mt-4 px-4 py-2 bg-[#1E293B] border border-[#334155] rounded-lg text-xs hover:bg-[#0F172A] transition-colors inline-flex items-center gap-2"
+            className="mt-4 px-4 py-2 bg-[#151d1e] border border-[#3b494b] rounded-lg text-xs hover:bg-[#0d1515] transition-colors inline-flex items-center gap-2"
           >
             <span className="material-symbols-outlined text-xs">arrow_back</span>
             Back to Dashboard
@@ -540,13 +840,13 @@ export default function LiveSessionPage() {
   const currentQuestion = questions[activeQIndex];
 
   return (
-    <div className="flex flex-col h-screen bg-[#0F172A] text-[#F1F5F9] overflow-hidden select-none">
+    <div className="flex flex-col h-screen bg-[#0d1515] text-[#F1F5F9] overflow-hidden select-none">
       {/* Session Header */}
-      <header className="flex justify-between items-center px-6 py-3.5 bg-[#1E293B] border-b border-[#334155] z-10">
+      <header className="flex justify-between items-center px-6 py-3.5 bg-[#151d1e] border-b border-[#3b494b] z-10">
         <div className="flex items-center gap-4">
           <button
             onClick={() => router.push('/dashboard')}
-            className="text-[#94A3B8] hover:text-white p-1 rounded hover:bg-[#0F172A] transition-colors"
+            className="text-[#94A3B8] hover:text-white p-1 rounded hover:bg-[#0d1515] transition-colors"
             title="Back to Dashboard"
           >
             <span className="material-symbols-outlined text-lg">arrow_back</span>
@@ -563,15 +863,46 @@ export default function LiveSessionPage() {
           </div>
         </div>
 
-        {/* Timer / Counter */}
+        {/* Timer Display and Controls */}
         <div className="flex items-center gap-6">
-          <div className="flex items-center gap-2 px-3 py-1.5 bg-[#0F172A] border border-[#334155] rounded-lg font-mono">
-            <span className={`material-symbols-outlined text-sm ${timerWarning ? 'text-red-500 animate-pulse' : 'text-[#06B6D4]'}`}>
-              timer
-            </span>
-            <span className={`text-sm font-bold ${timerWarning ? 'text-red-500 animate-pulse' : 'text-[#F1F5F9]'}`}>
-              {formatTime(timeLeftSeconds)}
-            </span>
+          <div className="flex items-center gap-2 bg-[#0d1515] border border-[#3b494b] p-1.5 rounded-lg font-mono">
+            <div className="flex items-center gap-1.5 px-2">
+              <span className={`material-symbols-outlined text-sm ${timerWarning ? 'text-red-500 animate-pulse' : 'text-[#06B6D4]'}`}>
+                {session?.is_paused ? 'pause_circle' : 'timer'}
+              </span>
+              <span className={`text-sm font-bold ${timerWarning ? 'text-red-500 animate-pulse' : 'text-[#F1F5F9]'} ${session?.is_paused ? 'opacity-70' : ''}`}>
+                {formatTime(timeLeftSeconds)} {session?.is_paused ? '(Paused)' : ''}
+              </span>
+            </div>
+            
+            <div className="h-4 w-px bg-[#3b494b] mx-1"></div>
+            
+            {/* Pause/Resume button */}
+            <button
+              onClick={handlePauseResume}
+              className="text-[#94A3B8] hover:text-[#06B6D4] p-1 rounded hover:bg-[#151d1e] transition-all"
+              title={session?.is_paused ? 'Resume Timer' : 'Pause Timer'}
+            >
+              <span className="material-symbols-outlined text-sm font-bold">
+                {session?.is_paused ? 'play_arrow' : 'pause'}
+              </span>
+            </button>
+            
+            {/* Extend buttons */}
+            <button
+              onClick={() => handleExtendTimer(10)}
+              className="text-[10px] font-bold text-[#94A3B8] hover:text-[#06B6D4] px-1.5 py-0.5 rounded hover:bg-[#151d1e] border border-[#3b494b] transition-all"
+              title="Add 10 minutes"
+            >
+              +10m
+            </button>
+            <button
+              onClick={() => handleExtendTimer(15)}
+              className="text-[10px] font-bold text-[#94A3B8] hover:text-[#06B6D4] px-1.5 py-0.5 rounded hover:bg-[#151d1e] border border-[#3b494b] transition-all"
+              title="Add 15 minutes"
+            >
+              +15m
+            </button>
           </div>
 
           <button
@@ -579,7 +910,7 @@ export default function LiveSessionPage() {
             className={`text-xs px-3.5 py-1.5 font-bold rounded-lg border transition-all inline-flex items-center gap-1.5 ${
               copiedLink
                 ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
-                : 'bg-[#1E293B] border-[#334155] text-[#94A3B8] hover:bg-[#0F172A] hover:text-white'
+                : 'bg-[#151d1e] border-[#3b494b] text-[#94A3B8] hover:bg-[#0d1515] hover:text-white'
             }`}
           >
             <span className="material-symbols-outlined text-sm">
@@ -590,7 +921,7 @@ export default function LiveSessionPage() {
 
           <button
             onClick={() => router.push(`/session/${sessionId}/code-story`)}
-            className="text-xs px-3.5 py-1.5 font-bold rounded-lg bg-[#1E293B] border border-[#334155] text-white hover:bg-[#0F172A] transition-colors inline-flex items-center gap-1.5"
+            className="text-xs px-3.5 py-1.5 font-bold rounded-lg bg-[#151d1e] border border-[#3b494b] text-white hover:bg-[#0d1515] transition-colors inline-flex items-center gap-1.5"
           >
             <span className="material-symbols-outlined text-sm text-[#06B6D4]">analytics</span>
             View Code Story
@@ -598,7 +929,7 @@ export default function LiveSessionPage() {
 
           <button
             onClick={handleEndInterview}
-            className="text-xs px-4 py-1.5 font-bold bg-[#06B6D4] text-[#0F172A] hover:bg-[#06B6D4]/90 rounded-lg shadow-lg shadow-[#06B6D4]/10 transition-colors inline-flex items-center gap-1.5"
+            className="text-xs px-4 py-1.5 font-bold bg-[#06B6D4] text-[#0d1515] hover:bg-[#06B6D4]/90 rounded-lg shadow-lg shadow-[#06B6D4]/10 transition-colors inline-flex items-center gap-1.5"
           >
             <span className="material-symbols-outlined text-sm font-bold">assignment_turned_in</span>
             End & Compile Report
@@ -610,9 +941,9 @@ export default function LiveSessionPage() {
       <div className="flex flex-1 overflow-hidden">
         
         {/* LEFT WORKSPACE (60%) */}
-        <div className="w-[60%] flex border-r border-[#334155] bg-[#0F172A] overflow-hidden">
+        <div className="w-[60%] flex border-r border-[#3b494b] bg-[#0d1515] overflow-hidden">
           {/* Collapsible/Sleek File Explorer */}
-          <div className="w-1/4 border-r border-[#334155] flex flex-col bg-[#1E293B]/60 overflow-y-auto custom-scrollbar p-3">
+          <div className="w-1/4 border-r border-[#3b494b] flex flex-col bg-[#151d1e]/60 overflow-y-auto custom-scrollbar p-3">
             <h2 className="text-[10px] font-bold text-[#94A3B8] uppercase tracking-wider mb-3 px-1">Repository Explorer</h2>
             {treeRoot && Object.keys(treeRoot.children).length > 0 ? (
               renderTree(treeRoot)
@@ -622,8 +953,8 @@ export default function LiveSessionPage() {
           </div>
 
           {/* Code Viewer Panel */}
-          <div className="flex-1 flex flex-col overflow-hidden bg-[#0F172A]">
-            <div className="flex justify-between items-center px-4 py-2.5 bg-[#1E293B]/40 border-b border-[#334155] text-xs select-none">
+          <div className="flex-1 flex flex-col overflow-hidden bg-[#0d1515]">
+            <div className="flex justify-between items-center px-4 py-2.5 bg-[#151d1e]/40 border-b border-[#3b494b] text-xs select-none">
               <div className="flex items-center gap-2 text-[#94A3B8] font-mono">
                 <span className="material-symbols-outlined text-sm">code</span>
                 <span className="truncate max-w-xs">{selectedFilePath || 'Select a file'}</span>
@@ -648,8 +979,12 @@ export default function LiveSessionPage() {
                     const isHighlighted = 
                       currentQuestion && 
                       currentQuestion.file_path === selectedFilePath && 
-                      lineNum >= currentQuestion.line_start && 
-                      lineNum <= currentQuestion.line_end;
+                      (
+                        // If file was not found, we loaded the fallback snippet and we should highlight all lines after the header comment
+                        fileContent.startsWith('// Loaded from generated snippet')
+                          ? lineNum > 2 // highlight the code lines
+                          : (lineNum >= currentQuestion.line_start && lineNum <= currentQuestion.line_end)
+                      );
 
                     return (
                       <div
@@ -671,7 +1006,7 @@ export default function LiveSessionPage() {
                 </div>
               ) : (
                 <div className="flex flex-col items-center justify-center h-full text-[#94A3B8] text-center p-4">
-                  <span className="material-symbols-outlined text-3xl mb-2 text-[#334155]">developer_board</span>
+                  <span className="material-symbols-outlined text-3xl mb-2 text-[#3b494b]">developer_board</span>
                   <p className="text-xs">Select a file from the repository explorer to view the code.</p>
                 </div>
               )}
@@ -680,20 +1015,24 @@ export default function LiveSessionPage() {
         </div>
 
         {/* RIGHT WORKSPACE (40%) */}
-        <div className="w-[40%] flex flex-col bg-[#1E293B]/40 overflow-y-auto custom-scrollbar">
+        <div className="w-[40%] flex flex-col bg-[#151d1e]/40 overflow-y-auto custom-scrollbar">
           
           {/* Active Question Details */}
           {currentQuestion ? (
             <div className="p-6 space-y-6 flex-1 flex flex-col justify-between">
               <div className="space-y-6">
                 {/* Question Info card */}
-                <div className="bg-[#1E293B] border border-[#334155] rounded-xl p-5 shadow-xl space-y-4">
+                <div 
+                  onWheel={handleQuestionCardWheel}
+                  className="bg-[#151d1e] border border-[#3b494b] rounded-xl p-5 shadow-xl space-y-4 hover:border-[#06B6D4]/40 transition-all duration-300 relative group cursor-ns-resize"
+                  title="Scroll vertical here to switch questions"
+                >
                   <div className="flex justify-between items-center">
                     <span className="text-[10px] uppercase font-bold text-[#06B6D4] tracking-widest">
                       Question {activeQIndex + 1} of {questions.length}
                     </span>
                     <div className="flex gap-2">
-                      <span className="px-2 py-0.5 bg-[#334155] rounded-full text-[9px] font-bold text-[#94A3B8] uppercase">
+                      <span className="px-2 py-0.5 bg-[#3b494b] rounded-full text-[9px] font-bold text-[#94A3B8] uppercase">
                         {currentQuestion.difficulty}
                       </span>
                       <span className="px-2 py-0.5 bg-[#06B6D4]/10 border border-[#06B6D4]/20 rounded-full text-[9px] font-bold text-[#06B6D4] uppercase">
@@ -707,17 +1046,81 @@ export default function LiveSessionPage() {
                   </h3>
 
                   {currentQuestion.file_path && currentQuestion.file_path !== 'Custom Question' && (
-                    <div className="text-[10px] text-[#94A3B8] font-mono flex items-center gap-1.5 bg-[#0F172A]/50 px-3 py-1.5 rounded-lg border border-[#334155]">
+                    <div className="text-[10px] text-[#94A3B8] font-mono flex items-center gap-1.5 bg-[#0d1515]/50 px-3 py-1.5 rounded-lg border border-[#3b494b]">
                       <span className="material-symbols-outlined text-xs">folder_open</span>
                       <span>
                         {currentQuestion.file_path} (Lines {currentQuestion.line_start}-{currentQuestion.line_end})
                       </span>
                     </div>
                   )}
+
+                  <div className="flex justify-center pt-2.5 border-t border-[#3b494b]/60">
+                    <span className="text-[9px] text-[#94A3B8] group-hover:text-[#06B6D4] font-medium flex items-center gap-1 transition-colors">
+                      <span className="material-symbols-outlined text-xs animate-bounce">unfold_more</span>
+                      Scroll this card to switch questions
+                    </span>
+                  </div>
+                </div>
+
+                {/* Ideal/Expected Answer collapsible section */}
+                <div className="bg-[#151d1e]/60 border border-[#3b494b] rounded-xl p-4 shadow-lg space-y-3 transition-all duration-300">
+                  <button
+                    onClick={() => fetchIdealAnswer(currentQuestion)}
+                    className="flex justify-between items-center w-full text-left focus:outline-none"
+                  >
+                    <span className="text-xs uppercase font-extrabold text-[#06B6D4] tracking-widest flex items-center gap-1.5 select-none">
+                      <span className="material-symbols-outlined text-sm">visibility</span>
+                      Reveal Expected Answer key points
+                    </span>
+                    <span className="material-symbols-outlined text-base text-[#94A3B8] transition-transform select-none">
+                      {showIdealAnswer ? 'keyboard_arrow_up' : 'keyboard_arrow_down'}
+                    </span>
+                  </button>
+
+                  {showIdealAnswer && (
+                    <div className="pt-2 border-t border-[#3b494b]/60 text-xs leading-relaxed text-[#94A3B8] animate-in fade-in duration-300 space-y-3">
+                      {idealAnswerLoading ? (
+                        <div className="flex items-center gap-2 text-[10px] text-[#94A3B8] py-2">
+                          <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-[#06B6D4]"></div>
+                          Generating ideal answer guide...
+                        </div>
+                      ) : idealAnswerText ? (
+                        <>
+                          <div className="whitespace-pre-line text-[#F1F5F9] bg-[#0d1515]/40 p-3 rounded-lg border border-[#3b494b]/50">
+                            {idealAnswerText}
+                          </div>
+
+                          {/* Share with Candidate Controls */}
+                          <div className="flex items-center justify-between pt-2 border-t border-[#3b494b]/40">
+                            <span className="text-[10px] text-[#94A3B8] font-medium flex items-center gap-1.5 select-none">
+                              <span className={`h-2 w-2 rounded-full ${currentQuestion.show_expected_answer ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'}`}></span>
+                              {currentQuestion.show_expected_answer ? 'Currently visible to candidate' : 'Hidden from candidate'}
+                            </span>
+                            <button
+                              onClick={() => toggleShareAnswer(currentQuestion)}
+                              className={`px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-md border transition-all flex items-center gap-1 ${
+                                currentQuestion.show_expected_answer
+                                  ? 'bg-[#06B6D4]/10 border-[#06B6D4] text-[#06B6D4] hover:bg-[#06B6D4]/20'
+                                  : 'bg-[#0d1515] border-[#3b494b] text-[#94A3B8] hover:text-white hover:border-[#475569]'
+                              }`}
+                            >
+                              <span className="material-symbols-outlined text-xs">
+                                {currentQuestion.show_expected_answer ? 'visibility_off' : 'share'}
+                              </span>
+                              {currentQuestion.show_expected_answer ? 'Hide from Candidate' : 'Share with Candidate'}
+                            </button>
+                          </div>
+                        </>
+                      ) : (
+                        <p className="italic text-[10px]">No answer guide available.</p>
+                      )}
+                    </div>
+                  )}
+
                 </div>
 
                 {/* Score and Answer Log Input */}
-                <div className="space-y-4 bg-[#1E293B]/80 border border-[#334155] rounded-xl p-5 shadow-xl">
+                <div className="space-y-4 bg-[#151d1e]/80 border border-[#3b494b] rounded-xl p-5 shadow-xl">
                   <div className="flex justify-between items-center">
                     <label className="text-xs font-bold text-[#94A3B8] uppercase tracking-wider block">
                       Recruiter Log & Scoring
@@ -736,13 +1139,13 @@ export default function LiveSessionPage() {
                     <textarea
                       value={notes[currentQuestion.id] || ''}
                       onChange={(e) => handleNotesChange(e.target.value)}
-                      className="w-full bg-[#0F172A] border border-[#334155] rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-[#06B6D4] transition-colors placeholder-[#475569] h-28 custom-scrollbar resize-none"
+                      className="w-full bg-[#0d1515] border border-[#3b494b] rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-[#06B6D4] transition-colors placeholder-[#475569] h-28 custom-scrollbar resize-none"
                       placeholder="Type your notes about candidate's answer here. Updates are autosaved."
                     />
                   </div>
 
                   {/* Score Selector Slider */}
-                  <div className="space-y-2 pt-2 border-t border-[#334155]">
+                  <div className="space-y-2 pt-2 border-t border-[#3b494b]">
                     <div className="flex justify-between text-[10px] font-bold text-[#94A3B8] uppercase tracking-wider">
                       <span>Performance Score</span>
                       <span className="text-[#06B6D4] font-bold text-xs">{scores[currentQuestion.id] || 5}/10</span>
@@ -754,7 +1157,7 @@ export default function LiveSessionPage() {
                       step="1"
                       value={scores[currentQuestion.id] || 5}
                       onChange={(e) => handleScoreChange(parseInt(e.target.value))}
-                      className="w-full h-1 bg-[#0F172A] rounded-lg appearance-none cursor-pointer accent-[#06B6D4]"
+                      className="w-full h-1 bg-[#0d1515] rounded-lg appearance-none cursor-pointer accent-[#06B6D4]"
                     />
                     <div className="flex justify-between text-[9px] text-[#475569] font-semibold">
                       <span>1 - Poor</span>
@@ -765,7 +1168,7 @@ export default function LiveSessionPage() {
                 </div>
 
                 {/* AI COPILOT CARD */}
-                <div className="bg-gradient-to-br from-[#06B6D4]/5 to-[#0F172A] border border-[#06B6D4]/20 rounded-xl p-5 shadow-lg space-y-4">
+                <div className="bg-gradient-to-br from-[#06B6D4]/5 to-[#0d1515] border border-[#06B6D4]/20 rounded-xl p-5 shadow-lg space-y-4">
                   <div className="flex justify-between items-center">
                     <span className="text-[10px] uppercase font-extrabold text-[#06B6D4] tracking-widest flex items-center gap-1.5">
                       <span className="material-symbols-outlined text-xs">auto_awesome</span>
@@ -774,7 +1177,7 @@ export default function LiveSessionPage() {
                     <button
                       onClick={triggerCopilotFollowUp}
                       disabled={copilotLoading}
-                      className="text-[10px] font-bold text-[#0F172A] bg-[#06B6D4] hover:bg-[#06B6D4]/80 disabled:bg-[#334155] disabled:text-[#94A3B8] px-2.5 py-1 rounded transition-colors inline-flex items-center gap-1"
+                      className="text-[10px] font-bold text-[#0d1515] bg-[#06B6D4] hover:bg-[#06B6D4]/80 disabled:bg-[#3b494b] disabled:text-[#94A3B8] px-2.5 py-1 rounded transition-colors inline-flex items-center gap-1"
                     >
                       {copilotLoading ? (
                         <>
@@ -791,7 +1194,7 @@ export default function LiveSessionPage() {
                   </div>
 
                   {copilotFollowUp ? (
-                    <div className="p-3 bg-[#0F172A]/50 border border-[#06B6D4]/10 rounded-lg text-xs leading-relaxed text-[#F1F5F9] animate-in fade-in duration-300">
+                    <div className="p-3 bg-[#0d1515]/50 border border-[#06B6D4]/10 rounded-lg text-xs leading-relaxed text-[#F1F5F9] animate-in fade-in duration-300">
                       {copilotFollowUp}
                     </div>
                   ) : (
@@ -803,11 +1206,11 @@ export default function LiveSessionPage() {
               </div>
 
               {/* Question Navigation Footer */}
-              <div className="flex justify-between items-center border-t border-[#334155] pt-4 mt-6">
+              <div className="flex justify-between items-center border-t border-[#3b494b] pt-4 mt-6">
                 <button
                   onClick={() => setActiveQIndex(prev => Math.max(0, prev - 1))}
                   disabled={activeQIndex === 0}
-                  className="px-3.5 py-1.5 border border-[#334155] text-xs font-bold rounded-lg text-[#94A3B8] hover:bg-[#0F172A] hover:text-white disabled:opacity-40 disabled:hover:bg-transparent transition-all inline-flex items-center gap-1"
+                  className="px-3.5 py-1.5 border border-[#3b494b] text-xs font-bold rounded-lg text-[#94A3B8] hover:bg-[#0d1515] hover:text-white disabled:opacity-40 disabled:hover:bg-transparent transition-all inline-flex items-center gap-1"
                 >
                   <span className="material-symbols-outlined text-sm">navigate_before</span>
                   Previous
@@ -818,7 +1221,7 @@ export default function LiveSessionPage() {
                 <button
                   onClick={() => setActiveQIndex(prev => Math.min(questions.length - 1, prev + 1))}
                   disabled={activeQIndex === questions.length - 1}
-                  className="px-3.5 py-1.5 border border-[#334155] text-xs font-bold rounded-lg text-[#94A3B8] hover:bg-[#0F172A] hover:text-white disabled:opacity-40 disabled:hover:bg-transparent transition-all inline-flex items-center gap-1"
+                  className="px-3.5 py-1.5 border border-[#3b494b] text-xs font-bold rounded-lg text-[#94A3B8] hover:bg-[#0d1515] hover:text-white disabled:opacity-40 disabled:hover:bg-transparent transition-all inline-flex items-center gap-1"
                 >
                   Next
                   <span className="material-symbols-outlined text-sm">navigate_next</span>
@@ -827,7 +1230,7 @@ export default function LiveSessionPage() {
             </div>
           ) : (
             <div className="p-8 text-center text-[#94A3B8] italic flex-1 flex flex-col justify-center items-center">
-              <span className="material-symbols-outlined text-4xl mb-2 text-[#334155]">question_mark</span>
+              <span className="material-symbols-outlined text-4xl mb-2 text-[#3b494b]">question_mark</span>
               No questions found for this session.
             </div>
           )}
