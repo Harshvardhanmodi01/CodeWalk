@@ -174,85 +174,45 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
         .single();
 
       if (profileErr && profileErr.code === 'PGRST116') {
-        console.warn('Profile not found, attempting to create one...');
-        
+        console.warn('Profile not found, attempting to create one via admin API...');
+
         let registeredName = email.split('@')[0];
         let registeredCompany = '';
 
         try {
-          const { data: recData } = await supabase
-            .from('recruiters')
-            .select('full_name, company')
-            .eq('id', userId)
-            .single();
-
-          if (recData?.full_name) registeredName = recData.full_name;
-          if (recData?.company) registeredCompany = recData.company;
-        } catch (e) {
-          console.warn('Could not load recruiter data for default profile:', e);
-        }
-
-        try {
-          const { data: { user: authUser } } = await supabase.auth.getUser();
-          if (authUser?.user_metadata?.name) registeredName = authUser.user_metadata.name;
-          if (authUser?.user_metadata?.companyName) registeredCompany = authUser.user_metadata.companyName;
+          const { data: authUser } = await supabase.auth.getUser();
+          if (authUser?.user?.user_metadata?.name) registeredName = authUser.user.user_metadata.name;
+          if (authUser?.user?.user_metadata?.companyName) registeredCompany = authUser.user.user_metadata.companyName;
         } catch (e) {}
 
-        // Auto-create profile if missing
-        const defaultProfile: any = {
-          id: userId,
-          email: email,
-          name: registeredName,
-          company_name: registeredCompany,
-          company_size: '1-10 employees',
-          domain: email.split('@')[1] || 'acme.com',
-          industry: 'Technology',
-          plan: 'free',
-          tokens_total: 5,
-          tokens_used: 0,
-          github_connected: false,
-          created_at: new Date().toISOString()
-        };
-
-        // Try to insert with new columns if they exist
+        // Use admin API route to bypass RLS — anon client cannot INSERT when no session is active
         try {
-          const { data: newProfile, error: insertErr } = await supabase
-            .from('profiles')
-            .insert({
-              ...defaultProfile,
-              full_name: registeredName,
-              company: registeredCompany
-            })
-            .select()
-            .single();
+          const res = await fetch('/api/auth/create-profile', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              userId,
+              name: registeredName,
+              email,
+              company: registeredCompany,
+            }),
+          });
 
-          if (!insertErr && newProfile) {
-            profile = newProfile;
-          } else {
-            console.warn('Insert with new columns failed, trying fallback with old columns only:', insertErr);
-            const { data: fallbackProfile, error: fallbackErr } = await supabase
+          if (res.ok) {
+            // Re-fetch the newly created profile
+            const { data: newProfile } = await supabase
               .from('profiles')
-              .insert(defaultProfile)
-              .select()
+              .select('*')
+              .eq('id', userId)
               .single();
-
-            if (!fallbackErr && fallbackProfile) {
-              profile = fallbackProfile;
-            } else {
-              console.error('Failed to auto-create missing profile fallback:', fallbackErr);
+            if (newProfile) {
+              profile = newProfile;
             }
+          } else {
+            console.error('Admin API create-profile failed:', await res.text());
           }
         } catch (err) {
-          console.warn('Profiles insert with new columns threw error, trying fallback:', err);
-          const { data: fallbackProfile, error: fallbackErr } = await supabase
-            .from('profiles')
-            .insert(defaultProfile)
-            .select()
-            .single();
-
-          if (!fallbackErr && fallbackProfile) {
-            profile = fallbackProfile;
-          }
+          console.error('Failed to call create-profile API:', err);
         }
       }
 
@@ -275,21 +235,24 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
         .single();
 
       if (recruiterErr && recruiterErr.code === 'PGRST116') {
-        console.warn('Recruiter profile not found, auto-creating one...');
-        const { data: newRecruiter, error: recInsertErr } = await supabase
-          .from('recruiters')
-          .insert({
-            id: userId,
-            email: email,
-            full_name: email.split('@')[0],
-            company: ''
-          })
-          .select()
-          .single();
-        if (!recInsertErr && newRecruiter) {
-          recruiter = newRecruiter;
-        } else {
-          console.error('Failed to auto-create missing recruiter:', recInsertErr);
+        console.warn('Recruiter profile not found, auto-creating via admin API...');
+        // Use admin API to bypass RLS
+        try {
+          await fetch('/api/auth/create-profile', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              userId,
+              name: email.split('@')[0],
+              email,
+              company: '',
+            }),
+          });
+          // Re-fetch recruiter after creation
+          const { data: refetched } = await supabase.from('recruiters').select('*').eq('id', userId).single();
+          if (refetched) recruiter = refetched;
+        } catch (err) {
+          console.error('Failed to auto-create missing recruiter via admin API:', err);
         }
       }
 

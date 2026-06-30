@@ -1,14 +1,15 @@
-﻿'use client';
+'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useGlobal } from '@/app/context/GlobalContext';
 import { supabase } from '@/app/lib/supabaseClient';
 import { toast } from 'react-hot-toast';
 
-export default function LoginPage() {
+function LoginPageInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { signIn, user } = useGlobal();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -19,10 +20,15 @@ export default function LoginPage() {
 
   useEffect(() => {
     setMounted(true);
+    // Show any OAuth provider errors surfaced via URL param from /auth/callback
+    const oauthError = searchParams.get('oauth_error');
+    if (oauthError) {
+      setError(decodeURIComponent(oauthError));
+    }
     if (user) {
       router.replace('/dashboard');
     }
-  }, [user, router]);
+  }, [user, router, searchParams]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -44,7 +50,10 @@ export default function LoginPage() {
     try {
       const { error } = await supabase.auth.signInWithOAuth({
         provider,
-        options: { redirectTo: window.location.origin + '/dashboard' }
+        options: {
+          // /auth/callback exchanges the OAuth code for a session (PKCE flow)
+          redirectTo: window.location.origin + '/auth/callback',
+        }
       });
       if (error) throw error;
     } catch (err: any) {
@@ -275,5 +284,13 @@ export default function LoginPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginPageInner />
+    </Suspense>
   );
 }

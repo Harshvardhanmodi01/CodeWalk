@@ -23,6 +23,11 @@ export default function RegisterPage() {
   const [otpCode, setOtpCode] = useState('');
   const [tempUser, setTempUser] = useState<any>(null);
 
+  const isQuotaExhausted = typeof window !== 'undefined' && (
+    localStorage.getItem('cw_quota_exhausted') === 'true' ||
+    document.cookie.includes('cw_quota_exhausted=true')
+  );
+
   useEffect(() => {
     if (user) {
       router.replace('/dashboard');
@@ -46,11 +51,6 @@ export default function RegisterPage() {
     e.preventDefault();
     setError('');
     setLoading(true);
-
-    const isQuotaExhausted = typeof window !== 'undefined' && (
-      localStorage.getItem('cw_quota_exhausted') === 'true' ||
-      document.cookie.includes('cw_quota_exhausted=true')
-    );
 
     if (isQuotaExhausted) {
       setError('Free trial limit reached for this device. To prevent abuse, new registrations are blocked. Please sign in to your original account or upgrade to Pro.');
@@ -83,25 +83,8 @@ export default function RegisterPage() {
         throw new Error('Registration failed. Please try again.');
       }
 
-      // Immediately after signUp, do a Supabase upsert into the profiles table
-      try {
-        await supabase.from('profiles').upsert({
-          id: authUser.id,
-          email: email,
-          full_name: fullName,
-          company: company,
-          name: fullName,
-          company_name: company,
-          role: 'HR / Recruiter',
-          plan: 'free',
-          tokens_used: 0,
-          tokens_total: isQuotaExhausted ? 0 : 5,
-          onboarding_completed: false,
-          created_at: new Date().toISOString()
-        }, { onConflict: 'id' });
-      } catch (dbErr) {
-        console.warn('Immediate profiles upsert failed:', dbErr);
-      }
+      // DO NOT insert profile here — no session yet, RLS will block it.
+      // Profile will be created after OTP verification via admin API.
 
       toast.success('Registration successful!');
 
@@ -160,47 +143,27 @@ export default function RegisterPage() {
         const activeUser = authUser || tempUser;
         
         if (activeUser) {
-          const { error: dbErr } = await supabase.from('recruiters').upsert({
-            id: activeUser.id,
-            email,
-            full_name: fullName,
-            company,
-          }, { onConflict: 'id' });
-
-          if (dbErr) {
-            console.error('Failed to create recruiter profile:', dbErr);
-          }
-
+          // Use admin API route to bypass RLS and write profile + recruiter rows.
+          // Direct Supabase writes here fail because RLS requires auth.uid() == id
+          // and the session cookie may not be established yet right after OTP verify.
           try {
-            const { error: profErr } = await supabase.from('profiles').upsert({
-              id: activeUser.id,
-              email,
-              full_name: fullName,
-              company,
-              name: fullName,
-              company_name: company,
-              created_at: new Date().toISOString()
-            }, { onConflict: 'id' });
-
-            if (profErr) {
-              console.warn('Profiles upsert failed, trying fallback:', profErr);
-              await supabase.from('profiles').upsert({
-                id: activeUser.id,
-                email,
+            const profileRes = await fetch('/api/auth/create-profile', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                userId: activeUser.id,
                 name: fullName,
-                company_name: company,
-                created_at: new Date().toISOString()
-              }, { onConflict: 'id' });
+                email,
+                company,
+                tokensTotal: isQuotaExhausted ? 0 : 5
+              }),
+            });
+            if (!profileRes.ok) {
+              const profileData = await profileRes.json().catch(() => ({}));
+              console.error('Failed to create profile via admin API:', profileData.error);
             }
           } catch (err) {
-            console.warn('Profiles upsert threw error, trying fallback:', err);
-            await supabase.from('profiles').upsert({
-              id: activeUser.id,
-              email,
-              name: fullName,
-              company_name: company,
-              created_at: new Date().toISOString()
-            }, { onConflict: 'id' });
+            console.error('Profile creation API call failed:', err);
           }
         }
 

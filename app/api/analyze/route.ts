@@ -479,7 +479,7 @@ export async function POST(request: NextRequest) {
     }
 
     // ==================== AUTHENTICATION CHECK ====================
-    const supabaseClient = createServerSupabaseClient();
+    const supabaseClient = await createServerSupabaseClient();
     const { data: { session } } = await supabaseClient.auth.getSession();
     const isGuest = !session;
 
