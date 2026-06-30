@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import Sidebar from '@/components/dashboard/Sidebar';
+import FloatingBatchProgress from '@/components/dashboard/FloatingBatchProgress';
 import { useGlobal } from '@/app/context/GlobalContext';
 import { useRouter } from 'next/navigation';
 
@@ -35,6 +36,9 @@ export default function DashboardLayout({
       <div className="flex-1 ml-sidebar-width flex flex-col min-h-screen relative overflow-hidden">
         {children}
       </div>
+
+      {/* Floating bulk worker progress bar */}
+      <FloatingBatchProgress />
     </div>
   );
 }

@@ -80,10 +80,10 @@ export default function TokenTable() {
   );
 
   return (
-    <div className="bg-[#1E293B] border border-[#334155] rounded-lg overflow-hidden shadow-sm">
+    <div className="bg-[#151d1e] border border-[#3b494b] rounded-lg overflow-hidden shadow-sm">
       
       {/* Header controls */}
-      <div className="p-4 sm:p-6 border-b border-[#334155] flex flex-col sm:flex-row gap-4 justify-between items-center bg-[#1E293B] select-none">
+      <div className="p-4 sm:p-6 border-b border-[#3b494b] flex flex-col sm:flex-row gap-4 justify-between items-center bg-[#151d1e] select-none">
         <div className="flex items-center gap-2">
           <span className="material-symbols-outlined text-[#06B6D4]">history</span>
           <h5 className="text-xs font-bold uppercase tracking-wider text-white">Session Consumption History</h5>
@@ -93,7 +93,7 @@ export default function TokenTable() {
         <div className="relative w-full sm:w-64">
           <input 
             type="text"
-            className="w-full bg-[#0F172A] border border-[#334155] text-xs rounded pl-3 pr-8 py-2 focus:border-[#06B6D4] outline-none text-[#F1F5F9]"
+            className="w-full bg-[#0d1515] border border-[#3b494b] text-xs rounded pl-3 pr-8 py-2 focus:border-[#06B6D4] outline-none text-[#F1F5F9]"
             placeholder="Filter sessions..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -113,7 +113,7 @@ export default function TokenTable() {
           </div>
         ) : (
           <table className="w-full text-left border-collapse text-xs sm:text-sm">
-            <thead className="bg-[#0F172A]/40 select-none border-b border-[#334155]">
+            <thead className="bg-[#0d1515]/40 select-none border-b border-[#3b494b]">
               <tr>
                 <th className="px-6 py-4 text-[10px] uppercase font-bold text-[#94A3B8]">Repo Name</th>
                 <th className="px-6 py-4 text-[10px] uppercase font-bold text-[#94A3B8]">Candidate</th>
@@ -122,9 +122,9 @@ export default function TokenTable() {
                 <th className="px-6 py-4 text-[10px] uppercase font-bold text-[#94A3B8] text-right">Status</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#334155]/30 text-[#94A3B8]">
+            <tbody className="divide-y divide-[#3b494b]/30 text-[#94A3B8]">
               {filteredLogs.map((log, idx) => (
-                <tr key={idx} className="hover:bg-[#0F172A]/20 transition-colors">
+                <tr key={idx} className="hover:bg-[#0d1515]/20 transition-colors">
                   <td className="px-6 py-4 font-mono text-xs text-[#06B6D4] flex items-center gap-2">
                     <span className="material-symbols-outlined text-sm text-[#94A3B8]/40">terminal</span>
                     {log.repo}
@@ -156,14 +156,14 @@ export default function TokenTable() {
       </div>
 
       {/* Pagination Footer */}
-      <div className="p-4 border-t border-[#334155] flex justify-between items-center bg-[#1E293B] select-none text-[10px] sm:text-xs">
+      <div className="p-4 border-t border-[#3b494b] flex justify-between items-center bg-[#151d1e] select-none text-[10px] sm:text-xs">
         <span className="text-[#94A3B8]">Showing {filteredLogs.length} of {logs.length} records</span>
         <div className="flex gap-1.5">
-          <button className="w-7 h-7 flex items-center justify-center border border-[#334155] text-[#94A3B8] hover:bg-[#0F172A] rounded transition-colors">
+          <button className="w-7 h-7 flex items-center justify-center border border-[#3b494b] text-[#94A3B8] hover:bg-[#0d1515] rounded transition-colors">
             <span className="material-symbols-outlined text-sm font-bold">chevron_left</span>
           </button>
           <button className="w-7 h-7 flex items-center justify-center border border-[#06B6D4] text-[#06B6D4] bg-[#06B6D4]/10 font-bold rounded text-[10px]">1</button>
-          <button className="w-7 h-7 flex items-center justify-center border border-[#334155] text-[#94A3B8] hover:bg-[#0F172A] rounded transition-colors">
+          <button className="w-7 h-7 flex items-center justify-center border border-[#3b494b] text-[#94A3B8] hover:bg-[#0d1515] rounded transition-colors">
             <span className="material-symbols-outlined text-sm font-bold">chevron_right</span>
           </button>
         </div>

@@ -136,7 +136,7 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
           setUser(null);
           setTwoFactorChallenged(false);
           setCompany({
-            name: 'Acme Corp',
+            name: '',
             size: '10-50 employees',
             domain: 'acme.com',
             industry: 'Technology',
@@ -282,7 +282,7 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
             id: userId,
             email: email,
             full_name: email.split('@')[0],
-            company: 'Acme Corp'
+            company: ''
           })
           .select()
           .single();
@@ -307,6 +307,20 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
           .from('profiles')
           .update({ tokens_used: sessionCount })
           .eq('id', userId);
+      }
+
+      if (profile) {
+        if (profile.plan === 'pro' || profile.plan === 'enterprise') {
+          if (typeof window !== 'undefined') {
+            localStorage.removeItem('cw_quota_exhausted');
+            document.cookie = "cw_quota_exhausted=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC;";
+          }
+        } else if (actualTokensUsed >= (profile.tokens_total ?? 5)) {
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('cw_quota_exhausted', 'true');
+            document.cookie = "cw_quota_exhausted=true; path=/; max-age=31536000; path=/";
+          }
+        }
       }
 
       if (profile) {
@@ -469,7 +483,12 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
       email,
       password: password || '',
     });
-    if (error) throw error;
+    if (error) {
+      if (error.message?.toLowerCase().includes('email not confirmed') || error.message?.toLowerCase().includes('confirm your email')) {
+        throw new Error("Please verify your email first. Check your inbox for the verification link.");
+      }
+      throw error;
+    }
   };
 
   const signUp = async (email: string, password?: string, companyName?: string, companySize?: string) => {
@@ -479,7 +498,7 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
       options: {
         data: {
           name: email.split('@')[0],
-          companyName: companyName || 'Acme Corp',
+          companyName: companyName || '',
           companySize: companySize || '1-10 employees',
         },
       },

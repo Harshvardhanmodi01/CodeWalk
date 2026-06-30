@@ -17,16 +17,32 @@ export default function Sidebar() {
 
   const avatarUrlToDisplay = getAvatarUrl();
 
-  const menuItems = [
+  const [isManageOpen, setIsManageOpen] = useState(false);
+
+  const primaryMenuItems = [
     { name: 'Dashboard', path: '/dashboard', icon: 'dashboard' },
+    { name: 'Positions', path: '/positions', icon: 'work' },
     { name: 'History', path: '/history', icon: 'history' },
+    { name: 'Candidates', path: '/candidates', icon: 'groups' },
+    { name: 'Resume Parser', path: '/resume-extractor', icon: 'description' },
+  ];
+
+  const subMenuItems = [
     { name: 'Tokens', path: '/tokens', icon: 'analytics' },
     { name: 'Profile', path: '/profile', icon: 'person' },
     { name: 'Pricing', path: '/pricing', icon: 'payments' },
   ];
 
+  useEffect(() => {
+    // Keep manage dropdown open if one of the sub-items is currently active
+    const isSubActive = subMenuItems.some(item => pathname === item.path || pathname?.startsWith(item.path + '/'));
+    if (isSubActive) {
+      setIsManageOpen(true);
+    }
+  }, [pathname]);
+
   const handleNewAssessment = () => {
-    router.push('/dashboard');
+    router.push('/dashboard/new-session');
   };
 
   const handleLogout = async () => {
@@ -87,7 +103,7 @@ export default function Sidebar() {
         <div className="px-4 mb-2">
           <p className="font-label-sm text-[10px] text-[#b9cacb] px-2 mb-2 uppercase tracking-widest opacity-50 font-bold">Navigation</p>
           <div className="space-y-1">
-            {menuItems.map((item) => {
+            {primaryMenuItems.map((item) => {
               const isActive = pathname === item.path || pathname?.startsWith(item.path + '/');
               return (
                 <Link
@@ -104,6 +120,47 @@ export default function Sidebar() {
                 </Link>
               );
             })}
+
+            {/* Collapsible Dropdown for Tokens & Profile */}
+            <div className="space-y-1 pt-2">
+              <button
+                onClick={() => setIsManageOpen(!isManageOpen)}
+                className="w-full flex items-center justify-between px-4 py-3 rounded-lg font-label-sm text-xs transition-all duration-150 uppercase tracking-wider text-[#b9cacb] hover:bg-[#2e3637]/50 hover:text-white cursor-pointer"
+              >
+                <div className="flex items-center gap-3">
+                  <span className="material-symbols-outlined text-lg">settings</span>
+                  <span>Account &amp; Settings</span>
+                </div>
+                <span 
+                  className="material-symbols-outlined text-base transition-transform duration-200" 
+                  style={{ transform: isManageOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}
+                >
+                  keyboard_arrow_down
+                </span>
+              </button>
+
+              {isManageOpen && (
+                <div className="pl-6 space-y-1 border-l border-[#3b494b]/60 ml-6 mt-1 transition-all duration-200">
+                  {subMenuItems.map((item) => {
+                    const isActive = pathname === item.path || pathname?.startsWith(item.path + '/');
+                    return (
+                      <Link
+                        key={item.path}
+                        href={item.path}
+                        className={`flex items-center gap-3 px-4 py-2.5 rounded-lg font-label-sm text-[11px] transition-all duration-150 uppercase tracking-wider ${
+                          isActive 
+                            ? 'bg-[#2e3637] text-[#7df4ff] font-bold' 
+                            : 'text-[#b9cacb]/80 hover:bg-[#2e3637]/30 hover:text-white'
+                        }`}
+                      >
+                        <span className="material-symbols-outlined text-base">{item.icon}</span>
+                        <span>{item.name}</span>
+                      </Link>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </nav>

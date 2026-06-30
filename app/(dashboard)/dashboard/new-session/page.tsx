@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { useState, useEffect, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useGlobal } from '@/app/context/GlobalContext';
 import { supabase } from '@/app/lib/supabaseClient';
 import { toast } from 'react-hot-toast';
+import CodeBlock from '@/components/dashboard/CodeBlock';
 
 interface QuestionItem {
   question_text: string;
@@ -13,14 +14,20 @@ interface QuestionItem {
   line_start: number;
   line_end: number;
   difficulty: 'easy' | 'medium' | 'hard';
-  category: 'frontend' | 'backend' | 'dsa' | 'system-design';
+  category: 'frontend' | 'backend' | 'dsa' | 'system-design' | 'behavioral';
+  question_type?: 'code-based' | 'jd-connected' | 'skill-gap' | 'system-design';
+  why_asked?: string;
   follow_up_questions?: string[];
   expected_answer?: string;
 }
 
-export default function NewSessionFlow() {
+function NewSessionFlowContent() {
   const router = useRouter();
-  const { user } = useGlobal();
+  const searchParams = useSearchParams();
+  const paramCandidateId = searchParams.get('candidateId');
+  const paramRepoUrl = searchParams.get('repoUrl');
+  const paramJd = searchParams.get('jd');
+  const { user, refreshUserData } = useGlobal();
   
   // Step tracker
   const [step, setStep] = useState<1 | 2 | 3>(1);
@@ -34,11 +41,36 @@ export default function NewSessionFlow() {
   const [duration, setDuration] = useState('45');
   const [difficulty, setDifficulty] = useState<'easy' | 'medium' | 'hard' | 'mixed'>('medium');
   const [focus, setFocus] = useState<string[]>(['All']);
+  const [jobDescription, setJobDescription] = useState('');
 
   // Git repositories list state
   const [gitRepos, setGitRepos] = useState<any[]>([]);
   const [fetchingRepos, setFetchingRepos] = useState(false);
   const [repoSource, setRepoSource] = useState<'dropdown' | 'custom'>('custom');
+
+  useEffect(() => {
+    if (paramRepoUrl) {
+      setRepoUrl(paramRepoUrl);
+      setRepoSource('custom');
+    }
+    if (paramJd) {
+      setJobDescription(paramJd);
+    }
+    if (paramCandidateId) {
+      const fetchCandidate = async () => {
+        const { data, error } = await supabase
+          .from('candidates')
+          .select('*')
+          .eq('id', paramCandidateId)
+          .single();
+        if (data && !error) {
+          setCandidateName(data.name);
+          setCandidateEmail(data.email);
+        }
+      };
+      fetchCandidate();
+    }
+  }, [paramRepoUrl, paramJd, paramCandidateId]);
 
   useEffect(() => {
     if (user?.githubConnected && user?.githubUsername) {
@@ -175,7 +207,8 @@ export default function NewSessionFlow() {
         body: JSON.stringify({
           repoUrl,
           difficulty,
-          focus
+          focus,
+          jobDescription
         })
       });
 
@@ -314,6 +347,11 @@ export default function NewSessionFlow() {
         .eq('id', user?.id);
 
       if (tokenErr) console.warn('Failed to increment tokens_used:', tokenErr);
+
+      // Force refresh client user data
+      if (refreshUserData) {
+        await refreshUserData();
+      }
 
       // Redirect to live recruiter interview workspace
       router.push(`/session/${sessData.id}`);
@@ -459,6 +497,20 @@ export default function NewSessionFlow() {
                       type="text"
                     />
                   )}
+                </div>
+
+                <div className="space-y-1.5">
+                  <div className="flex justify-between items-center">
+                    <label className="text-xs font-bold text-[#94A3B8] uppercase tracking-wider block">Job Description (Optional)</label>
+                    <span className="text-[10px] text-[#94A3B8]">{jobDescription.length} / 5000</span>
+                  </div>
+                  <textarea
+                    value={jobDescription}
+                    onChange={(e) => setJobDescription(e.target.value.slice(0, 5000))}
+                    className="w-full bg-[#0d1515] border border-[#3b494b] px-4 py-3 rounded-lg text-xs focus:outline-none focus:border-[#06B6D4] transition-colors resize-y min-h-[120px] text-[#F1F5F9] placeholder-muted-text/50"
+                    placeholder="Paste the job description here — AI will generate questions matching both the candidate's code and the role requirements"
+                    rows={4}
+                  />
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -648,6 +700,12 @@ export default function NewSessionFlow() {
           {/* STEP 3: QUESTIONS PREVIEW */}
           {step === 3 && (
             <div className="bg-[#151d1e] border border-[#3b494b] p-8 rounded-xl shadow-xl space-y-6">
+              {questions.some(q => q.question_type && q.question_type !== 'code-based') && (
+                <div className="bg-[#06B6D4]/10 border border-[#06B6D4]/20 p-4 rounded-xl text-xs text-[#06B6D4] font-semibold flex items-center gap-2">
+                  <span className="material-symbols-outlined text-sm">info</span>
+                  <span>AI analyzed your candidate&apos;s code + job requirements. 4 code questions, 4 role-match questions, 2 skill gap questions, 2 system design questions generated.</span>
+                </div>
+              )}
               <div className="border-b border-[#3b494b] pb-4 flex justify-between items-center">
                 <div>
                   <h2 className="text-xl font-bold">Step 3 — Questions Preview</h2>
@@ -697,7 +755,7 @@ export default function NewSessionFlow() {
                   <div key={idx} className="bg-[#0d1515]/40 border border-[#3b494b] p-4 rounded-lg space-y-3 relative group">
                     <div className="flex justify-between items-start">
                       <div className="space-y-1 pr-12">
-                        <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider">
+                        <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider flex-wrap">
                           <span className="text-[#06B6D4]">Q{idx + 1}</span>
                           <span className="text-[#3b494b]">•</span>
                           <span className={`px-1.5 py-0.5 rounded text-[8px] ${
@@ -707,8 +765,29 @@ export default function NewSessionFlow() {
                           }`}>{q.difficulty}</span>
                           <span className="text-[#3b494b]">•</span>
                           <span className="text-[#94A3B8]">{q.category}</span>
+                          {q.question_type && (
+                            <>
+                              <span className="text-[#3b494b]">•</span>
+                              <span className={`px-1.5 py-0.5 rounded text-[8px] ${
+                                q.question_type === 'jd-connected' ? 'bg-purple-500/10 border border-purple-500/30 text-purple-400' :
+                                q.question_type === 'skill-gap' ? 'bg-orange-500/10 border border-orange-500/30 text-orange-400' :
+                                q.question_type === 'system-design' ? 'bg-blue-500/10 border border-blue-500/30 text-blue-400' :
+                                'bg-cyan-500/10 border border-cyan-500/20 text-[#06B6D4]'
+                              }`}>
+                                {q.question_type === 'code-based' ? 'Code-Based' :
+                                 q.question_type === 'jd-connected' ? 'JD-Connected' :
+                                 q.question_type === 'skill-gap' ? 'Skill Gap' :
+                                 q.question_type === 'system-design' ? 'System Design' : q.question_type}
+                              </span>
+                            </>
+                          )}
                         </div>
                         <p className="text-sm font-semibold pt-1">{q.question_text}</p>
+                        {q.why_asked && (
+                          <p className="text-[10px] text-[#849495] italic mt-1">
+                            <strong>Why asked:</strong> {q.why_asked}
+                          </p>
+                        )}
                         {q.file_path && (
                           <p className="text-[10px] text-[#94A3B8] font-mono select-none">
                             File: {q.file_path} {q.line_start > 0 ? `(Lines ${q.line_start}-${q.line_end})` : ''}
@@ -745,9 +824,12 @@ export default function NewSessionFlow() {
                     </div>
 
                     {q.code_snippet && (
-                      <div className="bg-[#0d1515] p-3 rounded border border-[#3b494b] overflow-x-auto text-[11px] font-mono text-[#F1F5F9]">
-                        <pre><code>{q.code_snippet}</code></pre>
-                      </div>
+                      <CodeBlock
+                        code={q.code_snippet}
+                        filePath={q.file_path}
+                        lineStart={q.line_start}
+                        lineEnd={q.line_end}
+                      />
                     )}
                   </div>
                 ))}
@@ -784,5 +866,18 @@ export default function NewSessionFlow() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function NewSessionFlow() {
+  return (
+    <Suspense fallback={
+      <div className="flex-1 flex flex-col items-center justify-center bg-[#0d1515] text-[#F1F5F9] min-h-screen">
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-[#06B6D4] mb-3"></div>
+        <p className="text-xs text-[#94A3B8]">Loading session builder...</p>
+      </div>
+    }>
+      <NewSessionFlowContent />
+    </Suspense>
   );
 }

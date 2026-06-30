@@ -24,10 +24,10 @@ export default function ProfilePage() {
   // Custom Avatar state
   const [avatarUrl, setAvatarUrl] = useState('');
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
 
   const getAvatarUrl = () => {
     if (avatarUrl) return avatarUrl;
-    if (user?.githubConnected && user?.githubAvatar) return user.githubAvatar;
     return null;
   };
 
@@ -55,6 +55,84 @@ export default function ProfilePage() {
 
   // Sync profile details on mount
   useEffect(() => {
+    const fetchProfile = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) return;
+
+        // Fetch full_name and company directly from profiles table
+        let { data: profile, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', session.user.id)
+          .single();
+
+        if (error || !profile) {
+          // If profiles table row does not exist for current user, create it using user.user_metadata
+          const authUser = session.user;
+          const metaName = authUser.user_metadata?.full_name || authUser.user_metadata?.name || authUser.email?.split('@')[0] || '';
+          const metaCompany = authUser.user_metadata?.company || authUser.user_metadata?.companyName || '';
+
+          const { data: newProfile, error: createErr } = await supabase
+            .from('profiles')
+            .upsert({
+              id: authUser.id,
+              email: authUser.email || '',
+              full_name: metaName,
+              company: metaCompany,
+              name: metaName,
+              company_name: metaCompany,
+              role: 'HR / Recruiter',
+              plan: 'free',
+              tokens_used: 0,
+              tokens_total: 5,
+              onboarding_completed: false,
+              created_at: new Date().toISOString()
+            }, { onConflict: 'id' })
+            .select()
+            .single();
+
+          if (!createErr && newProfile) {
+            profile = newProfile;
+          }
+        }
+
+        if (profile) {
+          setName(profile.full_name || profile.name || '');
+          setCompanyName(profile.company || profile.company_name || '');
+          setRole(profile.role || 'HR / Recruiter');
+          setCompanySize(profile.company_size || '11 to 50');
+          setHiresPerMonth(profile.hires_per_month || '1 to 5');
+          setAvatarUrl(profile.avatar_url || '');
+        }
+      } catch (err) {
+        console.error('Failed to load profile directly on mount:', err);
+      }
+
+      // Check for newly connected GitHub identity via OAuth redirection
+      try {
+        const { data: { user: authUser } } = await supabase.auth.getUser();
+        const githubIdentity = authUser?.identities?.find(id => id.provider === 'github');
+        if (authUser && githubIdentity && user && !user.githubConnected) {
+          const githubUsername = authUser.user_metadata?.user_name || authUser.user_metadata?.preferred_username || '';
+          const githubAvatar = authUser.user_metadata?.avatar_url || '';
+          
+          setPendingGithubUsername(githubUsername);
+          setPendingGithubAvatar(githubAvatar);
+          
+          // Generate verification OTP
+          const generatedOtp = Math.floor(100000 + Math.random() * 900000).toString();
+          setCorrectGithubOtp(generatedOtp);
+          setShowGithubVerifyModal(true);
+          
+          console.log(`[DEMO] GitHub Verification OTP: ${generatedOtp}`);
+          toast.success(`[DEMO] GitHub Verification OTP: ${generatedOtp}`, { duration: 12000 });
+        }
+      } catch (e) {
+        console.error('Failed to link GitHub:', e);
+      }
+    };
+
     if (user) {
       setName(user.name || '');
       setCompanyName(user.companyName || '');
@@ -62,42 +140,10 @@ export default function ProfilePage() {
       setCompanySize(user.companySize || '11 to 50');
       setHiresPerMonth(user.hiresPerMonth || '1 to 5');
       setAvatarUrl(user.avatarUrl || '');
-
-      // Load 2FA state
-      if (user.twoFactorEnabled) {
-        setTwoFactorEnabled(true);
-      } else {
-        setTwoFactorEnabled(false);
-      }
-
-      // Load connected repos
+      setTwoFactorEnabled(!!user.twoFactorEnabled);
       setRepos(user.githubRepos || []);
 
-      // Check for newly connected GitHub identity via OAuth redirection
-      const checkGitHubLink = async () => {
-        try {
-          const { data: { user: authUser } } = await supabase.auth.getUser();
-          const githubIdentity = authUser?.identities?.find(id => id.provider === 'github');
-          if (authUser && githubIdentity && !user.githubConnected) {
-            const githubUsername = authUser.user_metadata?.user_name || authUser.user_metadata?.preferred_username || '';
-            const githubAvatar = authUser.user_metadata?.avatar_url || '';
-            
-            setPendingGithubUsername(githubUsername);
-            setPendingGithubAvatar(githubAvatar);
-            
-            // Generate verification OTP
-            const generatedOtp = Math.floor(100000 + Math.random() * 900000).toString();
-            setCorrectGithubOtp(generatedOtp);
-            setShowGithubVerifyModal(true);
-            
-            console.log(`[DEMO] GitHub Verification OTP: ${generatedOtp}`);
-            toast.success(`[DEMO] GitHub Verification OTP: ${generatedOtp}`, { duration: 12000 });
-          }
-        } catch (e) {
-          console.error('Failed to link GitHub:', e);
-        }
-      };
-      checkGitHubLink();
+      fetchProfile();
     }
   }, [user]);
 
@@ -248,11 +294,29 @@ export default function ProfilePage() {
     if (!file || !user) return;
 
     if (file.type !== 'image/png' && file.type !== 'image/jpeg' && file.type !== 'image/jpg') {
-      toast.error('Only PNG, JPG, and JPEG images are allowed.');
+      toast.error('Only JPG and PNG files are allowed');
+      return;
+    }
+
+    const fileExt = file.name.split('.').pop()?.toLowerCase();
+    if (fileExt !== 'png' && fileExt !== 'jpg' && fileExt !== 'jpeg') {
+      toast.error('Only JPG and PNG files are allowed');
+      return;
+    }
+
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error('Image must be under 2MB');
       return;
     }
 
     setUploadingPhoto(true);
+    setUploadProgress(10);
+    
+    // Simulate upload progress
+    const progressInterval = setInterval(() => {
+      setUploadProgress((prev) => (prev < 90 ? prev + 10 : prev));
+    }, 100);
+
     try {
       // 1. Ensure the 'avatars' bucket exists
       try {
@@ -261,12 +325,10 @@ export default function ProfilePage() {
         console.log('Bucket check completed or skipped:', bucketErr);
       }
 
-      // 2. Upload file to avatars bucket
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${user.id}-${Math.random().toString(36).substring(2)}.${fileExt}`;
-      const filePath = `avatar-${fileName}`;
+      // 2. Upload file to avatars bucket at path: avatars/[user-auth-id]/avatar.[file-extension]
+      const filePath = `${user.id}/avatar.${fileExt}`;
 
-      const { data: uploadData, error: uploadErr } = await supabase.storage
+      const { error: uploadErr } = await supabase.storage
         .from('avatars')
         .upload(filePath, file, {
           cacheControl: '3600',
@@ -280,7 +342,7 @@ export default function ProfilePage() {
         .from('avatars')
         .getPublicUrl(filePath);
 
-      // 4. Update profiles table avatar_url
+      // 4. Save that public URL to the profiles table avatar_url column for the logged in user
       const { error: dbErr } = await supabase
         .from('profiles')
         .update({ avatar_url: publicUrl })
@@ -289,13 +351,19 @@ export default function ProfilePage() {
       if (dbErr) throw dbErr;
 
       setAvatarUrl(publicUrl);
+      clearInterval(progressInterval);
+      setUploadProgress(100);
+      
+      // Immediately update context user avatar
       await refreshUserData();
-      toast.success('Profile photo uploaded and updated successfully!');
+      toast.success('Profile photo updated');
     } catch (err: any) {
+      clearInterval(progressInterval);
       console.error('Error uploading photo:', err);
       toast.error(err.message || 'Failed to upload photo.');
     } finally {
       setUploadingPhoto(false);
+      setUploadProgress(0);
     }
   };
 
@@ -744,7 +812,7 @@ export default function ProfilePage() {
                       {uploadingPhoto ? (
                         <span className="flex items-center justify-center gap-1">
                           <div className="animate-spin rounded-full h-2.5 w-2.5 border-t-2 border-[#0d1515]"></div>
-                          <span>Uploading...</span>
+                          <span>Uploading ({uploadProgress}%)</span>
                         </span>
                       ) : (
                         <span>Upload Photo</span>

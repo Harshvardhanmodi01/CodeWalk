@@ -199,6 +199,7 @@ export default function AppContent({ children }: { children: React.ReactNode }) 
     pathname?.startsWith('/register') || 
     pathname?.startsWith('/signup') || 
     pathname?.startsWith('/verify-email') ||
+    pathname?.startsWith('/auth/') ||
     pathname?.startsWith('/session') ||
     pathname?.startsWith('/candidate') ||
     pathname?.startsWith('/onboarding');

@@ -488,7 +488,26 @@ export default function LiveSessionPage() {
     setShowIdealAnswer(false);
     setIdealAnswerText(currentQ.expected_answer || '');
 
+    // Set snippet as immediate placeholder so code viewer is never blank
+    if (currentQ.code_snippet) {
+      setFileContent(currentQ.code_snippet);
+    } else {
+      setFileContent('');
+    }
+
     if (currentQ.file_path && currentQ.file_path !== 'Custom Question') {
+      // Auto-expand parent directories in the explorer tree
+      const parts = currentQ.file_path.split('/');
+      let currentPath = '';
+      setExpandedDirs(prev => {
+        const next = { ...prev };
+        for (let i = 0; i < parts.length - 1; i++) {
+          currentPath = currentPath ? `${currentPath}/${parts[i]}` : parts[i];
+          next[currentPath] = true;
+        }
+        return next;
+      });
+
       loadFileContent(currentQ.file_path);
     } else {
       setFileContent('// Custom Recruiter Question\n\n' + currentQ.question_text);

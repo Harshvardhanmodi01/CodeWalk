@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { supabase } from '@/app/lib/supabaseClient';
+import CodeBlock from '@/components/dashboard/CodeBlock';
 
 interface Question {
   id: string;
@@ -438,14 +439,13 @@ export default function CandidateSessionPage() {
 
               {/* Code Snippet Box */}
               {currentQ.code_snippet ? (
-                <div className="bg-[#0d1515] border border-[#3b494b] rounded-xl overflow-hidden shadow-lg flex flex-col flex-grow">
-                  <div className="px-4 py-2 border-b border-[#3b494b] bg-[#151d1e]/40 flex items-center justify-between text-[10px] font-mono text-[#94A3B8]">
-                    <span>Snippet Reference</span>
-                    <span>Read-Only</span>
-                  </div>
-                  <div className="p-4 overflow-auto custom-scrollbar flex-1 font-mono text-xs text-[#94A3B8] leading-relaxed">
-                    <pre className="whitespace-pre">{currentQ.code_snippet}</pre>
-                  </div>
+                <div className="flex flex-col flex-grow">
+                  <CodeBlock
+                    code={currentQ.code_snippet}
+                    filePath={currentQ.file_path}
+                    lineStart={currentQ.line_start}
+                    lineEnd={currentQ.line_end}
+                  />
                 </div>
               ) : (
                 <div className="bg-[#0d1515] border border-[#3b494b] rounded-xl p-8 text-center text-[#94A3B8] italic flex items-center justify-center flex-grow">

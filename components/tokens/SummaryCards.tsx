@@ -45,7 +45,7 @@ export default function SummaryCards() {
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 select-none">
       
       {/* Consumed Progress ring widget */}
-      <div className="lg:col-span-2 bg-[#1E293B] border border-[#334155] p-6 sm:p-8 flex flex-col md:flex-row items-center justify-between gap-8 rounded-lg shadow-sm">
+      <div className="lg:col-span-2 bg-[#151d1e] border border-[#3b494b] p-6 sm:p-8 flex flex-col md:flex-row items-center justify-between gap-8 rounded-lg shadow-sm">
         <div className="space-y-4 flex flex-col items-center md:items-start text-center md:text-left">
           <div>
             <span className="text-[10px] text-[#94A3B8] uppercase tracking-widest font-bold block mb-1">
@@ -64,7 +64,7 @@ export default function SummaryCards() {
               <span className="text-[10px] text-[#94A3B8] font-mono">Reset Countdown</span>
               <span className="text-white font-bold uppercase mt-0.5">{timeLeft}</span>
             </div>
-            <div className="w-px h-8 bg-[#334155]"></div>
+            <div className="w-px h-8 bg-[#3b494b]"></div>
             <div className="flex flex-col">
               <span className="text-[10px] text-[#94A3B8] font-mono">Plan Tier</span>
               <span className="text-[#06B6D4] font-bold uppercase mt-0.5">{plan === 'pro' ? 'Professional' : plan === 'enterprise' ? 'Enterprise' : 'Basic Free'}</span>
@@ -76,7 +76,7 @@ export default function SummaryCards() {
         <div className="relative w-36 h-36 flex items-center justify-center shrink-0">
           <svg className="w-full h-full transform -rotate-90">
             <circle 
-              className="text-[#0F172A]" 
+              className="text-[#0d1515]" 
               cx="72" 
               cy="72" 
               fill="transparent" 
@@ -105,7 +105,7 @@ export default function SummaryCards() {
       </div>
 
       {/* Warning CTA Box */}
-      <div className="bg-[#1E293B] border border-[#334155] p-6 sm:p-8 flex flex-col justify-between rounded-lg relative overflow-hidden text-[#F1F5F9]">
+      <div className="bg-[#151d1e] border border-[#3b494b] p-6 sm:p-8 flex flex-col justify-between rounded-lg relative overflow-hidden text-[#F1F5F9]">
         <div className="relative z-10 flex flex-col justify-between h-full space-y-4">
           <div>
             <h4 className="text-base text-white font-bold flex items-center gap-2">
