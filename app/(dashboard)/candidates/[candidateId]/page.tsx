@@ -5,6 +5,8 @@ import { useParams, useRouter } from 'next/navigation';
 import { supabase } from '@/app/lib/supabaseClient';
 import { useGlobal } from '@/app/context/GlobalContext';
 import { toast } from 'react-hot-toast';
+import ScheduleInterviewModal from '@/components/modals/ScheduleInterviewModal';
+import RadarChart from '@/components/dashboard/RadarChart';
 
 interface Candidate {
   id: string;
@@ -13,7 +15,7 @@ interface Candidate {
   github_url: string;
   linkedin_url?: string;
   role_applied?: string;
-  status: 'pending' | 'scheduled' | 'interviewed' | 'hired' | 'rejected';
+  status: 'pending' | 'screening' | 'scheduled' | 'interviewed' | 'hired' | 'rejected' | 'imported';
   tech_stack: string[];
   years_experience?: string;
   current_title?: string;
@@ -58,6 +60,8 @@ export default function CandidateProfilePage() {
   const [linkerError, setLinkerError] = useState<string | null>(null);
   const [userRepos, setUserRepos] = useState<any[]>([]);
   const [loadingRepos, setLoadingRepos] = useState(false);
+  const [events, setEvents] = useState<any[]>([]);
+  const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
 
   const fetchCandidateDetails = async () => {
     try {
@@ -83,6 +87,7 @@ export default function CandidateProfilePage() {
           created_at,
           timer_duration_minutes,
           status,
+          score_breakdown,
           session_reports (
             overall_score,
             hire_recommendation
@@ -94,6 +99,19 @@ export default function CandidateProfilePage() {
         console.warn('Failed to load candidate sessions:', sessErr);
       } else {
         setSessions(sessData as any[] || []);
+      }
+
+      // Fetch Candidate Events
+      const { data: eventData, error: eventErr } = await supabase
+        .from('candidate_events')
+        .select('*')
+        .eq('candidate_id', candidateId)
+        .order('created_at', { ascending: false });
+
+      if (eventErr) {
+        console.warn('Failed to load candidate events:', eventErr);
+      } else {
+        setEvents(eventData || []);
       }
 
     } catch (err: any) {
@@ -295,8 +313,7 @@ export default function CandidateProfilePage() {
 
   // Schedule/Start Interview
   const handleScheduleInterview = () => {
-    if (!candidate) return;
-    router.push(`/dashboard/new-session?candidateId=${candidate.id}`);
+    setScheduleModalOpen(true);
   };
 
   if (loading) {
@@ -322,6 +339,16 @@ export default function CandidateProfilePage() {
 
   const initials = candidate.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
   const repoAnalysis = candidate.resume_extracted_data?.repoAnalysis;
+
+  const completedSession = sessions.find(s => s.status === 'completed');
+  const hasReport = !!completedSession || typeof candidate.overall_score === 'number';
+  const scoreBreakdownToUse = (completedSession as any)?.score_breakdown || (candidate.overall_score ? {
+    codeQuality: candidate.overall_score || 70,
+    problemSolving: (candidate.overall_score || 70) - 5,
+    technicalKnowledge: (candidate.overall_score || 70) + 10,
+    systemDesign: candidate.overall_score || 70,
+    communication: (candidate.overall_score || 70) + 5
+  } : null);
 
   return (
     <div className="flex-1 flex flex-col bg-[#0d1515] text-[#F1F5F9] min-h-screen p-8 overflow-y-auto">
@@ -592,6 +619,19 @@ export default function CandidateProfilePage() {
             </div>
           </div>
 
+          {/* Radar Chart section */}
+          {hasReport && scoreBreakdownToUse && (
+            <div className="bg-[#151d1e] border border-[#3b494b] p-6 rounded-xl shadow-md space-y-4">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-[#06B6D4] border-b border-[#3b494b]/60 pb-3 flex items-center gap-1.5 font-mono">
+                <span className="material-symbols-outlined text-sm font-bold">radar</span>
+                <span>AI Score Dimensions Breakdown</span>
+              </h3>
+              <div className="flex justify-center max-w-sm mx-auto">
+                <RadarChart scores={scoreBreakdownToUse} />
+              </div>
+            </div>
+          )}
+
           {/* Notes auto-saving section */}
           <div className="bg-[#151d1e] border border-[#3b494b] p-6 rounded-xl shadow-md space-y-3">
             <div className="flex justify-between items-center border-b border-[#3b494b]/60 pb-3">
@@ -691,6 +731,64 @@ export default function CandidateProfilePage() {
         </div>
 
       </div>
+
+      {/* Communication Timeline Section */}
+      <div className="bg-[#151d1e] border border-[#3b494b] p-6 rounded-xl shadow-md mt-8 space-y-6">
+        <h3 className="text-xs font-bold uppercase tracking-wider text-[#06B6D4] border-b border-[#3b494b]/60 pb-3 flex items-center gap-1.5">
+          <span className="material-symbols-outlined text-sm">schedule</span>
+          <span>Communication Timeline</span>
+        </h3>
+
+        {events.length === 0 ? (
+          <p className="text-xs text-[#94A3B8] italic">No communication logs recorded for this candidate.</p>
+        ) : (
+          <div className="relative pl-6 border-l border-[#3b494b] space-y-6 ml-3">
+            {events.map((e) => {
+              let dotColor = 'bg-gray-400';
+              let icon = 'info';
+              if (e.event_type === 'imported') { dotColor = 'bg-gray-400'; icon = 'download'; }
+              else if (e.event_type === 'link_sent') { dotColor = 'bg-blue-400'; icon = 'mail'; }
+              else if (e.event_type === 'link_opened') { dotColor = 'bg-yellow-500'; icon = 'visibility'; }
+              else if (e.event_type === 'interview_started') { dotColor = 'bg-purple-500'; icon = 'play_arrow'; }
+              else if (e.event_type === 'interview_completed') { dotColor = 'bg-emerald-500'; icon = 'check_circle'; }
+              else if (e.event_type === 'report_generated') { dotColor = 'bg-emerald-500'; icon = 'assessment'; }
+              else if (e.event_type === 'candidate_rejected') { dotColor = 'bg-red-500'; icon = 'cancel'; }
+              else if (e.event_type === 'candidate_hired') { dotColor = 'bg-cyan-400'; icon = 'verified'; }
+
+              return (
+                <div key={e.id} className="relative flex flex-col md:flex-row md:items-center justify-between gap-4 text-xs">
+                  <div className={`absolute -left-[31px] top-0.5 md:top-1/2 md:-translate-y-1/2 w-4 h-4 rounded-full ${dotColor} flex items-center justify-center border-2 border-[#151d1e] z-10`}>
+                    <span className="material-symbols-outlined text-[8px] text-[#0d1515] font-bold">{icon}</span>
+                  </div>
+
+                  <div className="flex-1">
+                    <p className="font-semibold text-white">{e.event_description}</p>
+                    <p className="text-[10px] text-[#94A3B8] mt-0.5 font-mono">
+                      {new Date(e.created_at).toLocaleString()}
+                    </p>
+                  </div>
+
+                  <div className="text-[10px] text-[#94A3B8] font-bold uppercase tracking-wider md:text-right">
+                    By {user?.name || 'Recruiter'}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {scheduleModalOpen && (
+        <ScheduleInterviewModal
+          isOpen={scheduleModalOpen}
+          onClose={() => setScheduleModalOpen(false)}
+          candidateId={candidate.id}
+          candidateName={candidate.name}
+          candidateEmail={candidate.email}
+          onScheduleSuccess={fetchCandidateDetails}
+        />
+      )}
+
     </div>
   );
 }

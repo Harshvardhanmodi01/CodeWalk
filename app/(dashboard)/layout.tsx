@@ -5,6 +5,7 @@ import Sidebar from '@/components/dashboard/Sidebar';
 import FloatingBatchProgress from '@/components/dashboard/FloatingBatchProgress';
 import { useGlobal } from '@/app/context/GlobalContext';
 import { useRouter, usePathname } from 'next/navigation';
+import { supabase } from '@/app/lib/supabaseClient';
 
 export default function DashboardLayout({
   children,
@@ -15,6 +16,7 @@ export default function DashboardLayout({
   const router = useRouter();
   const pathname = usePathname();
   const [mounted, setMounted] = useState(false);
+  const [authLoading, setAuthLoading] = useState(true);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
   useEffect(() => {
@@ -25,7 +27,25 @@ export default function DashboardLayout({
     setIsMobileSidebarOpen(false);
   }, [pathname]);
 
-  if (!mounted || !user) {
+  // Check Supabase session on mount
+  useEffect(() => {
+    const checkSession = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          router.push('/login');
+        } else {
+          setAuthLoading(false);
+        }
+      } catch (err) {
+        console.error('Session check failed:', err);
+        router.push('/login');
+      }
+    };
+    checkSession();
+  }, [router]);
+
+  if (!mounted || authLoading || !user) {
     return (
       <div className="min-h-screen bg-[#0d1515] flex items-center justify-center">
         <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-[#00dbe9]"></div>
