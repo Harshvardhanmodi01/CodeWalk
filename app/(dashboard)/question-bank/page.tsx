@@ -454,8 +454,7 @@ export default function QuestionBankDashboardPage() {
         category: cat,
         order_index: currentCount,
         show_expected_answer: false,
-        expected_answer: q.expected_answer,
-        shared_answer: null
+        expected_answer: q.expected_answer
       };
 
       const { error: insertErr } = await supabase
@@ -531,8 +530,7 @@ export default function QuestionBankDashboardPage() {
           category: cat,
           order_index: startingIdx + idx,
           show_expected_answer: false,
-          expected_answer: q.expected_answer,
-          shared_answer: null
+          expected_answer: q.expected_answer
         };
       });
 
