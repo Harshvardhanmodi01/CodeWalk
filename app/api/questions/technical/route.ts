@@ -33,7 +33,13 @@ async function collectCodeFiles(
 
 export async function POST(req: Request) {
   try {
-    const { repoUrl, difficulty, focus, jobDescription } = await req.json();
+    const body = await req.json();
+    const repoUrl = body.github_url || body.repoUrl;
+    const difficulty = body.difficulty || 'medium';
+    const focus = body.focus || ['All'];
+    const jobDescription = body.job_description || body.jobDescription;
+    const count = body.count || 12;
+
     if (!repoUrl) {
       return NextResponse.json({ error: 'Repository URL is required' }, { status: 400 });
     }
@@ -81,7 +87,7 @@ export async function POST(req: Request) {
         fileContentsMap.set(file.path, content);
         return {
           path: file.path,
-          content: content.slice(0, 3500) // send slightly larger content window to groq
+          content: content.slice(0, 3500)
         };
       } catch {
         return null;
@@ -107,11 +113,11 @@ export async function POST(req: Request) {
 1. Candidate's actual code from their GitHub repository
 2. Job description for the role they are applying for
 
-Generate 16 interview questions total split into these categories:
-- 5 questions directly about the candidate's actual code (reference specific functions, files, or patterns you see in their code) [question_type: code-based]
-- 5 questions that connect their code experience to the job requirements (e.g. if JD requires microservices and their code shows REST APIs, ask about scaling their approach) [question_type: jd-connected]
-- 3 questions about technologies mentioned in JD that are NOT in their code (to assess learning ability and gaps) [question_type: skill-gap]
-- 3 system design or architectural questions relevant to the job role [question_type: system-design]
+Generate ${count} interview questions total split into these categories:
+- Directly about the candidate's actual code (reference specific functions, files, or patterns you see in their code) [question_type: code-based]
+- Connect their code experience to the job requirements (e.g. if JD requires microservices and their code shows REST APIs, ask about scaling their approach) [question_type: jd-connected]
+- Technologies mentioned in JD that are NOT in their code (to assess learning ability and gaps) [question_type: skill-gap]
+- System design or architectural questions relevant to the job role [question_type: system-design]
 
 CRITICAL: The "file_path" field MUST match exactly one of the file paths provided in the codebase snippets for code-based and jd-connected questions. Do NOT invent new files or file paths.
 For skill-gap and system-design questions, file_path can be empty or "Custom Question", and code_snippet should be empty.
@@ -152,7 +158,7 @@ Return ONLY valid JSON. No markdown code blocks, no text surrounding the JSON. C
    ${fileContents.map(f => `--- FILE: ${f?.path} ---\n${f?.content}`).join('\n\n')}`;
    
        } else {
-         systemPrompt = `You are a senior technical interviewer. Analyze the provided codebase file snippets and generate 12 relevant interview questions.
+         systemPrompt = `You are a senior technical interviewer. Analyze the provided codebase file snippets and generate ${count} relevant interview questions.
    For each question, extract a specific code snippet from the file, and specify its lines.
    CRITICAL: The "file_path" field MUST match exactly one of the file paths provided in the codebase snippets. Do NOT invent new files or file paths.
    
@@ -202,80 +208,39 @@ Return ONLY valid JSON. No markdown code blocks, no text surrounding the JSON. C
     const resultText = completion.choices?.[0]?.message?.content || '{"questions":[]}';
     const parsed = JSON.parse(resultText);
 
-    // 3. Post-Process & Re-extract Code Snippets from full file content
     const rawQuestions = parsed.questions || [];
     const validQuestions: any[] = [];
 
     for (const q of rawQuestions) {
-      // If code snippet is associated with a file path, extract it from full content
       if (q.file_path && q.file_path !== 'Custom Question' && q.file_path.trim() !== '') {
         const fullContent = fileContentsMap.get(q.file_path);
-        if (!fullContent) {
-          // Skip if file not found in our fetched map
-          continue;
-        }
+        if (!fullContent) continue;
 
         const lines = fullContent.split('\n');
         const start = Math.max(1, parseInt(q.line_start) || 1);
         const end = Math.min(lines.length, parseInt(q.line_end) || start);
 
-        if (start > lines.length || end < start) {
-          // Skip if line range is invalid
-          continue;
-        }
+        if (start > lines.length || end < start) continue;
 
         const extractedLines = lines.slice(start - 1, end);
-        // Validate minimum 3 lines of actual non-empty/non-whitespace code
         const nonEmptyLines = extractedLines.filter(l => l.trim().length > 0);
-        if (nonEmptyLines.length < 3) {
-          // Skip if it contains less than 3 lines of actual code
-          continue;
-        }
+        if (nonEmptyLines.length < 3) continue;
 
-        // Replace with actual extracted content
         q.code_snippet = extractedLines.join('\n');
         q.line_start = start;
         q.line_end = end;
       } else {
-        // For skill-gap or system-design with no file_path, ensure code_snippet is empty
         q.code_snippet = '';
         q.line_start = 0;
         q.line_end = 0;
       }
-
       validQuestions.push(q);
     }
 
-    // Filter by type if JD is provided to make sure we match the target distribution
-    if (hasJD) {
-      const codeBased = validQuestions.filter(q => q.question_type === 'code-based');
-      const jdConnected = validQuestions.filter(q => q.question_type === 'jd-connected');
-      const skillGap = validQuestions.filter(q => q.question_type === 'skill-gap');
-      const systemDesign = validQuestions.filter(q => q.question_type === 'system-design');
-
-      // Slice to match exactly: 4, 4, 2, 2
-      const finalQuestions = [
-        ...codeBased.slice(0, 4),
-        ...jdConnected.slice(0, 4),
-        ...skillGap.slice(0, 2),
-        ...systemDesign.slice(0, 2)
-      ];
-
-      // If we fall short of 12 (due to failed validation), fill in with any remaining valid questions
-      if (finalQuestions.length < 12) {
-        const usedIds = new Set(finalQuestions.map(q => q.question_text));
-        const remaining = validQuestions.filter(q => !usedIds.has(q.question_text));
-        finalQuestions.push(...remaining.slice(0, 12 - finalQuestions.length));
-      }
-
-      return NextResponse.json({ questions: finalQuestions });
-    } else {
-      // Standard flow: slice to 10 or 12 questions
-      return NextResponse.json({ questions: validQuestions.slice(0, 12) });
-    }
+    return NextResponse.json({ questions: validQuestions.slice(0, count) });
 
   } catch (err: any) {
-    console.error('Session questions API error:', err);
+    console.error('API technical questions error:', err);
     return NextResponse.json({ error: err.message || 'Internal Server Error' }, { status: 500 });
   }
 }

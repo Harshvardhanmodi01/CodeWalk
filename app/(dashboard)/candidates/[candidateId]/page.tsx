@@ -32,6 +32,7 @@ interface SessionItem {
   created_at: string;
   timer_duration_minutes: number;
   status: string;
+  interview_mode?: string;
   session_reports?: {
     overall_score: number;
     hire_recommendation: string;
@@ -88,6 +89,7 @@ export default function CandidateProfilePage() {
           timer_duration_minutes,
           status,
           score_breakdown,
+          interview_mode,
           session_reports (
             overall_score,
             hire_recommendation
@@ -694,33 +696,61 @@ export default function CandidateProfilePage() {
             {sessions.length === 0 ? (
               <p className="text-xs text-[#475569] italic text-center py-4">No past sessions recorded.</p>
             ) : (
-              <div className="space-y-3 max-h-[300px] overflow-y-auto custom-scrollbar">
-                {sessions.map((sess) => {
-                  const report = sess.session_reports?.[0];
+              <div className="space-y-4 max-h-[300px] overflow-y-auto custom-scrollbar">
+                {Object.entries(
+                  sessions.reduce((groups: Record<string, SessionItem[]>, sess) => {
+                    const mode = sess.interview_mode || 'technical';
+                    if (!groups[mode]) groups[mode] = [];
+                    groups[mode].push(sess);
+                    return groups;
+                  }, {})
+                ).map(([mode, modeSess]) => {
+                  const modeColors: Record<string, string> = {
+                    technical: 'text-[#06B6D4] border-[#06B6D4]/30',
+                    behavioral: 'text-purple-400 border-purple-500/30',
+                    logical: 'text-orange-400 border-orange-500/30',
+                    fullstack: 'text-emerald-400 border-emerald-500/30',
+                    custom: 'text-gray-400 border-gray-500/30'
+                  };
                   return (
-                    <div key={sess.id} className="bg-[#0d1515] border border-[#3b494b]/60 p-3 rounded-lg text-xs flex justify-between items-center">
-                      <div>
-                        <p className="font-semibold text-white">45 Min Interview</p>
-                        <p className="text-[10px] text-[#94A3B8] mt-0.5">{new Date(sess.created_at).toLocaleDateString()}</p>
-                      </div>
-                      <div className="text-right">
-                        {report ? (
-                          <>
-                            <p className="font-bold text-emerald-400 font-mono">{report.overall_score}%</p>
-                            <button
-                              onClick={() => router.push(`/session/${sess.id}/report`)}
-                              className="text-[9px] text-[#06B6D4] hover:underline uppercase font-bold mt-1 block"
-                            >
-                              View Report
-                            </button>
-                          </>
-                        ) : (
-                          <span className={`px-2 py-0.5 rounded text-[8px] font-bold uppercase ${
-                            sess.status === 'active' ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20' : 'bg-slate-500/10 text-slate-400 border border-slate-500/20'
-                          }`}>
-                            {sess.status}
-                          </span>
-                        )}
+                    <div key={mode} className="space-y-2">
+                      <h4 className={`text-[10px] font-bold uppercase tracking-wider pl-1.5 border-l-2 capitalize ${modeColors[mode] || 'text-[#06B6D4] border-[#06B6D4]'}`}>
+                        {mode === 'technical' ? 'Technical Code' :
+                         mode === 'behavioral' ? 'HR Behavioral' :
+                         mode === 'logical' ? 'Logical Thinking' :
+                         mode === 'fullstack' ? 'Full Stack' : mode} Mode
+                      </h4>
+                      <div className="space-y-2">
+                        {modeSess.map((sess) => {
+                          const report = sess.session_reports?.[0];
+                          return (
+                            <div key={sess.id} className="bg-[#0d1515] border border-[#3b494b]/60 p-3 rounded-lg text-xs flex justify-between items-center">
+                              <div>
+                                <p className="font-semibold text-white">{sess.timer_duration_minutes} Min Interview</p>
+                                <p className="text-[10px] text-[#94A3B8] mt-0.5">{new Date(sess.created_at).toLocaleDateString()}</p>
+                              </div>
+                              <div className="text-right">
+                                {report ? (
+                                  <>
+                                    <p className="font-bold text-emerald-400 font-mono">{report.overall_score}%</p>
+                                    <button
+                                      onClick={() => router.push(`/session/${sess.id}/report`)}
+                                      className="text-[9px] text-[#06B6D4] hover:underline uppercase font-bold mt-1 block cursor-pointer"
+                                    >
+                                      View Report
+                                    </button>
+                                  </>
+                                ) : (
+                                  <span className={`px-2 py-0.5 rounded text-[8px] font-bold uppercase ${
+                                    sess.status === 'active' ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20' : 'bg-slate-500/10 text-slate-400 border border-slate-500/20'
+                                  }`}>
+                                    {sess.status}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   );

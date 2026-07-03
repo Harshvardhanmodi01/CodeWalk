@@ -14,11 +14,12 @@ interface QuestionItem {
   line_start: number;
   line_end: number;
   difficulty: 'easy' | 'medium' | 'hard';
-  category: 'frontend' | 'backend' | 'dsa' | 'system-design' | 'behavioral';
-  question_type?: 'code-based' | 'jd-connected' | 'skill-gap' | 'system-design';
+  category: string;
+  question_type?: 'code-based' | 'jd-connected' | 'skill-gap' | 'system-design' | 'behavioral' | 'logical' | 'custom';
   why_asked?: string;
-  follow_up_questions?: string[];
   expected_answer?: string;
+  follow_up_questions?: string[];
+  options?: string[];
 }
 
 function NewSessionFlowContent() {
@@ -30,10 +31,17 @@ function NewSessionFlowContent() {
   const { user, refreshUserData } = useGlobal();
   
   // Step tracker
+  // Step 1: Selection & Details setup
+  // Step 2: Code analysis (Technical/Fullstack/Custom-with-tech only)
+  // Step 3: Questions list audit & adjustments
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   
+  // Interview Mode Selection State
+  // Mode selection is open by default (Step 0 view, rendered when interviewMode is null)
+  const [interviewMode, setInterviewMode] = useState<'technical' | 'behavioral' | 'logical' | 'fullstack' | 'custom' | null>(null);
+
   // Form State
   const [candidateName, setCandidateName] = useState('');
   const [candidateEmail, setCandidateEmail] = useState('');
@@ -42,6 +50,28 @@ function NewSessionFlowContent() {
   const [difficulty, setDifficulty] = useState<'easy' | 'medium' | 'hard' | 'mixed'>('medium');
   const [focus, setFocus] = useState<string[]>(['All']);
   const [jobDescription, setJobDescription] = useState('');
+
+  // Behavioral Specific Setup
+  const [roleTitle, setRoleTitle] = useState('');
+  const [experienceLevel, setExperienceLevel] = useState<'junior' | 'mid-level' | 'senior' | 'lead'>('mid-level');
+
+  // Logical Specific Setup
+  const [logicalTimerMinutes, setLogicalTimerMinutes] = useState('2');
+
+  // Custom Mode Builder Setup
+  const [customSections, setCustomSections] = useState({
+    technical: true,
+    behavioral: false,
+    logical: false,
+    custom: false
+  });
+  const [customCounts, setCustomCounts] = useState({
+    technical: 5,
+    behavioral: 5,
+    logical: 5,
+    custom: 5
+  });
+  const [customQuestionsInput, setCustomQuestionsInput] = useState('');
 
   // Git repositories list state
   const [gitRepos, setGitRepos] = useState<any[]>([]);
@@ -148,19 +178,32 @@ function NewSessionFlowContent() {
     return pattern.test(url.trim());
   };
 
-  // Step 1: Analyze Repository
-  const handleAnalyzeRepo = async (e: React.FormEvent) => {
+  // Check if current setup mode requires GitHub code repository
+  const requiresRepo = () => {
+    if (interviewMode === 'technical' || interviewMode === 'fullstack') return true;
+    if (interviewMode === 'custom' && customSections.technical) return true;
+    return false;
+  };
+
+  // Step 1: Submit Setup Form
+  const handleSetupSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    
-    if (!candidateName.trim() || !candidateEmail.trim() || !repoUrl.trim()) {
-      setError('Please fill in all fields.');
+
+    if (!candidateName.trim() || !candidateEmail.trim()) {
+      setError('Please fill in candidate name and email.');
       return;
     }
 
-    if (!validateGithubUrl(repoUrl)) {
-      setError('Invalid GitHub URL. Must match https://github.com/owner/repo');
-      return;
+    if (requiresRepo()) {
+      if (!repoUrl.trim()) {
+        setError('GitHub Repository URL is required for this mode.');
+        return;
+      }
+      if (!validateGithubUrl(repoUrl)) {
+        setError('Invalid GitHub URL. Must match https://github.com/owner/repo');
+        return;
+      }
     }
 
     // Token limit validation
@@ -175,50 +218,160 @@ function NewSessionFlowContent() {
       }
     }
 
-    setLoading(true);
-    try {
-      const res = await fetch('/api/session/analyze', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ repoUrl })
-      });
-      
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Repository analysis failed.');
-      
-      setAnalysisData(data.analysis);
-      setGithubAvatar(data.githubAvatarUrl || `https://github.com/${data.owner}.png`);
-      setStep(2);
-    } catch (err: any) {
-      setError(err.message || 'An error occurred during repo analysis.');
-    } finally {
-      setLoading(false);
+    if (requiresRepo()) {
+      // If code is needed, trigger repository analysis first (Step 2)
+      setLoading(true);
+      try {
+        const res = await fetch('/api/session/analyze', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ repoUrl })
+        });
+        
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Repository analysis failed.');
+        
+        setAnalysisData(data.analysis);
+        setGithubAvatar(data.githubAvatarUrl || `https://github.com/${data.owner}.png`);
+        setStep(2);
+      } catch (err: any) {
+        setError(err.message || 'An error occurred during repo analysis.');
+      } finally {
+        setLoading(false);
+      }
+    } else {
+      // If no code repository required, skip Step 2 and generate questions directly
+      await generateAllQuestions();
     }
   };
 
-  // Step 2: Generate Questions
-  const handleGenerateQuestions = async () => {
+  // Generate Questions for the current mode
+  const generateAllQuestions = async () => {
     setError('');
     setLoading(true);
     try {
-      const res = await fetch('/api/session/questions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          repoUrl,
-          difficulty,
-          focus,
-          jobDescription
-        })
-      });
+      let allQs: QuestionItem[] = [];
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to generate questions.');
+      if (interviewMode === 'technical') {
+        const res = await fetch('/api/questions/technical', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            repoUrl,
+            difficulty,
+            focus,
+            jobDescription,
+            count: 12
+          })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to generate technical questions.');
+        allQs = data.questions || [];
 
-      setQuestions(data.questions || []);
+      } else if (interviewMode === 'behavioral') {
+        const res = await fetch('/api/questions/behavioral', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            role_title: roleTitle || 'Software Engineer',
+            experience_level: experienceLevel,
+            count: 10
+          })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to generate behavioral questions.');
+        allQs = data.questions || [];
+
+      } else if (interviewMode === 'logical') {
+        const res = await fetch('/api/questions/logical', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            count: 15
+          })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to generate logical questions.');
+        allQs = data.questions || [];
+
+      } else if (interviewMode === 'fullstack') {
+        // Tech (8)
+        const techRes = await fetch('/api/questions/technical', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ repoUrl, difficulty, focus, jobDescription, count: 8 })
+        });
+        const techData = await techRes.json();
+        if (techRes.ok && techData.questions) allQs.push(...techData.questions);
+
+        // Behavioral (5)
+        const behRes = await fetch('/api/questions/behavioral', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ role_title: roleTitle || 'Software Engineer', experience_level: experienceLevel, count: 5 })
+        });
+        const behData = await behRes.json();
+        if (behRes.ok && behData.questions) allQs.push(...behData.questions);
+
+        // Logical (5)
+        const logRes = await fetch('/api/questions/logical', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ count: 5 })
+        });
+        const logData = await logRes.json();
+        if (logRes.ok && logData.questions) allQs.push(...logData.questions);
+
+      } else if (interviewMode === 'custom') {
+        if (customSections.technical) {
+          const techRes = await fetch('/api/questions/technical', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ repoUrl, difficulty, focus, jobDescription, count: customCounts.technical })
+          });
+          const techData = await techRes.json();
+          if (techRes.ok && techData.questions) allQs.push(...techData.questions);
+        }
+
+        if (customSections.behavioral) {
+          const behRes = await fetch('/api/questions/behavioral', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ role_title: roleTitle || 'Software Engineer', experience_level: experienceLevel, count: customCounts.behavioral })
+          });
+          const behData = await behRes.json();
+          if (behRes.ok && behData.questions) allQs.push(...behData.questions);
+        }
+
+        if (customSections.logical) {
+          const logRes = await fetch('/api/questions/logical', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ count: customCounts.logical })
+          });
+          const logData = await logRes.json();
+          if (logRes.ok && logData.questions) allQs.push(...logData.questions);
+        }
+
+        if (customSections.custom) {
+          const custRes = await fetch('/api/questions/custom', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ questions_text: customQuestionsInput })
+          });
+          const custData = await custRes.json();
+          if (custRes.ok && custData.questions) allQs.push(...custData.questions);
+        }
+      }
+
+      if (allQs.length === 0) {
+        throw new Error('Could not generate any questions. Please try again.');
+      }
+
+      setQuestions(allQs);
       setStep(3);
     } catch (err: any) {
-      setError(err.message || 'An error occurred while generating questions.');
+      setError(err.message || 'An error occurred during question generation.');
     } finally {
       setLoading(false);
     }
@@ -253,7 +406,7 @@ function NewSessionFlowContent() {
       line_start: 0,
       line_end: 0,
       difficulty: 'medium',
-      category: 'system-design'
+      category: 'custom'
     };
 
     setQuestions([...questions, newQ]);
@@ -283,7 +436,7 @@ function NewSessionFlowContent() {
         .insert({
           name: candidateName.trim(),
           email: candidateEmail.trim(),
-          github_url: repoUrl.trim()
+          github_url: requiresRepo() ? repoUrl.trim() : ''
         })
         .select()
         .single();
@@ -296,17 +449,26 @@ function NewSessionFlowContent() {
         .insert({
           recruiter_id: user?.id,
           candidate_id: candData.id,
-          repo_url: repoUrl.trim(),
+          repo_url: requiresRepo() ? repoUrl.trim() : '',
           status: 'active',
           timer_duration_minutes: parseInt(duration),
-          remaining_seconds: parseInt(duration) * 60 // initialize remaining_seconds
+          remaining_seconds: parseInt(duration) * 60,
+          interview_mode: interviewMode,
+          mode_config: {
+            customSections,
+            customCounts,
+            roleTitle,
+            experienceLevel,
+            logicalTimerMinutes: parseInt(logicalTimerMinutes)
+          },
+          custom_questions: customSections.custom ? customQuestionsInput.split('\n').filter(Boolean) : []
         })
         .select()
         .single();
 
       if (sessErr) throw sessErr;
 
-      // 3. Create Session Report record (pre-created or overall story summary saved)
+      // 3. Create Session Report record
       const { error: repErr } = await supabase
         .from('session_reports')
         .insert({
@@ -320,18 +482,19 @@ function NewSessionFlowContent() {
 
       if (repErr) console.warn('Failed to pre-create session report:', repErr);
 
-      // 4. Create Questions records
+      // 4. Create Questions records (with options array check)
       const formattedQs = questions.map((q, idx) => ({
         session_id: sessData.id,
         question_text: q.question_text,
-        code_snippet: q.code_snippet,
-        file_path: q.file_path,
-        line_start: q.line_start,
-        line_end: q.line_end,
-        difficulty: q.difficulty,
-        category: q.category,
+        code_snippet: q.code_snippet || '',
+        file_path: q.file_path || 'Custom Question',
+        line_start: q.line_start || 0,
+        line_end: q.line_end || 0,
+        difficulty: q.difficulty || 'medium',
+        category: q.category || 'custom',
         order_index: idx,
-        expected_answer: q.expected_answer
+        expected_answer: q.expected_answer ? q.expected_answer : null,
+        options: q.options || []
       }));
 
       const { error: qsErr } = await supabase
@@ -353,7 +516,7 @@ function NewSessionFlowContent() {
         await refreshUserData();
       }
 
-      // Redirect to live recruiter interview workspace
+      toast.success('Interview successfully initiated!');
       router.push(`/session/${sessData.id}`);
     } catch (err: any) {
       setError(err.message || 'Failed to initialize session in database.');
@@ -361,18 +524,156 @@ function NewSessionFlowContent() {
     }
   };
 
+  // RENDER INTERVIEW MODE SELECTION SCREEN (STEP 0)
+  if (interviewMode === null) {
+    return (
+      <div className="flex-grow flex flex-col items-center justify-center p-8 bg-[#0d1515] text-[#F1F5F9] min-h-[calc(100vh-4rem)]">
+        <div className="max-w-4xl w-full space-y-8 pb-12">
+          <div className="text-center space-y-3">
+            <h1 className="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-white to-[#b9cacb] bg-clip-text text-transparent">
+              Choose Interview Mode
+            </h1>
+            <p className="text-sm text-[#94A3B8] max-w-xl mx-auto">
+              Select the type of interview you want to conduct — the interface will adapt automatically to support coding, behavioral ratings, or timers.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            
+            {/* Mode 1: Technical */}
+            <div className="bg-[#151d1e] border border-[#3b494b] hover:border-[#06B6D4] p-6 rounded-xl transition-all hover:-translate-y-1 hover:shadow-xl flex flex-col justify-between group">
+              <div className="space-y-4">
+                <div className="flex justify-between items-start">
+                  <span className="material-symbols-outlined text-4xl text-[#06B6D4] bg-[#06B6D4]/10 p-2 rounded-lg">code</span>
+                  <span className="bg-[#06B6D4]/20 text-[#06B6D4] text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">Most Popular</span>
+                </div>
+                <h3 className="text-md font-bold text-white group-hover:text-[#06B6D4] transition-colors">Technical Code Interview</h3>
+                <p className="text-xs text-[#94A3B8] leading-relaxed">
+                  AI generates questions directly from candidate&apos;s GitHub repository. Deep dive into their actual code, architecture decisions, and patterns.
+                </p>
+              </div>
+              <button 
+                onClick={() => setInterviewMode('technical')}
+                className="mt-6 w-full py-2 bg-[#06B6D4] text-[#0d1515] font-bold text-xs uppercase tracking-wider rounded-lg transition-all active:scale-95 cursor-pointer text-center"
+              >
+                Select
+              </button>
+            </div>
+
+            {/* Mode 2: HR Behavioral */}
+            <div className="bg-[#151d1e] border border-[#3b494b] hover:border-purple-500 p-6 rounded-xl transition-all hover:-translate-y-1 hover:shadow-xl flex flex-col justify-between group">
+              <div className="space-y-4">
+                <div className="flex justify-between items-start">
+                  <span className="material-symbols-outlined text-4xl text-purple-400 bg-purple-500/10 p-2 rounded-lg">chat</span>
+                </div>
+                <h3 className="text-md font-bold text-white group-hover:text-purple-400 transition-colors">HR &amp; Behavioral Round</h3>
+                <p className="text-xs text-[#94A3B8] leading-relaxed">
+                  Structured behavioral interview with STAR-format questions. Assess communication, teamwork, leadership potential, and culture fit.
+                </p>
+              </div>
+              <button 
+                onClick={() => setInterviewMode('behavioral')}
+                className="mt-6 w-full py-2 bg-purple-500 text-white font-bold text-xs uppercase tracking-wider rounded-lg transition-all active:scale-95 cursor-pointer text-center"
+              >
+                Select
+              </button>
+            </div>
+
+            {/* Mode 3: Logical Round */}
+            <div className="bg-[#151d1e] border border-[#3b494b] hover:border-orange-500 p-6 rounded-xl transition-all hover:-translate-y-1 hover:shadow-xl flex flex-col justify-between group">
+              <div className="space-y-4">
+                <div className="flex justify-between items-start">
+                  <span className="material-symbols-outlined text-4xl text-orange-400 bg-orange-500/10 p-2 rounded-lg">psychology</span>
+                </div>
+                <h3 className="text-md font-bold text-white group-hover:text-orange-400 transition-colors">Logical Thinking &amp; Aptitude</h3>
+                <p className="text-xs text-[#94A3B8] leading-relaxed">
+                  Test analytical thinking, pattern recognition, logical deduction, and cognitive ability through scenario and multiple-choice questions.
+                </p>
+              </div>
+              <button 
+                onClick={() => setInterviewMode('logical')}
+                className="mt-6 w-full py-2 bg-orange-500 text-white font-bold text-xs uppercase tracking-wider rounded-lg transition-all active:scale-95 cursor-pointer text-center"
+              >
+                Select
+              </button>
+            </div>
+
+            {/* Mode 4: Full Stack */}
+            <div className="bg-[#151d1e] border border-[#3b494b] hover:border-emerald-500 p-6 rounded-xl transition-all hover:-translate-y-1 hover:shadow-xl flex flex-col justify-between group">
+              <div className="space-y-4">
+                <div className="flex justify-between items-start">
+                  <span className="material-symbols-outlined text-4xl text-emerald-400 bg-emerald-500/10 p-2 rounded-lg">layers</span>
+                  <span className="bg-emerald-500/20 text-emerald-400 text-[8px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider text-center">Final Round</span>
+                </div>
+                <h3 className="text-md font-bold text-white group-hover:text-emerald-400 transition-colors">Full Stack Interview</h3>
+                <p className="text-xs text-[#94A3B8] leading-relaxed">
+                  Complete evaluation combining technical repository questions, behavioral assessment, and logical thinking rounds. Tabbed interface.
+                </p>
+              </div>
+              <button 
+                onClick={() => setInterviewMode('fullstack')}
+                className="mt-6 w-full py-2 bg-emerald-500 text-[#0d1515] font-bold text-xs uppercase tracking-wider rounded-lg transition-all active:scale-95 cursor-pointer text-center"
+              >
+                Select
+              </button>
+            </div>
+
+            {/* Mode 5: Custom */}
+            <div className="bg-[#151d1e] border border-[#3b494b] hover:border-gray-400 p-6 rounded-xl transition-all hover:-translate-y-1 hover:shadow-xl flex flex-col justify-between group">
+              <div className="space-y-4">
+                <div className="flex justify-between items-start">
+                  <span className="material-symbols-outlined text-4xl text-gray-400 bg-gray-500/10 p-2 rounded-lg">settings</span>
+                </div>
+                <h3 className="text-md font-bold text-white group-hover:text-gray-400 transition-colors">Custom Interview</h3>
+                <p className="text-xs text-[#94A3B8] leading-relaxed">
+                  Build your own interview template. Select exactly which sections to include, custom question counts, and recruiter-provided questions.
+                </p>
+              </div>
+              <button 
+                onClick={() => setInterviewMode('custom')}
+                className="mt-6 w-full py-2 bg-gray-600 text-white font-bold text-xs uppercase tracking-wider rounded-lg transition-all active:scale-95 cursor-pointer text-center"
+              >
+                Select
+              </button>
+            </div>
+
+          </div>
+
+          <div className="text-center pt-4">
+            <button 
+              onClick={() => router.push('/dashboard')}
+              className="text-xs text-[#94A3B8] hover:text-white transition-colors underline cursor-pointer"
+            >
+              Cancel and return to Dashboard
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // RENDER INTERVIEW BUILDER / SETUP PAGE
   return (
     <div className="flex-1 flex flex-col bg-[#0d1515] text-[#F1F5F9] min-h-screen">
       {/* Top Header Bar */}
       <header className="flex justify-between items-center px-8 py-4 bg-[#151d1e] w-full border-b border-[#3b494b] z-10 select-none">
         <div className="flex items-center gap-3">
           <button 
-            onClick={() => router.push('/dashboard')}
+            onClick={() => {
+              if (step > 1) {
+                setStep((step - 1) as any);
+              } else {
+                setInterviewMode(null);
+              }
+            }}
             className="text-[#94A3B8] hover:text-[#06B6D4] p-1 rounded hover:bg-[#0d1515] transition-colors"
           >
             <span className="material-symbols-outlined text-lg font-bold">arrow_back</span>
           </button>
           <span className="font-extrabold text-lg text-[#06B6D4] tracking-tight">CodeWalk Recopilot</span>
+          <span className="text-xs px-2 py-0.5 rounded uppercase font-bold bg-[#3b494b]/50 text-white">
+            {interviewMode}
+          </span>
         </div>
         <div className="flex items-center gap-4 text-xs font-mono text-[#94A3B8]">
           <span className={step === 1 ? 'text-[#06B6D4] font-bold' : ''}>1. Candidate</span>
@@ -393,15 +694,25 @@ function NewSessionFlowContent() {
             </div>
           )}
 
-          {/* STEP 1: CANDIDATE DETAILS FORM */}
+          {/* STEP 1: INTERVIEW PARAMETERS DETAILS FORM */}
           {step === 1 && (
             <div className="bg-[#151d1e] border border-[#3b494b] p-8 rounded-xl shadow-xl space-y-6">
-              <div className="border-b border-[#3b494b] pb-4">
-                <h2 className="text-xl font-bold">Step 1 — Candidate & Repo Details</h2>
-                <p className="text-xs text-[#94A3B8] mt-1">Configure candidate parameters and target repository URL to parse.</p>
+              <div className="border-b border-[#3b494b] pb-4 flex justify-between items-center">
+                <div>
+                  <h2 className="text-xl font-bold">Step 1 — Interview Parameters</h2>
+                  <p className="text-xs text-[#94A3B8] mt-1">Configure candidate parameters for the {interviewMode} session.</p>
+                </div>
+                <button
+                  onClick={() => setInterviewMode(null)}
+                  className="text-xs text-[#06B6D4] hover:underline"
+                >
+                  Change Mode
+                </button>
               </div>
 
-              <form onSubmit={handleAnalyzeRepo} className="space-y-6">
+              <form onSubmit={handleSetupSubmit} className="space-y-6">
+                
+                {/* Standard Candidate Details */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-1.5">
                     <label className="text-xs font-bold text-[#94A3B8] uppercase tracking-wider block">Candidate Name</label>
@@ -427,160 +738,345 @@ function NewSessionFlowContent() {
                   </div>
                 </div>
 
-                <div className="space-y-2">
-                  <div className="flex justify-between items-center">
-                    <label className="text-xs font-bold text-[#94A3B8] uppercase tracking-wider block">GitHub Repository URL</label>
-                    {user?.githubConnected && (
-                      <div className="flex bg-[#0d1515] p-0.5 rounded border border-[#3b494b] text-[10px] font-bold">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setRepoSource('dropdown');
-                            if (gitRepos.length > 0) setRepoUrl(gitRepos[0].html_url);
-                          }}
-                          className={`px-2.5 py-1 rounded transition-all ${
-                            repoSource === 'dropdown'
-                              ? 'bg-[#06B6D4] text-[#0d1515]'
-                              : 'text-[#94A3B8] hover:text-[#F1F5F9]'
-                          }`}
-                        >
-                          Select Repo
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setRepoSource('custom');
-                            setRepoUrl('');
-                          }}
-                          className={`px-2.5 py-1 rounded transition-all ${
-                            repoSource === 'custom'
-                              ? 'bg-[#06B6D4] text-[#0d1515]'
-                              : 'text-[#94A3B8] hover:text-[#F1F5F9]'
-                          }`}
-                        >
-                          Custom URL
-                        </button>
-                      </div>
-                    )}
-                  </div>
-
-                  {user?.githubConnected && repoSource === 'dropdown' ? (
-                    fetchingRepos ? (
-                      <div className="w-full bg-[#0d1515] border border-[#3b494b] px-4 py-3 rounded-lg flex items-center justify-center gap-2 text-xs text-[#94A3B8]">
-                        <span className="material-symbols-outlined text-sm animate-spin">sync</span>
-                        Fetching repositories from GitHub...
-                      </div>
-                    ) : gitRepos.length === 0 ? (
-                      <div className="w-full bg-[#0d1515] border border-dashed border-[#3b494b] px-4 py-3 rounded-lg text-center text-xs text-[#94A3B8]">
-                        No repositories found. Ensure your GitHub account has repositories or use a Custom URL.
-                      </div>
-                    ) : (
-                      <select
-                        value={repoUrl}
-                        onChange={(e) => setRepoUrl(e.target.value)}
+                {/* Behavioral Details (Modes: Behavioral, Full Stack, Custom-with-Behavioral) */}
+                {(interviewMode === 'behavioral' || interviewMode === 'fullstack' || (interviewMode === 'custom' && customSections.behavioral)) && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-[#0d1515]/30 p-4 border border-[#3b494b]/50 rounded-lg">
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-[#94A3B8] uppercase tracking-wider block">Target Position/Role Title</label>
+                      <input 
+                        required
+                        value={roleTitle}
+                        onChange={(e) => setRoleTitle(e.target.value)}
+                        className="w-full bg-[#0d1515] border border-[#3b494b] px-4 py-2.5 rounded-lg text-sm focus:outline-none focus:border-[#06B6D4] transition-colors"
+                        placeholder="Frontend Engineer / Product Manager"
+                        type="text"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-[#94A3B8] uppercase tracking-wider block">Experience Level</label>
+                      <select 
+                        value={experienceLevel}
+                        onChange={(e: any) => setExperienceLevel(e.target.value)}
                         className="w-full bg-[#0d1515] border border-[#3b494b] px-4 py-2.5 rounded-lg text-sm focus:outline-none focus:border-[#06B6D4] transition-colors"
                       >
-                        {gitRepos.map((repo: any) => (
-                          <option key={repo.id} value={repo.html_url}>
-                            {repo.full_name} {repo.language ? `(${repo.language})` : ''}
-                          </option>
-                        ))}
+                        <option value="junior">Junior (1-2 years)</option>
+                        <option value="mid-level">Mid-Level (3-5 years)</option>
+                        <option value="senior">Senior (5-8 years)</option>
+                        <option value="lead">Lead/Principal (8+ years)</option>
                       </select>
-                    )
-                  ) : (
-                    <input 
-                      required
-                      value={repoUrl}
-                      onChange={(e) => setRepoUrl(e.target.value)}
-                      className="w-full bg-[#0d1515] border border-[#3b494b] px-4 py-2.5 rounded-lg text-sm font-mono focus:outline-none focus:border-[#06B6D4] transition-colors"
-                      placeholder="https://github.com/owner/repo"
-                      type="text"
-                    />
-                  )}
-                </div>
-
-                <div className="space-y-1.5">
-                  <div className="flex justify-between items-center">
-                    <label className="text-xs font-bold text-[#94A3B8] uppercase tracking-wider block">Job Description (Optional)</label>
-                    <span className="text-[10px] text-[#94A3B8]">{jobDescription.length} / 5000</span>
-                  </div>
-                  <textarea
-                    value={jobDescription}
-                    onChange={(e) => setJobDescription(e.target.value.slice(0, 5000))}
-                    className="w-full bg-[#0d1515] border border-[#3b494b] px-4 py-3 rounded-lg text-xs focus:outline-none focus:border-[#06B6D4] transition-colors resize-y min-h-[120px] text-[#F1F5F9] placeholder-muted-text/50"
-                    placeholder="Paste the job description here — AI will generate questions matching both the candidate's code and the role requirements"
-                    rows={4}
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-[#94A3B8] uppercase tracking-wider block">Duration</label>
-                    <select 
-                      value={duration}
-                      onChange={(e) => setDuration(e.target.value)}
-                      className="w-full bg-[#0d1515] border border-[#3b494b] px-4 py-2.5 rounded-lg text-sm focus:outline-none focus:border-[#06B6D4] transition-colors"
-                    >
-                      <option value="30">30 Minutes</option>
-                      <option value="45">45 Minutes</option>
-                      <option value="60">60 Minutes</option>
-                      <option value="90">90 Minutes</option>
-                    </select>
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-[#94A3B8] uppercase tracking-wider block">Difficulty</label>
-                    <div className="grid grid-cols-4 gap-2 bg-[#0d1515] p-1 border border-[#3b494b] rounded-lg text-xs font-bold text-center">
-                      {(['easy', 'medium', 'hard', 'mixed'] as const).map((d) => (
-                        <button
-                          key={d}
-                          type="button"
-                          onClick={() => setDifficulty(d)}
-                          className={`py-2 rounded capitalize transition-all ${difficulty === d ? 'bg-[#06B6D4] text-[#0d1515]' : 'text-[#94A3B8] hover:text-[#F1F5F9]'}`}
-                        >
-                          {d}
-                        </button>
-                      ))}
                     </div>
                   </div>
+                )}
+
+                {/* Logical Details (Modes: Logical) */}
+                {interviewMode === 'logical' && (
+                  <div className="space-y-1.5 bg-[#0d1515]/30 p-4 border border-[#3b494b]/50 rounded-lg">
+                    <label className="text-xs font-bold text-[#94A3B8] uppercase tracking-wider block">Question Timer (minutes per question)</label>
+                    <select 
+                      value={logicalTimerMinutes}
+                      onChange={(e) => setLogicalTimerMinutes(e.target.value)}
+                      className="w-full max-w-xs bg-[#0d1515] border border-[#3b494b] px-4 py-2.5 rounded-lg text-sm focus:outline-none focus:border-[#06B6D4] transition-colors"
+                    >
+                      <option value="1">1 Minute</option>
+                      <option value="2">2 Minutes (Default)</option>
+                      <option value="3">3 Minutes</option>
+                    </select>
+                  </div>
+                )}
+
+                {/* Custom Builder UI (Mode: Custom) */}
+                {interviewMode === 'custom' && (
+                  <div className="bg-[#0d1515]/30 p-6 border border-[#3b494b]/50 rounded-lg space-y-6">
+                    <h4 className="text-sm font-bold uppercase text-[#06B6D4] border-b border-[#3b494b]/40 pb-2">Custom Interview Sections</h4>
+                    
+                    <div className="space-y-4">
+                      {/* Technical Checkbox + Slider */}
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <label className="flex items-center gap-3 text-sm font-semibold select-none cursor-pointer">
+                            <input 
+                              type="checkbox"
+                              checked={customSections.technical}
+                              onChange={(e) => setCustomSections(prev => ({ ...prev, technical: e.target.checked }))}
+                              className="h-4 w-4 rounded border-[#3b494b] text-[#06B6D4] focus:ring-[#06B6D4] bg-[#0d1515]"
+                            />
+                            <span>Include Technical Code Questions (Requires GitHub)</span>
+                          </label>
+                          {customSections.technical && (
+                            <span className="text-xs text-[#06B6D4] font-bold">{customCounts.technical} questions</span>
+                          )}
+                        </div>
+                        {customSections.technical && (
+                          <input 
+                            type="range"
+                            min="2"
+                            max="20"
+                            value={customCounts.technical}
+                            onChange={(e) => setCustomCounts(prev => ({ ...prev, technical: parseInt(e.target.value) }))}
+                            className="w-full accent-[#06B6D4]"
+                          />
+                        )}
+                      </div>
+
+                      {/* Behavioral Checkbox + Slider */}
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <label className="flex items-center gap-3 text-sm font-semibold select-none cursor-pointer">
+                            <input 
+                              type="checkbox"
+                              checked={customSections.behavioral}
+                              onChange={(e) => setCustomSections(prev => ({ ...prev, behavioral: e.target.checked }))}
+                              className="h-4 w-4 rounded border-[#3b494b] text-[#06B6D4] focus:ring-[#06B6D4] bg-[#0d1515]"
+                            />
+                            <span>Include HR Behavioral Questions</span>
+                          </label>
+                          {customSections.behavioral && (
+                            <span className="text-xs text-purple-400 font-bold">{customCounts.behavioral} questions</span>
+                          )}
+                        </div>
+                        {customSections.behavioral && (
+                          <input 
+                            type="range"
+                            min="2"
+                            max="20"
+                            value={customCounts.behavioral}
+                            onChange={(e) => setCustomCounts(prev => ({ ...prev, behavioral: parseInt(e.target.value) }))}
+                            className="w-full accent-purple-500"
+                          />
+                        )}
+                      </div>
+
+                      {/* Logical Checkbox + Slider */}
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <label className="flex items-center gap-3 text-sm font-semibold select-none cursor-pointer">
+                            <input 
+                              type="checkbox"
+                              checked={customSections.logical}
+                              onChange={(e) => setCustomSections(prev => ({ ...prev, logical: e.target.checked }))}
+                              className="h-4 w-4 rounded border-[#3b494b] text-[#06B6D4] focus:ring-[#06B6D4] bg-[#0d1515]"
+                            />
+                            <span>Include Logical Thinking &amp; Aptitude</span>
+                          </label>
+                          {customSections.logical && (
+                            <span className="text-xs text-orange-400 font-bold">{customCounts.logical} questions</span>
+                          )}
+                        </div>
+                        {customSections.logical && (
+                          <input 
+                            type="range"
+                            min="2"
+                            max="20"
+                            value={customCounts.logical}
+                            onChange={(e) => setCustomCounts(prev => ({ ...prev, logical: parseInt(e.target.value) }))}
+                            className="w-full accent-orange-500"
+                          />
+                        )}
+                      </div>
+
+                      {/* Custom Questions Checkbox + Input */}
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <label className="flex items-center gap-3 text-sm font-semibold select-none cursor-pointer">
+                            <input 
+                              type="checkbox"
+                              checked={customSections.custom}
+                              onChange={(e) => setCustomSections(prev => ({ ...prev, custom: e.target.checked }))}
+                              className="h-4 w-4 rounded border-[#3b494b] text-[#06B6D4] focus:ring-[#06B6D4] bg-[#0d1515]"
+                            />
+                            <span>Recruiter-Provided Custom Questions</span>
+                          </label>
+                        </div>
+                        {customSections.custom && (
+                          <div className="space-y-2">
+                            <label className="text-xs text-[#94A3B8]">Type or paste your custom questions (one question per line):</label>
+                            <textarea 
+                              value={customQuestionsInput}
+                              onChange={(e) => setCustomQuestionsInput(e.target.value)}
+                              rows={4}
+                              className="w-full bg-[#0d1515] border border-[#3b494b] p-3 rounded-lg text-xs focus:outline-none focus:border-[#06B6D4] text-[#F1F5F9]"
+                              placeholder="Question 1&#10;Question 2&#10;Question 3"
+                            />
+                          </div>
+                        )}
+                      </div>
+
+                    </div>
+                  </div>
+                )}
+
+                {/* GitHub Repo Setup (Modes: Technical, Full Stack, Custom-with-Technical) */}
+                {requiresRepo() && (
+                  <div className="space-y-4 bg-[#0d1515]/30 p-4 border border-[#3b494b]/50 rounded-lg">
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center">
+                        <label className="text-xs font-bold text-[#94A3B8] uppercase tracking-wider block">GitHub Repository URL</label>
+                        {user?.githubConnected && (
+                          <div className="flex bg-[#0d1515] p-0.5 rounded border border-[#3b494b] text-[10px] font-bold">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setRepoSource('dropdown');
+                                if (gitRepos.length > 0) setRepoUrl(gitRepos[0].html_url);
+                              }}
+                              className={`px-2.5 py-1 rounded transition-all ${
+                                repoSource === 'dropdown'
+                                  ? 'bg-[#06B6D4] text-[#0d1515]'
+                                  : 'text-[#94A3B8] hover:text-[#F1F5F9]'
+                              }`}
+                            >
+                              Select Repo
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setRepoSource('custom');
+                                setRepoUrl('');
+                              }}
+                              className={`px-2.5 py-1 rounded transition-all ${
+                                repoSource === 'custom'
+                                  ? 'bg-[#06B6D4] text-[#0d1515]'
+                                  : 'text-[#94A3B8] hover:text-[#F1F5F9]'
+                              }`}
+                            >
+                              Custom URL
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      {user?.githubConnected && repoSource === 'dropdown' ? (
+                        fetchingRepos ? (
+                          <div className="w-full bg-[#0d1515] border border-[#3b494b] px-4 py-3 rounded-lg flex items-center justify-center gap-2 text-xs text-[#94A3B8]">
+                            <span className="material-symbols-outlined text-sm animate-spin">sync</span>
+                            Fetching repositories from GitHub...
+                          </div>
+                        ) : gitRepos.length === 0 ? (
+                          <div className="w-full bg-[#0d1515] border border-dashed border-[#3b494b] px-4 py-3 rounded-lg text-center text-xs text-[#94A3B8]">
+                            No repositories found. Ensure your GitHub account has repositories or use a Custom URL.
+                          </div>
+                        ) : (
+                          <select
+                            value={repoUrl}
+                            onChange={(e) => setRepoUrl(e.target.value)}
+                            className="w-full bg-[#0d1515] border border-[#3b494b] px-4 py-2.5 rounded-lg text-sm focus:outline-none focus:border-[#06B6D4] transition-colors"
+                          >
+                            {gitRepos.map((repo: any) => (
+                              <option key={repo.id} value={repo.html_url}>
+                                {repo.full_name} {repo.language ? `(${repo.language})` : ''}
+                              </option>
+                            ))}
+                          </select>
+                        )
+                      ) : (
+                        <input 
+                          required
+                          value={repoUrl}
+                          onChange={(e) => setRepoUrl(e.target.value)}
+                          className="w-full bg-[#0d1515] border border-[#3b494b] px-4 py-2.5 rounded-lg text-sm font-mono focus:outline-none focus:border-[#06B6D4] transition-colors"
+                          placeholder="https://github.com/owner/repo"
+                          type="text"
+                        />
+                      )}
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <div className="flex justify-between items-center">
+                        <label className="text-xs font-bold text-[#94A3B8] uppercase tracking-wider block">Job Description (Optional)</label>
+                        <span className="text-[10px] text-[#94A3B8]">{jobDescription.length} / 5000</span>
+                      </div>
+                      <textarea
+                        value={jobDescription}
+                        onChange={(e) => setJobDescription(e.target.value.slice(0, 5000))}
+                        className="w-full bg-[#0d1515] border border-[#3b494b] px-4 py-3 rounded-lg text-xs focus:outline-none focus:border-[#06B6D4] transition-colors resize-y min-h-[100px] text-[#F1F5F9] placeholder-muted-text/50"
+                        placeholder="Paste the job description here — AI will generate questions matching both the candidate's code and the role requirements"
+                        rows={3}
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-[#94A3B8] uppercase tracking-wider block">Interview Focus Areas</label>
+                      <div className="flex flex-wrap gap-2">
+                        {['All', 'Frontend', 'Backend', 'DSA', 'System Design'].map((area) => {
+                          const active = focus.includes(area);
+                          return (
+                            <button
+                              key={area}
+                              type="button"
+                              onClick={() => handleFocusClick(area)}
+                              className={`px-4 py-1.5 border rounded-full text-xs font-bold transition-all ${
+                                active 
+                                  ? 'bg-[#06B6D4]/10 border-[#06B6D4] text-[#06B6D4]' 
+                                  : 'bg-[#0d1515]/40 border-[#3b494b] text-[#94A3B8] hover:border-[#94A3B8]/50'
+                              }`}
+                            >
+                              {area}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-[#94A3B8] uppercase tracking-wider block">Target Code Difficulty</label>
+                      <div className="grid grid-cols-4 gap-2 bg-[#0d1515] p-1 border border-[#3b494b] rounded-lg text-xs font-bold text-center">
+                        {(['easy', 'medium', 'hard', 'mixed'] as const).map((d) => (
+                          <button
+                            key={d}
+                            type="button"
+                            onClick={() => setDifficulty(d)}
+                            className={`py-1.5 rounded capitalize transition-all ${difficulty === d ? 'bg-[#06B6D4] text-[#0d1515]' : 'text-[#94A3B8] hover:text-[#F1F5F9]'}`}
+                          >
+                            {d}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Overall Settings (Duration) */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-[#94A3B8] uppercase tracking-wider block">Session Duration</label>
+                  <select 
+                    value={duration}
+                    onChange={(e) => setDuration(e.target.value)}
+                    className="w-full max-w-xs bg-[#0d1515] border border-[#3b494b] px-4 py-2.5 rounded-lg text-sm focus:outline-none focus:border-[#06B6D4] transition-colors"
+                  >
+                    <option value="30">30 Minutes</option>
+                    <option value="45">45 Minutes</option>
+                    <option value="60">60 Minutes</option>
+                    <option value="90">90 Minutes</option>
+                  </select>
                 </div>
 
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-[#94A3B8] uppercase tracking-wider block">Interview Focus Areas</label>
-                  <div className="flex flex-wrap gap-2">
-                    {['All', 'Frontend', 'Backend', 'DSA', 'System Design'].map((area) => {
-                      const active = focus.includes(area);
-                      return (
-                        <button
-                          key={area}
-                          type="button"
-                          onClick={() => handleFocusClick(area)}
-                          className={`px-4 py-2 border rounded-full text-xs font-bold transition-all ${
-                            active 
-                              ? 'bg-[#06B6D4]/10 border-[#06B6D4] text-[#06B6D4]' 
-                              : 'bg-[#0d1515]/40 border-[#3b494b] text-[#94A3B8] hover:border-[#94A3B8]/50'
-                          }`}
-                        >
-                          {area}
-                        </button>
-                      );
-                    })}
+                {/* Custom Builder Preview Block */}
+                {interviewMode === 'custom' && (
+                  <div className="bg-[#06B6D4]/10 border border-[#06B6D4]/20 p-4 rounded-xl text-xs text-[#06B6D4] font-semibold">
+                    <span>
+                      Preview: Your custom interview will include:{' '}
+                      {customSections.technical ? `${customCounts.technical} Technical, ` : ''}
+                      {customSections.behavioral ? `${customCounts.behavioral} Behavioral, ` : ''}
+                      {customSections.logical ? `${customCounts.logical} Logical, ` : ''}
+                      {customSections.custom ? `${customQuestionsInput.split('\n').filter(Boolean).length} Custom` : ''} questions.
+                    </span>
                   </div>
-                </div>
+                )}
 
                 <div className="pt-4 border-t border-[#3b494b]/60 flex justify-end">
                   <button
                     type="submit"
                     disabled={loading}
-                    className="px-6 py-3 bg-[#06B6D4] text-[#0d1515] font-bold text-xs uppercase tracking-wider rounded-lg flex items-center justify-center gap-2 hover:brightness-110 disabled:opacity-50 transition-all shadow-[0_0_15px_rgba(6,182,212,0.3)] active:scale-95"
+                    className="px-6 py-3 bg-[#06B6D4] text-[#0d1515] font-bold text-xs uppercase tracking-wider rounded-lg flex items-center justify-center gap-2 hover:brightness-110 disabled:opacity-50 transition-all shadow-[0_0_15px_rgba(6,182,212,0.3)] active:scale-95 cursor-pointer"
                   >
                     {loading ? (
                       <>
                         <span className="material-symbols-outlined text-sm animate-spin">sync</span>
-                        Analyzing Repository...
+                        Preparing your {interviewMode} interview...
                       </>
                     ) : (
                       <>
-                        <span>Analyze Repository</span>
+                        <span>{requiresRepo() ? 'Analyze Repository' : 'Prepare Interview Questions'}</span>
                         <span className="material-symbols-outlined text-sm font-bold">arrow_forward</span>
                       </>
                     )}
@@ -590,7 +1086,7 @@ function NewSessionFlowContent() {
             </div>
           )}
 
-          {/* STEP 2: CODE STORY PREVIEW */}
+          {/* STEP 2: CODE STORY PREVIEW (Tech/Fullstack only) */}
           {step === 2 && analysisData && (
             <div className="space-y-6">
               <div className="bg-[#151d1e] border border-[#3b494b] p-8 rounded-xl shadow-xl space-y-6">
@@ -644,7 +1140,7 @@ function NewSessionFlowContent() {
                   <div className="pt-4 border-t border-[#3b494b]/60 space-y-3">
                     <h4 className="text-xs font-bold text-[#94A3B8] uppercase tracking-wider">Candidate Brief</h4>
                     <blockquote className="border-l-4 border-[#06B6D4] bg-[#0d1515] p-4 text-xs italic text-[#94A3B8] leading-relaxed rounded-r-lg">
-                      "{analysisData.candidate_brief}"
+                      &quot;{analysisData.candidate_brief}&quot;
                     </blockquote>
                   </div>
 
@@ -676,9 +1172,9 @@ function NewSessionFlowContent() {
                     Back
                   </button>
                   <button
-                    onClick={handleGenerateQuestions}
+                    onClick={generateAllQuestions}
                     disabled={loading}
-                    className="px-6 py-3 bg-[#06B6D4] text-[#0d1515] font-bold text-xs uppercase tracking-wider rounded-lg flex items-center justify-center gap-2 hover:brightness-110 disabled:opacity-50 transition-all shadow-[0_0_15px_rgba(6,182,212,0.3)] active:scale-95"
+                    className="px-6 py-3 bg-[#06B6D4] text-[#0d1515] font-bold text-xs uppercase tracking-wider rounded-lg flex items-center justify-center gap-2 hover:brightness-110 disabled:opacity-50 transition-all shadow-[0_0_15px_rgba(6,182,212,0.3)] active:scale-95 cursor-pointer"
                   >
                     {loading ? (
                       <>
@@ -697,23 +1193,17 @@ function NewSessionFlowContent() {
             </div>
           )}
 
-          {/* STEP 3: QUESTIONS PREVIEW */}
+          {/* STEP 3: QUESTIONS PREVIEW & AUDIT */}
           {step === 3 && (
             <div className="bg-[#151d1e] border border-[#3b494b] p-8 rounded-xl shadow-xl space-y-6">
-              {questions.some(q => q.question_type && q.question_type !== 'code-based') && (
-                <div className="bg-[#06B6D4]/10 border border-[#06B6D4]/20 p-4 rounded-xl text-xs text-[#06B6D4] font-semibold flex items-center gap-2">
-                  <span className="material-symbols-outlined text-sm">info</span>
-                  <span>AI analyzed your candidate&apos;s code + job requirements. 4 code questions, 4 role-match questions, 2 skill gap questions, 2 system design questions generated.</span>
-                </div>
-              )}
               <div className="border-b border-[#3b494b] pb-4 flex justify-between items-center">
                 <div>
                   <h2 className="text-xl font-bold">Step 3 — Questions Preview</h2>
-                  <p className="text-xs text-[#94A3B8] mt-1">Audit, edit, and order questions generated from candidate code.</p>
+                  <p className="text-xs text-[#94A3B8] mt-1">Audit, edit, and order the generated questions before launching the live workspace.</p>
                 </div>
                 <button
                   onClick={() => setShowAddCustom(true)}
-                  className="px-3 py-1.5 border border-[#06B6D4] text-[#06B6D4] hover:bg-[#06B6D4]/10 text-xs font-bold rounded-lg transition-colors"
+                  className="px-3 py-1.5 border border-[#06B6D4] text-[#06B6D4] hover:bg-[#06B6D4]/10 text-xs font-bold rounded-lg transition-colors cursor-pointer"
                 >
                   + Add Custom Question
                 </button>
@@ -788,10 +1278,21 @@ function NewSessionFlowContent() {
                             <strong>Why asked:</strong> {q.why_asked}
                           </p>
                         )}
-                        {q.file_path && (
+                        {q.file_path && q.file_path !== 'Custom Question' && q.file_path !== 'Behavioral' && q.file_path !== 'Logical' && (
                           <p className="text-[10px] text-[#94A3B8] font-mono select-none">
                             File: {q.file_path} {q.line_start > 0 ? `(Lines ${q.line_start}-${q.line_end})` : ''}
                           </p>
+                        )}
+                        
+                        {/* Render Aptitude MCQ options */}
+                        {q.options && q.options.length > 0 && (
+                          <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2 max-w-xl">
+                            {q.options.map((opt, oIdx) => (
+                              <div key={oIdx} className="bg-[#151d1e] border border-[#3b494b] px-3 py-1.5 rounded text-xs text-[#b9cacb] font-mono select-none">
+                                {opt}
+                              </div>
+                            ))}
+                          </div>
                         )}
                       </div>
                       
@@ -800,7 +1301,7 @@ function NewSessionFlowContent() {
                         <button
                           onClick={() => moveQuestion(idx, 'up')}
                           disabled={idx === 0}
-                          className="p-1 text-[#94A3B8] hover:text-[#06B6D4] disabled:opacity-30"
+                          className="p-1 text-[#94A3B8] hover:text-[#06B6D4] disabled:opacity-30 cursor-pointer"
                           title="Move Up"
                         >
                           <span className="material-symbols-outlined text-sm font-bold">arrow_upward</span>
@@ -808,14 +1309,14 @@ function NewSessionFlowContent() {
                         <button
                           onClick={() => moveQuestion(idx, 'down')}
                           disabled={idx === questions.length - 1}
-                          className="p-1 text-[#94A3B8] hover:text-[#06B6D4] disabled:opacity-30"
+                          className="p-1 text-[#94A3B8] hover:text-[#06B6D4] disabled:opacity-30 cursor-pointer"
                           title="Move Down"
                         >
                           <span className="material-symbols-outlined text-sm font-bold">arrow_downward</span>
                         </button>
                         <button
                           onClick={() => deleteQuestion(idx)}
-                          className="p-1 text-red-400 hover:text-red-500"
+                          className="p-1 text-red-400 hover:text-red-500 cursor-pointer"
                           title="Delete"
                         >
                           <span className="material-symbols-outlined text-sm font-bold">delete</span>
@@ -837,15 +1338,21 @@ function NewSessionFlowContent() {
 
               <div className="pt-6 border-t border-[#3b494b]/60 flex justify-between items-center">
                 <button
-                  onClick={() => setStep(2)}
-                  className="px-4 py-2.5 border border-[#3b494b] hover:border-[#94A3B8] text-[#94A3B8] hover:text-[#F1F5F9] font-bold text-xs uppercase tracking-wider rounded-lg transition-colors"
+                  onClick={() => {
+                    if (requiresRepo()) {
+                      setStep(2);
+                    } else {
+                      setStep(1);
+                    }
+                  }}
+                  className="px-4 py-2.5 border border-[#3b494b] hover:border-[#94A3B8] text-[#94A3B8] hover:text-[#F1F5F9] font-bold text-xs uppercase tracking-wider rounded-lg transition-colors cursor-pointer"
                 >
                   Back
                 </button>
                 <button
                   onClick={handleStartInterview}
                   disabled={loading}
-                  className="px-6 py-3 bg-[#06B6D4] text-[#0d1515] font-bold text-xs uppercase tracking-wider rounded-lg flex items-center justify-center gap-2 hover:brightness-110 disabled:opacity-50 transition-all shadow-[0_0_15px_rgba(6,182,212,0.3)] active:scale-95"
+                  className="px-6 py-3 bg-[#06B6D4] text-[#0d1515] font-bold text-xs uppercase tracking-wider rounded-lg flex items-center justify-center gap-2 hover:brightness-110 disabled:opacity-50 transition-all shadow-[0_0_15px_rgba(6,182,212,0.3)] active:scale-95 cursor-pointer"
                 >
                   {loading ? (
                     <>

@@ -166,28 +166,30 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
   // Helper to load user profile and token logs from Supabase
   const loadUserData = async (userId: string, email: string) => {
     try {
-      // 1. Fetch profile from public.profiles
-      let { data: profile, error: profileErr } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .single();
+      // 1. Fetch profile and recruiter in parallel to minimize network latency
+      let [profileRes, recruiterRes] = await Promise.all([
+        supabase.from('profiles').select('*').eq('id', userId).maybeSingle(),
+        supabase.from('recruiters').select('*').eq('id', userId).maybeSingle()
+      ]);
 
-      if (profileErr && profileErr.code === 'PGRST116') {
+      let profile = profileRes.data;
+      let recruiter = recruiterRes.data;
+
+      // Handle missing profile or recruiter records
+      const creationPromises: Promise<any>[] = [];
+
+      if (!profile) {
         console.warn('Profile not found, attempting to create one via admin API...');
-
         let registeredName = email.split('@')[0];
         let registeredCompany = '';
-
         try {
           const { data: authUser } = await supabase.auth.getUser();
           if (authUser?.user?.user_metadata?.name) registeredName = authUser.user.user_metadata.name;
           if (authUser?.user?.user_metadata?.companyName) registeredCompany = authUser.user.user_metadata.companyName;
         } catch (e) {}
 
-        // Use admin API route to bypass RLS — anon client cannot INSERT when no session is active
-        try {
-          const res = await fetch('/api/auth/create-profile', {
+        creationPromises.push(
+          fetch('/api/auth/create-profile', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -196,49 +198,25 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
               email,
               company: registeredCompany,
             }),
-          });
-
-          if (res.ok) {
-            // Re-fetch the newly created profile
-            const { data: newProfile } = await supabase
-              .from('profiles')
-              .select('*')
-              .eq('id', userId)
-              .single();
-            if (newProfile) {
-              profile = newProfile;
+          }).then(async (res) => {
+            if (res.ok) {
+              const { data: newProfile } = await supabase
+                .from('profiles')
+                .select('*')
+                .eq('id', userId)
+                .single();
+              if (newProfile) {
+                profile = newProfile;
+              }
             }
-          } else {
-            console.error('Admin API create-profile failed:', await res.text());
-          }
-        } catch (err) {
-          console.error('Failed to call create-profile API:', err);
-        }
+          })
+        );
       }
 
-      if (profile) {
-        const local2fa = localStorage.getItem(`cw_2fa_enabled_${userId}`) === 'true';
-        const is2faEnabled = profile.two_factor_enabled || local2fa;
-        const needs2fa = is2faEnabled && sessionStorage.getItem(`cw_2fa_verified_${userId}`) !== 'true';
-        setTwoFactorChallenged(needs2fa);
-      } else {
-        const local2fa = localStorage.getItem(`cw_2fa_enabled_${userId}`) === 'true';
-        const needs2fa = local2fa && sessionStorage.getItem(`cw_2fa_verified_${userId}`) !== 'true';
-        setTwoFactorChallenged(needs2fa);
-      }
-
-      // 2. Try to fetch from recruiters table (for additional metadata)
-      let { data: recruiter, error: recruiterErr } = await supabase
-        .from('recruiters')
-        .select('*')
-        .eq('id', userId)
-        .single();
-
-      if (recruiterErr && recruiterErr.code === 'PGRST116') {
+      if (!recruiter) {
         console.warn('Recruiter profile not found, auto-creating via admin API...');
-        // Use admin API to bypass RLS
-        try {
-          await fetch('/api/auth/create-profile', {
+        creationPromises.push(
+          fetch('/api/auth/create-profile', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -247,30 +225,24 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
               email,
               company: '',
             }),
-          });
-          // Re-fetch recruiter after creation
-          const { data: refetched } = await supabase.from('recruiters').select('*').eq('id', userId).single();
-          if (refetched) recruiter = refetched;
-        } catch (err) {
-          console.error('Failed to auto-create missing recruiter via admin API:', err);
-        }
+          }).then(async () => {
+            const { data: refetched } = await supabase.from('recruiters').select('*').eq('id', userId).single();
+            if (refetched) recruiter = refetched;
+          })
+        );
       }
 
-      // 3. Count sessions dynamically to auto-sync tokens_used
-      const { count: sessionCount, error: countErr } = await supabase
-        .from('sessions')
-        .select('*', { count: 'exact', head: true })
-        .eq('recruiter_id', userId);
-
-      let actualTokensUsed = profile?.tokens_used ?? 0;
-      if (profile && !countErr && sessionCount !== null && sessionCount !== profile.tokens_used) {
-        actualTokensUsed = sessionCount;
-        // Run update query to sync the count in the database
-        await supabase
-          .from('profiles')
-          .update({ tokens_used: sessionCount })
-          .eq('id', userId);
+      if (creationPromises.length > 0) {
+        await Promise.all(creationPromises);
       }
+
+      // Check 2FA challenge status
+      const local2fa = localStorage.getItem(`cw_2fa_enabled_${userId}`) === 'true';
+      const is2faEnabled = profile?.two_factor_enabled || local2fa;
+      const needs2fa = is2faEnabled && sessionStorage.getItem(`cw_2fa_verified_${userId}`) !== 'true';
+      setTwoFactorChallenged(needs2fa);
+
+      const actualTokensUsed = profile?.tokens_used ?? 0;
 
       if (profile) {
         if (profile.plan === 'pro' || profile.plan === 'enterprise') {
@@ -286,10 +258,8 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
         }
       }
 
+      // 2. Populate critical user details to transition out of loading state immediately!
       if (profile) {
-        const local2fa = localStorage.getItem(`cw_2fa_enabled_${userId}`) === 'true';
-        const is2faEnabled = profile.two_factor_enabled || local2fa;
-
         setUser({
           id: userId,
           email,
@@ -322,15 +292,12 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
         });
 
         setSubscription((profile.plan === 'pro' ? 'Pro' : profile.plan === 'enterprise' ? 'Enterprise' : 'Free') as any);
-
-        // Load token stats
-        setTokenStats((prev) => ({
-          ...prev,
+        setTokenStats({
           limit: profile.tokens_total ?? 5,
           used: actualTokensUsed,
-        }));
+          history: [],
+        });
       } else {
-        // Fallback representation
         setUser({
           id: userId,
           email,
@@ -352,38 +319,43 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
         });
       }
 
-      // 2. Fetch token history
-      const { data: history } = await supabase
-        .from('token_history')
-        .select('*')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false });
+      // 3. Load non-critical logs and history in the background asynchronously
+      Promise.all([
+        supabase.from('sessions').select('*', { count: 'exact', head: true }).eq('recruiter_id', userId),
+        supabase.from('token_history').select('*').eq('user_id', userId).order('created_at', { ascending: false }),
+        supabase.from('assessments').select('*').eq('user_id', userId)
+      ]).then(async ([sessionCountRes, historyRes, assessmentsRes]) => {
+        const sessionCount = sessionCountRes.count;
+        const history = historyRes.data;
+        const dbAssessments = assessmentsRes.data;
 
-      if (history) {
-        setTokenStats((prev) => ({
-          ...prev,
-          history: history.map((h) => ({
-            id: h.id,
-            repo: h.repo,
-            timestamp: h.created_at,
-            tokens: h.tokens,
-            filesCount: h.files_count,
-          })),
-        }));
-      }
+        // Auto-sync sessions count if out-of-sync
+        if (profile && sessionCount !== null && sessionCount !== profile.tokens_used) {
+          await supabase.from('profiles').update({ tokens_used: sessionCount }).eq('id', userId);
+          setUser(prev => prev ? { ...prev, tokensUsed: sessionCount } : null);
+          setTokenStats(prev => ({ ...prev, used: sessionCount }));
+        }
 
-      // 3. Fetch assessments from Supabase
-      try {
-        const { data: dbAssessments, error: assessErr } = await supabase
-          .from('assessments')
-          .select('*')
-          .eq('user_id', userId);
+        // Set token history
+        if (history) {
+          setTokenStats((prev) => ({
+            ...prev,
+            history: history.map((h) => ({
+              id: h.id,
+              repo: h.repo,
+              timestamp: h.created_at,
+              tokens: h.tokens,
+              filesCount: h.files_count,
+            })),
+          }));
+        }
 
-        if (!assessErr && dbAssessments && dbAssessments.length > 0) {
+        // Set assessments
+        if (dbAssessments && dbAssessments.length > 0) {
           const localStored = localStorage.getItem('cw_analyses');
           const localList = localStored ? JSON.parse(localStored) : [];
-          
           const mergedList = [...localList];
+          
           dbAssessments.forEach((dbItem: any) => {
             const matchedIdx = mergedList.findIndex((item: any) => item.jobId === dbItem.id);
             const mapped = {
@@ -409,7 +381,6 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
               mergedList.unshift(mapped);
             }
 
-            // Sync ratings & notes from Supabase item into localStorage keys
             if (dbItem.ratings) {
               localStorage.setItem(`ratings_${dbItem.id}`, JSON.stringify(dbItem.ratings));
             }
@@ -422,9 +393,10 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
 
           localStorage.setItem('cw_analyses', JSON.stringify(mergedList));
         }
-      } catch (err) {
-        console.warn('Assessments table sync skipped or failed:', err);
-      }
+      }).catch((err) => {
+        console.warn('Background token/assessment sync warning:', err);
+      });
+
     } catch (e) {
       console.error('Failed to load Supabase user data:', e);
     }

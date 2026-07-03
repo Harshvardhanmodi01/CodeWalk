@@ -15,7 +15,7 @@ interface Question {
   difficulty: 'easy' | 'medium' | 'hard';
   category: 'frontend' | 'backend' | 'dsa' | 'system-design';
   order_index: number;
-  expected_answer?: string;
+  shared_answer?: string;
   show_expected_answer?: boolean;
 }
 
@@ -96,10 +96,10 @@ export default function CandidateSessionPage() {
           }
         }
 
-        // 2. Fetch Questions
+        // 2. Fetch Questions (explicitly select safe columns to prevent candidate from viewing expected_answer)
         const { data: qData, error: qErr } = await supabase
           .from('questions')
-          .select('*')
+          .select('id, question_text, code_snippet, file_path, line_start, line_end, difficulty, category, order_index, show_expected_answer, shared_answer')
           .eq('session_id', sessionId)
           .order('order_index', { ascending: true });
 
@@ -165,10 +165,10 @@ export default function CandidateSessionPage() {
           }
         }
 
-        // 2. Fetch Questions to sync show_expected_answer and expected_answer columns
+        // 2. Fetch Questions to sync show_expected_answer and shared_answer columns
         const { data: qData } = await supabase
           .from('questions')
-          .select('id, expected_answer, show_expected_answer')
+          .select('id, shared_answer, show_expected_answer')
           .eq('session_id', sessionId);
 
         if (qData) {
@@ -178,7 +178,7 @@ export default function CandidateSessionPage() {
               if (updatedQ) {
                 return {
                   ...prevQ,
-                  expected_answer: updatedQ.expected_answer,
+                  shared_answer: updatedQ.shared_answer,
                   show_expected_answer: updatedQ.show_expected_answer
                 };
               }
@@ -424,7 +424,7 @@ export default function CandidateSessionPage() {
               </div>
 
               {/* Ideal Answer Shared by Interviewer */}
-              {currentQ.show_expected_answer && currentQ.expected_answer && (
+              {currentQ.show_expected_answer && currentQ.shared_answer && (
                 <div className="bg-[#06B6D4]/10 border border-[#06B6D4]/40 rounded-xl p-5 shadow-xl space-y-3 animate-in fade-in slide-in-from-top-4 duration-500">
                   <div className="flex items-center gap-2 text-cyan-400 font-extrabold uppercase tracking-widest text-xs select-none">
                     <span className="material-symbols-outlined text-sm text-[13px]">info</span>
@@ -432,7 +432,7 @@ export default function CandidateSessionPage() {
                     <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse ml-auto" title="Active Solution Guide Shared"></span>
                   </div>
                   <div className="whitespace-pre-line text-xs leading-relaxed text-[#F1F5F9] bg-[#0d1515]/60 p-4 rounded-lg border border-[#3b494b]/60 font-medium">
-                    {currentQ.expected_answer}
+                    {currentQ.shared_answer}
                   </div>
                 </div>
               )}

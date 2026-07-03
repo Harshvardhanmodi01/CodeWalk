@@ -19,8 +19,8 @@ export async function POST(req: NextRequest) {
         full_name: name,
         company: company || '',
         company_name: company || '',
-        plan: 'free',
-        tokens_total: typeof tokensTotal === 'number' ? tokensTotal : 5,
+        plan: 'enterprise',
+        tokens_total: typeof tokensTotal === 'number' ? tokensTotal : 999999,
         tokens_used: 0,
         created_at: new Date().toISOString(),
       }, { onConflict: 'id' });

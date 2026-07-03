@@ -18,6 +18,7 @@ interface SessionData {
   scheduled_at?: string;
   link_opened_at?: string;
   score_breakdown?: any;
+  interview_mode?: string;
   candidate: {
     id: string;
     name: string;
@@ -142,6 +143,7 @@ export default function RecruiterDashboard() {
         scheduled_at,
         link_opened_at,
         score_breakdown,
+        interview_mode,
         candidate:candidate_id (
           id,
           name,
@@ -977,6 +979,7 @@ export default function RecruiterDashboard() {
                           </th>
                           <th className="px-6 py-4 text-xs font-bold text-[#94A3B8] uppercase tracking-wider">Candidate Name</th>
                           <th className="px-6 py-4 text-xs font-bold text-[#94A3B8] uppercase tracking-wider">GitHub Repo</th>
+                          <th className="px-6 py-4 text-xs font-bold text-[#94A3B8] uppercase tracking-wider text-center">Mode</th>
                           <th className="px-6 py-4 text-xs font-bold text-[#94A3B8] uppercase tracking-wider text-right">Date</th>
                           <th className="px-6 py-4 text-xs font-bold text-[#94A3B8] uppercase tracking-wider text-right">Score</th>
                           <th className="px-6 py-4 text-xs font-bold text-[#94A3B8] uppercase tracking-wider text-center">Status</th>
@@ -1002,8 +1005,23 @@ export default function RecruiterDashboard() {
                                   <span className="text-[10px] text-[#94A3B8] font-normal">{session.candidate?.email}</span>
                                 </div>
                               </td>
-                              <td className="px-6 py-4 text-xs font-mono text-[#06B6D4]">
-                                {session.repo_url.replace('https://github.com/', '')}
+                              <td className="px-6 py-4 text-xs font-mono text-[#06B6D4] truncate max-w-[150px]">
+                                {session.repo_url ? session.repo_url.replace('https://github.com/', '') : 'N/A (No Code)'}
+                              </td>
+                              <td className="px-6 py-4 text-center">
+                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
+                                  session.interview_mode === 'behavioral' ? 'bg-purple-500/10 border-purple-500/30 text-purple-400' :
+                                  session.interview_mode === 'logical' ? 'bg-orange-500/10 border-orange-500/30 text-orange-400' :
+                                  session.interview_mode === 'fullstack' ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' :
+                                  session.interview_mode === 'custom' ? 'bg-gray-500/10 border-gray-500/30 text-gray-400' :
+                                  'bg-cyan-500/10 border-cyan-500/30 text-[#06B6D4]'
+                                }`}>
+                                  {session.interview_mode === 'technical' ? 'Technical' :
+                                   session.interview_mode === 'behavioral' ? 'Behavioral' :
+                                   session.interview_mode === 'logical' ? 'Logical' :
+                                   session.interview_mode === 'fullstack' ? 'Full Stack' :
+                                   session.interview_mode === 'custom' ? 'Custom' : 'Technical'}
+                                </span>
                               </td>
                               <td className="px-6 py-4 text-right font-mono text-xs">
                                 <div className="flex items-center justify-end gap-1.5">

@@ -29,6 +29,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
     { name: 'Positions', path: '/positions', icon: 'work' },
     { name: 'History', path: '/history', icon: 'history' },
     { name: 'Candidates', path: '/candidates', icon: 'groups' },
+    { name: 'Question Bank', path: '/question-bank', icon: 'library_books' },
     { name: 'Resume Parser', path: '/resume-extractor', icon: 'description' },
   ];
 

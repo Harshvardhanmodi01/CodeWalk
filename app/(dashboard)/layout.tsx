@@ -33,17 +33,17 @@ export default function DashboardLayout({
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) {
-          router.push('/login');
+          window.location.replace('/login');
         } else {
           setAuthLoading(false);
         }
       } catch (err) {
         console.error('Session check failed:', err);
-        router.push('/login');
+        window.location.replace('/login');
       }
     };
     checkSession();
-  }, [router]);
+  }, []);
 
   if (!mounted || authLoading || !user) {
     return (
