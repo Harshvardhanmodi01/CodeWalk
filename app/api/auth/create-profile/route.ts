@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
 
     if (profileError && recruiterError) {
       return NextResponse.json(
-        { error: `Profile: ${profileError.message} | Recruiter: ${recruiterError.message}` },
+        { error: 'Failed to initialize user profile. Please try again.' },
         { status: 500 }
       );
     }

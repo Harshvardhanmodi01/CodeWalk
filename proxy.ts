@@ -1,7 +1,66 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
+interface RateLimitRecord {
+  count: number;
+  resetTime: number;
+}
+
+// Simple in-memory rate limiting map.
+const limiters = new Map<string, RateLimitRecord>();
+
 export async function proxy(req: NextRequest) {
+  const url = req.nextUrl.clone();
+  const path = url.pathname;
+
+  // 1. Rate Limiting for API routes
+  if (path.startsWith('/api')) {
+    let limit = 30; // default for all other /api/* routes
+    let routeType = 'other';
+
+    if (path.startsWith('/api/auth/')) {
+      limit = 5;
+      routeType = 'auth';
+    } else if (path.startsWith('/api/questions/')) {
+      limit = 20;
+      routeType = 'questions';
+    } else if (path.startsWith('/api/admin/')) {
+      limit = 2;
+      routeType = 'admin';
+    }
+
+    const ip = req.headers.get('x-forwarded-for')?.split(',')[0].trim() ||
+               req.headers.get('x-real-ip') ||
+               (req as any).ip ||
+               '127.0.0.1';
+
+    const key = `${ip}:${routeType}`;
+    const now = Date.now();
+    const record = limiters.get(key);
+
+    if (!record || now > record.resetTime) {
+      limiters.set(key, {
+        count: 1,
+        resetTime: now + 60000 // 1 minute window
+      });
+    } else if (record.count >= limit) {
+      const retryAfter = Math.ceil((record.resetTime - now) / 1000);
+      return new NextResponse(
+        JSON.stringify({ error: 'Too many requests. Please try again later.' }),
+        {
+          status: 429,
+          headers: {
+            'Content-Type': 'application/json',
+            'Retry-After': String(retryAfter)
+          }
+        }
+      );
+    } else {
+      record.count++;
+    }
+  }
+
+  // 2. Existing Session & Route Protection
   let response = NextResponse.next({
     request: {
       headers: req.headers,
@@ -44,9 +103,6 @@ export async function proxy(req: NextRequest) {
   // Use getUser() as it is secure and checks session validity
   const { data: { user } } = await supabase.auth.getUser();
 
-  const url = req.nextUrl.clone();
-  const path = url.pathname;
-
   // Protect recruiter routes
   const isProtectedRoute = 
     path.startsWith('/dashboard') ||
@@ -81,6 +137,6 @@ export async function proxy(req: NextRequest) {
 
 export const config = {
   matcher: [
-    '/((?!api|_next/static|_next/image|favicon.ico).*)',
+    '/((?!_next/static|_next/image|favicon.ico).*)',
   ],
 };

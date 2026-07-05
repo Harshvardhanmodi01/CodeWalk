@@ -55,19 +55,21 @@ export default function CandidateSessionPage() {
     const loadCandidateWorkspace = async () => {
       try {
         setLoading(true);
-        // 1. Fetch Session (No auth required because of public SELECT policy)
-        const { data: sessData, error: sessErr } = await supabase
-          .from('sessions')
-          .select('*')
-          .eq('id', sessionId)
-          .single();
+        // Call public candidate session verification API
+        const res = await fetch(`/api/candidate/session?sessionId=${sessionId}`);
+        const data = await res.json();
 
-        if (sessErr || !sessData) {
-          setValidationError('NOT_FOUND');
+        if (!res.ok || data.error) {
+          if (res.status === 404) {
+            setValidationError('NOT_FOUND');
+          } else {
+            setError(data.error || 'Failed to load candidate workspace.');
+          }
           setLoading(false);
           return;
         }
 
+        const sessData = data.session;
         setSession(sessData);
 
         if (sessData.status === 'completed') {
@@ -96,32 +98,16 @@ export default function CandidateSessionPage() {
           }
         }
 
-        // 2. Fetch Questions (explicitly select safe columns to prevent candidate from viewing expected_answer)
-        const { data: qData, error: qErr } = await supabase
-          .from('questions')
-          .select('id, question_text, code_snippet, file_path, line_start, line_end, difficulty, category, order_index, show_expected_answer, shared_answer')
-          .eq('session_id', sessionId)
-          .order('order_index', { ascending: true });
+        setQuestions(data.questions || []);
 
-        if (qErr) throw qErr;
-        setQuestions(qData || []);
-
-        // 3. Fetch existing answers (so candidate notes are restored if they refresh)
-        const { data: ansData, error: ansErr } = await supabase
-          .from('answers')
-          .select('*')
-          .eq('session_id', sessionId);
-
-        if (ansErr) throw ansErr;
-        
         const restoredNotes: Record<string, string> = {};
-        (ansData || []).forEach(a => {
+        (data.answers || []).forEach((a: any) => {
           restoredNotes[a.question_id] = a.answer_text || '';
         });
         setCandidateNotes(restoredNotes);
       } catch (err: any) {
         console.error(err);
-        setError(err.message || 'Failed to load candidate workspace.');
+        setError('Failed to load candidate workspace.');
       } finally {
         setLoading(false);
       }
@@ -136,13 +122,11 @@ export default function CandidateSessionPage() {
 
     const interval = setInterval(async () => {
       try {
-        // 1. Fetch Session status & timer
-        const { data: sessData } = await supabase
-          .from('sessions')
-          .select('status, is_paused, remaining_seconds, started_at, timer_duration_minutes')
-          .eq('id', sessionId)
-          .single();
+        const res = await fetch(`/api/candidate/session?sessionId=${sessionId}`);
+        if (!res.ok) return;
+        const data = await res.json();
 
+        const sessData = data.session;
         if (sessData) {
           setSession((prev: any) => prev ? { ...prev, ...sessData } : sessData);
           if (sessData.status === 'completed') {
@@ -165,16 +149,10 @@ export default function CandidateSessionPage() {
           }
         }
 
-        // 2. Fetch Questions to sync show_expected_answer and shared_answer columns
-        const { data: qData } = await supabase
-          .from('questions')
-          .select('id, shared_answer, show_expected_answer')
-          .eq('session_id', sessionId);
-
-        if (qData) {
+        if (data.questions) {
           setQuestions(prevQuestions => {
             return prevQuestions.map(prevQ => {
-              const updatedQ = qData.find(q => q.id === prevQ.id);
+              const updatedQ = data.questions.find((q: any) => q.id === prevQ.id);
               if (updatedQ) {
                 return {
                   ...prevQ,
@@ -190,7 +168,6 @@ export default function CandidateSessionPage() {
         console.error('Failed to run background status check:', e);
       }
     }, 5000); // 5 seconds
-
 
     return () => clearInterval(interval);
   }, [sessionId, validationError, loading, timerExpired]);
@@ -211,44 +188,23 @@ export default function CandidateSessionPage() {
     return () => clearInterval(interval);
   }, [timeLeftSeconds, timerExpired, session?.is_paused]);
 
-  // Save notes to Supabase (autosave)
+  // Save notes to Supabase via candidate/answer API
   const saveCandidateAnswer = async (qId: string, text: string) => {
     if (timerExpired || !sessionId) return;
     setSavingAnswer(prev => ({ ...prev, [qId]: true }));
     try {
-      // Check if answer already exists
-      const { data: existing, error: findErr } = await supabase
-        .from('answers')
-        .select('id, ai_score')
-        .eq('session_id', sessionId)
-        .eq('question_id', qId)
-        .maybeSingle();
-
-      if (findErr) throw findErr;
-
-      const currentScore = existing?.ai_score || 5;
-
-      if (existing) {
-        // Update candidate notes while keeping recruiter score intact
-        const { error: updErr } = await supabase
-          .from('answers')
-          .update({
-            answer_text: text,
-            submitted_at: new Date().toISOString()
-          })
-          .eq('id', existing.id);
-        if (updErr) throw updErr;
-      } else {
-        // Insert new answer log
-        const { error: insErr } = await supabase
-          .from('answers')
-          .insert({
-            session_id: sessionId,
-            question_id: qId,
-            answer_text: text,
-            ai_score: currentScore
-          });
-        if (insErr) throw insErr;
+      const res = await fetch('/api/candidate/answer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId,
+          questionId: qId,
+          answerText: text
+        })
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        throw new Error(data.error || 'Failed to save');
       }
     } catch (err) {
       console.warn('Failed to autosave response thoughts:', err);

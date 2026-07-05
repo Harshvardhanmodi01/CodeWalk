@@ -3,24 +3,29 @@ import { createServerSupabaseClient } from '@/app/lib/supabaseServer';
 import { supabaseAdmin } from '@/app/lib/supabaseAdmin';
 import { Resend } from 'resend';
 
+import { requireAuth } from '@/app/lib/auth-middleware';
+import { validateUUID, sanitizeString } from '@/app/lib/validation';
+
 export async function POST(req: NextRequest) {
   try {
     // 1. Authenticate recruiter
-    const supabase = await createServerSupabaseClient();
-    const { data: { session } } = await supabase.auth.getSession();
-
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized – please log in' }, { status: 401 });
+    const authResult = await requireAuth(req);
+    if (authResult instanceof Response) {
+      return authResult;
     }
 
-    const userId = session.user.id;
+    const supabase = await createServerSupabaseClient();
+    const userId = authResult.id;
 
     // 2. Parse request body
-    const { candidateId, dateTime, duration, notes, justGenerate } = await req.json();
+    const body = await req.json().catch(() => ({}));
+    const { candidateId, dateTime, duration, notes, justGenerate } = body;
 
-    if (!candidateId || !dateTime || !duration) {
-      return NextResponse.json({ error: 'candidateId, dateTime, and duration are required' }, { status: 400 });
+    if (!candidateId || !validateUUID(candidateId) || !dateTime || !duration) {
+      return NextResponse.json({ error: 'Valid candidateId, dateTime, and duration are required' }, { status: 400 });
     }
+
+    const sanitizedNotes = sanitizeString(notes || '');
 
     // 3. Fetch candidate details (uses recruiter client to respect RLS)
     const { data: candidate, error: candError } = await supabase
@@ -172,7 +177,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 7. Update candidate status to 'scheduled' and update notes if provided
-    const newNotes = notes ? `${candidate.notes || ''}\n[Scheduled Notes]: ${notes}` : candidate.notes;
+    const newNotes = sanitizedNotes ? `${candidate.notes || ''}\n[Scheduled Notes]: ${sanitizedNotes}` : candidate.notes;
     await supabaseAdmin
       .from('candidates')
       .update({ 
@@ -204,6 +209,6 @@ export async function POST(req: NextRequest) {
 
   } catch (err: any) {
     console.error('API send-interview-invite error:', err);
-    return NextResponse.json({ error: err.message || 'Internal server error' }, { status: 500 });
+    return NextResponse.json({ error: 'Something went wrong. Please try again.' }, { status: 500 });
   }
 }

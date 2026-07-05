@@ -31,17 +31,29 @@ async function collectCodeFiles(
   return collected;
 }
 
+import { requireAuth } from '@/app/lib/auth-middleware';
+import { validateGithubUrl, validateDifficulty } from '@/app/lib/validation';
+
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
+    const authResult = await requireAuth(req);
+    if (authResult instanceof Response) {
+      return authResult;
+    }
+
+    const body = await req.json().catch(() => ({}));
     const repoUrl = body.github_url || body.repoUrl;
     const difficulty = body.difficulty || 'medium';
     const focus = body.focus || ['All'];
     const jobDescription = body.job_description || body.jobDescription;
     const count = body.count || 12;
 
-    if (!repoUrl) {
-      return NextResponse.json({ error: 'Repository URL is required' }, { status: 400 });
+    if (!repoUrl || !validateGithubUrl(repoUrl)) {
+      return NextResponse.json({ error: 'Valid repository URL is required' }, { status: 400 });
+    }
+
+    if (difficulty && !validateDifficulty(difficulty)) {
+      return NextResponse.json({ error: 'Invalid difficulty value' }, { status: 400 });
     }
 
     const { owner, repo } = extractRepoInfo(repoUrl);
@@ -241,6 +253,6 @@ Return ONLY valid JSON. No markdown code blocks, no text surrounding the JSON. C
 
   } catch (err: any) {
     console.error('API technical questions error:', err);
-    return NextResponse.json({ error: err.message || 'Internal Server Error' }, { status: 500 });
+    return NextResponse.json({ error: 'Something went wrong. Please try again.' }, { status: 500 });
   }
 }

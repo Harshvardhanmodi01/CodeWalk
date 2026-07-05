@@ -1,11 +1,19 @@
 import { NextResponse } from 'next/server';
 import Groq from 'groq-sdk';
 
+import { requireAuth } from '@/app/lib/auth-middleware';
+import { sanitizeString } from '@/app/lib/validation';
+
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
-    const roleTitle = body.role_title || body.positionTitle || 'Software Engineer';
-    const experienceLevel = body.experience_level || 'mid-level';
+    const authResult = await requireAuth(req);
+    if (authResult instanceof Response) {
+      return authResult;
+    }
+
+    const body = await req.json().catch(() => ({}));
+    const roleTitle = sanitizeString(body.role_title || body.positionTitle || 'Software Engineer');
+    const experienceLevel = sanitizeString(body.experience_level || 'mid-level');
     const count = body.count || 10;
 
     const groqKey = process.env.GROQ_API_KEY;
@@ -76,6 +84,6 @@ Experience Level: ${experienceLevel}`;
 
   } catch (err: any) {
     console.error('API behavioral questions error:', err);
-    return NextResponse.json({ error: err.message || 'Internal Server Error' }, { status: 500 });
+    return NextResponse.json({ error: 'Something went wrong. Please try again.' }, { status: 500 });
   }
 }

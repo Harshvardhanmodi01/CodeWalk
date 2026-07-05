@@ -5,6 +5,12 @@ import Groq from 'groq-sdk';
 
 export async function GET(req: NextRequest) {
   try {
+    // Verify x-admin-secret header
+    const adminSecret = req.headers.get('x-admin-secret');
+    if (!adminSecret || adminSecret !== process.env.ADMIN_SECRET) {
+      return NextResponse.json({ error: 'Forbidden. Invalid admin secret.' }, { status: 403 });
+    }
+
     // 1. Authenticate admin user using user session
     const anonSupabase = await createServerSupabaseClient();
     const { data: { session } } = await anonSupabase.auth.getSession();

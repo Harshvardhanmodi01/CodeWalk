@@ -1,9 +1,16 @@
 import { NextResponse } from 'next/server';
 import Groq from 'groq-sdk';
 
+import { requireAuth } from '@/app/lib/auth-middleware';
+
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
+    const authResult = await requireAuth(req);
+    if (authResult instanceof Response) {
+      return authResult;
+    }
+
+    const body = await req.json().catch(() => ({}));
     const questionsText = body.questions_text || '';
     
     // Parse questions: split by newline, filter empty lines
@@ -167,6 +174,6 @@ ${lines.map((q: string, i: number) => `Q${i + 1}: ${q}`).join('\n')}`;
 
   } catch (err: any) {
     console.error('API custom questions error:', err);
-    return NextResponse.json({ error: err.message || 'Internal Server Error' }, { status: 500 });
+    return NextResponse.json({ error: 'Something went wrong. Please try again.' }, { status: 500 });
   }
 }

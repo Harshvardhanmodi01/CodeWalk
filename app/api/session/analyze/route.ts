@@ -1,12 +1,19 @@
 import { NextResponse } from 'next/server';
 import { extractRepoInfo, fetchRepoContents, fetchFileContent } from '@/app/lib/github';
 import Groq from 'groq-sdk';
+import { requireAuth } from '@/app/lib/auth-middleware';
+import { validateGithubUrl } from '@/app/lib/validation';
 
 export async function POST(req: Request) {
   try {
-    const { repoUrl } = await req.json();
-    if (!repoUrl) {
-      return NextResponse.json({ error: 'Repository URL is required' }, { status: 400 });
+    const authResult = await requireAuth(req);
+    if (authResult instanceof Response) {
+      return authResult;
+    }
+
+    const { repoUrl } = await req.json().catch(() => ({}));
+    if (!repoUrl || !validateGithubUrl(repoUrl)) {
+      return NextResponse.json({ error: 'Valid repository URL is required' }, { status: 400 });
     }
 
     const { owner, repo } = extractRepoInfo(repoUrl);
@@ -17,7 +24,8 @@ export async function POST(req: Request) {
     try {
       files = await fetchRepoContents(owner, repo, '', undefined, token);
     } catch (e: any) {
-      return NextResponse.json({ error: e.message || 'Failed to fetch repository contents' }, { status: 400 });
+      console.error('Repo contents fetch failed:', e);
+      return NextResponse.json({ error: 'Failed to fetch repository contents' }, { status: 400 });
     }
 
     // Try to fetch README
@@ -84,6 +92,6 @@ ${readmeText.slice(0, 3000)}`;
     });
   } catch (err: any) {
     console.error('Session analyze API error:', err);
-    return NextResponse.json({ error: err.message || 'Internal Server Error' }, { status: 500 });
+    return NextResponse.json({ error: 'Something went wrong. Please try again.' }, { status: 500 });
   }
 }

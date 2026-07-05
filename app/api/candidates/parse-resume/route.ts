@@ -16,10 +16,17 @@ if (typeof global !== 'undefined') {
 
 const pdf = require('pdf-parse');
 
+import { requireAuth } from '@/app/lib/auth-middleware';
+
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: Request) {
   try {
+    const authResult = await requireAuth(req);
+    if (authResult instanceof Response) {
+      return authResult;
+    }
+
     const formData = await req.formData();
     const file = formData.get('file') as File;
     if (!file) {
@@ -159,6 +166,6 @@ Return ONLY valid JSON. No markdown code blocks, no text surrounding the JSON. I
     }
   } catch (err: any) {
     console.error('Resume parsing API error:', err);
-    return NextResponse.json({ error: err.message || 'Failed to parse resume.' }, { status: 500 });
+    return NextResponse.json({ error: 'Something went wrong. Please try again.' }, { status: 500 });
   }
 }

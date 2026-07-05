@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/app/lib/supabaseAdmin';
 import { extractRepoInfo, fetchRepoContents, fetchFileContent, isCodeFile } from '@/app/lib/github';
 import Groq from 'groq-sdk';
+import { requireAuth } from '@/app/lib/auth-middleware';
+import { validateUUID } from '@/app/lib/validation';
 
 export const dynamic = 'force-dynamic';
 
@@ -36,16 +38,30 @@ async function collectCodeFiles(
 
 export async function POST(req: Request) {
   try {
-    const { candidateIds, positionId, recruiterId } = await req.json();
+    const authResult = await requireAuth(req);
+    if (authResult instanceof Response) {
+      return authResult;
+    }
+
+    const body = await req.json().catch(() => ({}));
+    const { candidateIds, positionId, recruiterId } = body;
 
     if (!candidateIds || !Array.isArray(candidateIds) || candidateIds.length === 0) {
       return NextResponse.json({ error: 'Candidate IDs array is required' }, { status: 400 });
     }
-    if (!positionId) {
-      return NextResponse.json({ error: 'Position ID is required' }, { status: 400 });
+    
+    // Validate each candidateId
+    for (const cId of candidateIds) {
+      if (!validateUUID(cId)) {
+        return NextResponse.json({ error: 'Invalid Candidate ID format' }, { status: 400 });
+      }
     }
-    if (!recruiterId) {
-      return NextResponse.json({ error: 'Recruiter ID is required' }, { status: 400 });
+
+    if (!positionId || !validateUUID(positionId)) {
+      return NextResponse.json({ error: 'Valid Position ID is required' }, { status: 400 });
+    }
+    if (!recruiterId || !validateUUID(recruiterId)) {
+      return NextResponse.json({ error: 'Valid Recruiter ID is required' }, { status: 400 });
     }
 
     // 1. Create a batch job in the database
@@ -71,7 +87,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ data: { batchJobId: job.id } });
   } catch (err: any) {
     console.error('Bulk generate questions API trigger error:', err);
-    return NextResponse.json({ error: err.message || 'Failed to start bulk generation.' }, { status: 500 });
+    return NextResponse.json({ error: 'Something went wrong. Please try again.' }, { status: 500 });
   }
 }
 

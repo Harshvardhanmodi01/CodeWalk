@@ -1,9 +1,22 @@
 import { NextResponse } from 'next/server';
 import Groq from 'groq-sdk';
+import { requireAuth } from '@/app/lib/auth-middleware';
+import { validateUUID } from '@/app/lib/validation';
 
 export async function POST(req: Request) {
   try {
-    const { answers, sessionId, interviewMode, behavioralScores, logicalScores, customQuestions } = await req.json();
+    const authResult = await requireAuth(req);
+    if (authResult instanceof Response) {
+      return authResult;
+    }
+
+    const body = await req.json().catch(() => ({}));
+    const { answers, sessionId, interviewMode, behavioralScores, logicalScores, customQuestions } = body;
+    
+    if (sessionId && !validateUUID(sessionId)) {
+      return NextResponse.json({ error: 'Invalid sessionId format' }, { status: 400 });
+    }
+
     if (!answers || !Array.isArray(answers)) {
       return NextResponse.json({ error: 'Answers array is required' }, { status: 400 });
     }
@@ -77,6 +90,6 @@ ${JSON.stringify(logicalScores, null, 2)}` : ''}
     return NextResponse.json(parsed);
   } catch (err: any) {
     console.error('Session report API error:', err);
-    return NextResponse.json({ error: err.message || 'Internal Server Error' }, { status: 500 });
+    return NextResponse.json({ error: 'Something went wrong. Please try again.' }, { status: 500 });
   }
 }

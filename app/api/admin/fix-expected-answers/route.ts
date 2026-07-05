@@ -7,6 +7,12 @@ const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 export async function GET(req: NextRequest) {
   try {
+    // Verify x-admin-secret header
+    const adminSecret = req.headers.get('x-admin-secret');
+    if (!adminSecret || adminSecret !== process.env.ADMIN_SECRET) {
+      return NextResponse.json({ error: 'Forbidden. Invalid admin secret.' }, { status: 403 });
+    }
+
     // 1. Authenticate admin user
     const anonSupabase = await createServerSupabaseClient();
     const { data: { session } } = await anonSupabase.auth.getSession();
