@@ -64,8 +64,8 @@ export async function proxy(req: NextRequest) {
   const nonce = Buffer.from(crypto.randomUUID()).toString('base64');
   const isDev = process.env.NODE_ENV === 'development';
   const scriptSrc = isDev 
-    ? `'self' 'nonce-${nonce}' 'unsafe-eval'` 
-    : `'self' 'nonce-${nonce}'`;
+    ? `'self' 'nonce-${nonce}' 'unsafe-eval' blob:` 
+    : `'self' 'nonce-${nonce}' blob:`;
 
   const cspHeader = `
     default-src 'self';

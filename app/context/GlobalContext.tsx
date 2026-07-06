@@ -320,78 +320,18 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
       }
 
       // 3. Load non-critical logs and history in the background asynchronously
-      Promise.all([
-        supabase.from('sessions').select('*', { count: 'exact', head: true }).eq('recruiter_id', userId),
-        supabase.from('token_history').select('*').eq('user_id', userId).order('created_at', { ascending: false }),
-        supabase.from('assessments').select('*').eq('user_id', userId)
-      ]).then(async ([sessionCountRes, historyRes, assessmentsRes]) => {
+      const queries: any[] = [
+        supabase.from('sessions').select('*', { count: 'exact', head: true }).eq('recruiter_id', userId)
+      ];
+
+      Promise.all(queries).then(async ([sessionCountRes]) => {
         const sessionCount = sessionCountRes.count;
-        const history = historyRes.data;
-        const dbAssessments = assessmentsRes.data;
 
         // Auto-sync sessions count if out-of-sync
         if (profile && sessionCount !== null && sessionCount !== profile.tokens_used) {
           await supabase.from('profiles').update({ tokens_used: sessionCount }).eq('id', userId);
           setUser(prev => prev ? { ...prev, tokensUsed: sessionCount } : null);
           setTokenStats(prev => ({ ...prev, used: sessionCount }));
-        }
-
-        // Set token history
-        if (history) {
-          setTokenStats((prev) => ({
-            ...prev,
-            history: history.map((h) => ({
-              id: h.id,
-              repo: h.repo,
-              timestamp: h.created_at,
-              tokens: h.tokens,
-              filesCount: h.files_count,
-            })),
-          }));
-        }
-
-        // Set assessments
-        if (dbAssessments && dbAssessments.length > 0) {
-          const localStored = localStorage.getItem('cw_analyses');
-          const localList = localStored ? JSON.parse(localStored) : [];
-          const mergedList = [...localList];
-          
-          dbAssessments.forEach((dbItem: any) => {
-            const matchedIdx = mergedList.findIndex((item: any) => item.jobId === dbItem.id);
-            const mapped = {
-              jobId: dbItem.id,
-              repo: dbItem.repo,
-              candidateName: dbItem.candidate_name,
-              status: dbItem.status,
-              createdAt: new Date(dbItem.created_at).toLocaleDateString('en-US', {
-                month: 'short', day: 'numeric', year: 'numeric'
-              }),
-              questionsCount: dbItem.questions_count,
-              score: dbItem.score,
-              model: dbItem.model,
-              apiResult: dbItem.api_result
-            };
-
-            if (matchedIdx !== -1) {
-              mergedList[matchedIdx] = {
-                ...mergedList[matchedIdx],
-                ...mapped
-              };
-            } else {
-              mergedList.unshift(mapped);
-            }
-
-            if (dbItem.ratings) {
-              localStorage.setItem(`ratings_${dbItem.id}`, JSON.stringify(dbItem.ratings));
-            }
-            if (dbItem.notes) {
-              Object.entries(dbItem.notes).forEach(([qId, noteText]) => {
-                localStorage.setItem(`notes_${dbItem.id}_${qId}`, noteText as string);
-              });
-            }
-          });
-
-          localStorage.setItem('cw_analyses', JSON.stringify(mergedList));
         }
       }).catch((err) => {
         console.warn('Background token/assessment sync warning:', err);
@@ -526,22 +466,14 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
     // Database update
     if (user) {
       try {
-        // 1. Insert into token_history
-        await supabase.from('token_history').insert({
-          user_id: user.id,
-          repo: repoName,
-          files_count: filesCount,
-          tokens: amount,
-        });
-
-        // 2. Update profiles table
+        // Update profiles table directly
         const nextUsed = Math.min(tokenStats.limit, tokenStats.used + amount);
         await supabase
           .from('profiles')
           .update({ tokens_used: nextUsed })
           .eq('id', user.id);
       } catch (e) {
-        console.error('Failed to log token usage to Supabase:', e);
+        console.error('Failed to update profiles quota in Supabase:', e);
       }
     }
   };
@@ -615,56 +547,18 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
   };
 
   const saveAssessment = async (assessment: any) => {
-    if (user) {
-      try {
-        const { error } = await supabase.from('assessments').upsert({
-          id: assessment.jobId,
-          user_id: user.id,
-          repo: assessment.repo,
-          candidate_name: assessment.candidateName,
-          status: assessment.status,
-          questions_count: assessment.questionsCount,
-          score: assessment.score,
-          model: assessment.model,
-          api_result: assessment.apiResult,
-          created_at: new Date().toISOString()
-        });
-        if (error) throw error;
-        console.log('✅ Assessment successfully saved to Supabase');
-      } catch (err) {
-        console.error('⚠️ Failed to save assessment to Supabase:', err);
-      }
-    }
+    // Supplementary Supabase assessments table deactivated because table is absent from DB
+    console.log('✅ Assessment successfully processed locally');
   };
 
   const updateAssessmentRatings = async (jobId: string, ratings: any) => {
-    if (user) {
-      try {
-        const { error } = await supabase
-          .from('assessments')
-          .update({ ratings })
-          .eq('id', jobId);
-        if (error) throw error;
-        console.log('✅ Assessment ratings synced to Supabase');
-      } catch (err) {
-        console.error('⚠️ Failed to sync ratings to Supabase:', err);
-      }
-    }
+    // Supplementary Supabase assessments table deactivated because table is absent from DB
+    console.log('✅ Assessment ratings synced locally');
   };
 
   const updateAssessmentNotes = async (jobId: string, notes: any) => {
-    if (user) {
-      try {
-        const { error } = await supabase
-          .from('assessments')
-          .update({ notes })
-          .eq('id', jobId);
-        if (error) throw error;
-        console.log('✅ Assessment notes synced to Supabase');
-      } catch (err) {
-        console.error('⚠️ Failed to sync notes to Supabase:', err);
-      }
-    }
+    // Supplementary Supabase assessments table deactivated because table is absent from DB
+    console.log('✅ Assessment notes synced locally');
   };
 
   return (

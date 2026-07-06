@@ -1,1 +1,1 @@
-npx secretlint --staged
+npm run security-scan
