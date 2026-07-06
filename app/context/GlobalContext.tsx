@@ -53,7 +53,7 @@ interface GlobalContextType {
   subscription: 'Free' | 'Pro' | 'Enterprise';
   tokenStats: TokenStats;
   theme: 'light' | 'dark';
-  signIn: (email: string, password?: string) => Promise<void>;
+  signIn: (email: string, password?: string, captchaAnswer?: string, captchaToken?: string) => Promise<void>;
   signUp: (email: string, password?: string, companyName?: string, companySize?: string) => Promise<void>;
   signOut: () => Promise<void>;
   toggleTheme: () => void;
@@ -413,32 +413,90 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
     setTheme((prev) => (prev === 'light' ? 'dark' : 'light'));
   };
 
-  const signIn = async (email: string, password?: string) => {
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password: password || '',
+  const signIn = async (email: string, password?: string, captchaAnswer?: string, captchaToken?: string) => {
+    const csrfRes = await fetch('/api/auth/csrf');
+    const { csrfToken } = await csrfRes.json().catch(() => ({ csrfToken: '' }));
+
+    const nonce = typeof window !== 'undefined' && window.crypto && window.crypto.randomUUID 
+      ? window.crypto.randomUUID() 
+      : Math.random().toString(36).substring(2, 15);
+    const timestamp = Date.now().toString();
+
+    const response = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': csrfToken,
+        'X-Request-Nonce': nonce,
+        'X-Request-Timestamp': timestamp
+      },
+      body: JSON.stringify({ email, password: password || '', captchaAnswer, captchaToken }),
     });
-    if (error) {
-      if (error.message?.toLowerCase().includes('email not confirmed') || error.message?.toLowerCase().includes('confirm your email')) {
+
+    const result = await response.json().catch(() => ({ error: 'Connection failed' }));
+
+    if (!response.ok) {
+      if (result.error?.toLowerCase().includes('email not confirmed') || result.error?.toLowerCase().includes('confirm your email')) {
         throw new Error("Please verify your email first. Check your inbox for the verification link.");
       }
-      throw error;
+      const err = new Error(result.error || 'Invalid credentials');
+      (err as any).requireCaptcha = result.requireCaptcha;
+      (err as any).captchaQuestion = result.captchaQuestion;
+      (err as any).captchaToken = result.captchaToken;
+      (err as any).attemptsRemaining = result.attemptsRemaining;
+      throw err;
+    }
+
+    if (result.session) {
+      const { error: sessionError } = await supabase.auth.setSession({
+        access_token: result.session.access_token,
+        refresh_token: result.session.refresh_token,
+      });
+      if (sessionError) throw sessionError;
     }
   };
 
   const signUp = async (email: string, password?: string, companyName?: string, companySize?: string) => {
-    const { error } = await supabase.auth.signUp({
-      email,
-      password: password || '',
-      options: {
-        data: {
-          name: email.split('@')[0],
-          companyName: companyName || '',
-          companySize: companySize || '1-10 employees',
-        },
+    const csrfRes = await fetch('/api/auth/csrf');
+    const { csrfToken } = await csrfRes.json().catch(() => ({ csrfToken: '' }));
+
+    const nonce = typeof window !== 'undefined' && window.crypto && window.crypto.randomUUID 
+      ? window.crypto.randomUUID() 
+      : Math.random().toString(36).substring(2, 15);
+    const timestamp = Date.now().toString();
+
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || (typeof window !== 'undefined' ? window.location.origin : '');
+
+    const response = await fetch('/api/auth/register', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': csrfToken,
+        'X-Request-Nonce': nonce,
+        'X-Request-Timestamp': timestamp
       },
+      body: JSON.stringify({
+        email,
+        password: password || '',
+        fullName: email.split('@')[0],
+        company: companyName || '',
+        redirectTo: `${siteUrl}/auth/confirm?next=/onboarding`
+      })
     });
-    if (error) throw error;
+
+    const result = await response.json().catch(() => ({ error: 'Connection failed' }));
+
+    if (!response.ok) {
+      throw new Error(result.error || 'Failed to register account.');
+    }
+
+    if (result.session) {
+      const { error: sessionError } = await supabase.auth.setSession({
+        access_token: result.session.access_token,
+        refresh_token: result.session.refresh_token,
+      });
+      if (sessionError) throw sessionError;
+    }
   };
 
   const signOut = async () => {

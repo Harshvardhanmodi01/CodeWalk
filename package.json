@@ -11,7 +11,9 @@
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "security-scan": "secretlint \"**/*\"",
+    "prepare": "husky"
   },
   "dependencies": {
     "@babel/parser": "^8.0.0",
@@ -43,6 +45,7 @@
     "zod": "^4.4.2"
   },
   "devDependencies": {
+    "@secretlint/secretlint-rule-preset-recommend": "^13.0.2",
     "@supabase/ssr": "^0.10.3",
     "@tailwindcss/postcss": "^4",
     "@types/babel__traverse": "^7.28.0",
@@ -53,6 +56,8 @@
     "@vitest/coverage-v8": "^4.1.9",
     "eslint": "^9",
     "eslint-config-next": "16.2.4",
+    "husky": "^9.1.7",
+    "secretlint": "^13.0.2",
     "tailwindcss": "^4",
     "ts-node": "^10.9.2",
     "typescript": "^5",

@@ -35,6 +35,41 @@ export default function AppContent({ children }: { children: React.ReactNode }) 
 
   useEffect(() => {
     setMounted(true);
+
+    const handleGlobalPaste = (e: ClipboardEvent) => {
+      const target = e.target as HTMLInputElement | HTMLTextAreaElement;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) {
+        const clipboardData = e.clipboardData || (window as any).clipboardData;
+        if (!clipboardData) return;
+        const pastedText = clipboardData.getData('text');
+        if (!pastedText) return;
+
+        // Zero-width spaces, RTL override, and other control/invisible character ranges
+        const dangerousUnicodeRegex = /[\u200B-\u200D\uFEFF\u202E\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/g;
+        if (dangerousUnicodeRegex.test(pastedText)) {
+          e.preventDefault();
+          const sanitizedText = pastedText.replace(dangerousUnicodeRegex, '');
+          
+          const start = target.selectionStart || 0;
+          const end = target.selectionEnd || 0;
+          const val = target.value;
+          
+          target.value = val.substring(0, start) + sanitizedText + val.substring(end);
+          target.selectionStart = target.selectionEnd = start + sanitizedText.length;
+          
+          // Trigger React onChange state synchronization
+          const inputEvent = new Event('input', { bubbles: true });
+          target.dispatchEvent(inputEvent);
+          
+          toast.error("Pasted content was sanitized for security");
+        }
+      }
+    };
+
+    document.addEventListener('paste', handleGlobalPaste);
+    return () => {
+      document.removeEventListener('paste', handleGlobalPaste);
+    };
   }, []);
 
   // Close dropdowns on path change

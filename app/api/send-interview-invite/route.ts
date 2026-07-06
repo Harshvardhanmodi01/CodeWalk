@@ -6,6 +6,16 @@ import { Resend } from 'resend';
 import { requireAuth } from '@/app/lib/auth-middleware';
 import { validateUUID, sanitizeString } from '@/app/lib/validation';
 
+function escapeHtml(unsafe: string): string {
+  if (typeof unsafe !== 'string') return unsafe;
+  return unsafe
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
 export async function POST(req: NextRequest) {
   try {
     // 1. Authenticate recruiter
@@ -81,7 +91,10 @@ export async function POST(req: NextRequest) {
         .select('company_name, name')
         .eq('id', userId)
         .single();
-      const companyName = profile?.company_name || 'CodeWalk Recruiter';
+      const companyName = escapeHtml(profile?.company_name || 'CodeWalk Recruiter');
+      const escapedCandidateName = escapeHtml(candidate.name);
+      const escapedRepoName = escapeHtml(candidate.github_url.split('/').pop() || '');
+      const escapedSessionUrl = escapeHtml(sessionUrl);
 
       const resend = new Resend(resendApiKey);
 
@@ -108,7 +121,7 @@ export async function POST(req: NextRequest) {
             
             <h2 style="color: #ffffff; font-size: 20px; border-bottom: 1px solid #3b494b; pb-10; margin-bottom: 20px;">Technical Assessment Scheduled</h2>
             
-            <p>Hi ${candidate.name},</p>
+            <p>Hi ${escapedCandidateName},</p>
             <p>We have scheduled a technical code story review session with <strong>${companyName}</strong>.</p>
             
             <div style="background-color: #151d1e; border: 1px solid #3b494b; border-radius: 6px; padding: 20px; margin: 25px 0;">
@@ -128,10 +141,10 @@ export async function POST(req: NextRequest) {
               </table>
             </div>
 
-            <p style="margin-bottom: 30px;">During this session, you will review code from your GitHub repository (<strong>${candidate.github_url.split('/').pop()}</strong>) and answer AI-facilitated architecture and coding questions.</p>
+            <p style="margin-bottom: 30px;">During this session, you will review code from your GitHub repository (<strong>${escapedRepoName}</strong>) and answer AI-facilitated architecture and coding questions.</p>
             
             <div style="text-align: center; margin-bottom: 30px;">
-              <a href="${sessionUrl}" style="background-color: #06B6D4; color: #0d1515; font-weight: bold; text-decoration: none; padding: 12px 30px; border-radius: 6px; display: inline-block; font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">Join Interview</a>
+              <a href="${escapedSessionUrl}" style="background-color: #06B6D4; color: #0d1515; font-weight: bold; text-decoration: none; padding: 12px 30px; border-radius: 6px; display: inline-block; font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">Join Interview</a>
             </div>
 
             <p style="font-size: 12px; color: #94A3B8; line-height: 1.5;">Please ensure you have a stable internet connection, Chrome or any modern desktop browser, and your GitHub repository context handy. Good luck!</p>

@@ -17,6 +17,10 @@ function LoginPageInner() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [captchaQuestion, setCaptchaQuestion] = useState('');
+  const [captchaToken, setCaptchaToken] = useState('');
+  const [captchaAnswer, setCaptchaAnswer] = useState('');
+  const [showCaptcha, setShowCaptcha] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -36,10 +40,16 @@ function LoginPageInner() {
     setLoading(true);
 
     try {
-      await signIn(email, password);
+      await signIn(email, password, captchaAnswer, captchaToken);
       router.push('/dashboard');
     } catch (err: any) {
       setError(err.message || 'Invalid email or password.');
+      if (err.requireCaptcha) {
+        setShowCaptcha(true);
+        setCaptchaQuestion(err.captchaQuestion);
+        setCaptchaToken(err.captchaToken);
+        setCaptchaAnswer('');
+      }
     } finally {
       setLoading(false);
     }
@@ -255,6 +265,27 @@ function LoginPageInner() {
                 </button>
               </div>
             </div>
+
+            {showCaptcha && (
+              <div className="space-y-1.5 p-4 border border-[#3b494b] bg-[#151d1e]/50 rounded-lg">
+                <label className="block text-xs font-bold text-emerald-400 uppercase tracking-wider">
+                  Security Verification Required
+                </label>
+                <p className="text-xs text-[#b9cacb] mt-1">{captchaQuestion}</p>
+                <input
+                  type="text"
+                  required
+                  placeholder="Enter your answer"
+                  value={captchaAnswer}
+                  onChange={(e) => setCaptchaAnswer(e.target.value)}
+                  className="w-full mt-2 rounded-lg px-4 py-2.5 text-xs outline-none bg-[#0d1515] border border-[#3b494b] text-white"
+                  style={{ border: '1px solid #3b494b' }}
+                  onFocus={e => (e.currentTarget.style.borderColor = '#00dbe9')}
+                  onBlur={e => (e.currentTarget.style.borderColor = '#3b494b')}
+                  disabled={loading}
+                />
+              </div>
+            )}
 
             <button
               className="w-full font-bold text-sm py-3.5 rounded-lg transition-all duration-150 active:scale-[0.98] flex items-center justify-center gap-2 mt-2 cursor-pointer"

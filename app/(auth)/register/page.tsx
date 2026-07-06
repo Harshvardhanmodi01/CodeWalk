@@ -9,7 +9,7 @@ import { toast } from 'react-hot-toast';
 
 export default function RegisterPage() {
   const router = useRouter();
-  const { user } = useGlobal();
+  const { user, signUp } = useGlobal();
   
   const [fullName, setFullName] = useState('');
   const [company, setCompany] = useState('');
@@ -58,33 +58,24 @@ export default function RegisterPage() {
       return;
     }
 
+    // Client-side validation (Fix 4: LPDoS & ReDoS)
+    if (password.length < 8 || password.length > 72) {
+      setError('Password must be between 8 and 72 characters');
+      setLoading(false);
+      return;
+    }
+
+    if (email.length > 254) {
+      setError('Email must be at most 254 characters');
+      setLoading(false);
+      return;
+    }
+
     try {
-      const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || window.location.origin;
-      const { data: authData, error: authErr } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            full_name: fullName,
-            company: company,
-            name: fullName,
-            companyName: company
-          },
-          emailRedirectTo: `${siteUrl}/auth/confirm?next=/onboarding`
-        }
-      });
+      await signUp(email, password, company);
 
-      if (authErr) throw authErr;
-
-      const authUser = authData?.user;
-      const session = authData?.session;
-
-      if (!authUser) {
-        throw new Error('Registration failed. Please try again.');
-      }
-
-      // DO NOT insert profile here — no session yet, RLS will block it.
-      // Profile will be created after OTP verification via admin API.
+      // Verify if a session was successfully created
+      const { data: { session } } = await supabase.auth.getSession();
 
       toast.success('Registration successful!');
 

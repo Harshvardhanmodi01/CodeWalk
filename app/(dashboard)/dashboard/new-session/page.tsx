@@ -174,8 +174,29 @@ function NewSessionFlowContent() {
 
   // GitHub URL simple validation
   const validateGithubUrl = (url: string) => {
+    const dangerousUnicodeRegex = /[\u200B-\u200D\uFEFF\u202E\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/g;
+    const cleanUrl = url.replace(dangerousUnicodeRegex, '').trim();
     const pattern = /^https?:\/\/(?:www\.)?github\.com\/([^/]+)\/([^/?#]+)/i;
-    return pattern.test(url.trim());
+    return pattern.test(cleanUrl);
+  };
+
+  const handleRepoUrlPaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    const pastedText = e.clipboardData.getData('text');
+    const dangerousUnicodeRegex = /[\u200B-\u200D\uFEFF\u202E\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/g;
+    const hasDangerous = dangerousUnicodeRegex.test(pastedText);
+    const cleanUrl = pastedText.replace(dangerousUnicodeRegex, '').trim();
+    
+    if (hasDangerous) {
+      toast.error("Pasted content was sanitized for security");
+    }
+    
+    const pattern = /^https?:\/\/(?:www\.)?github\.com\/([^/]+)\/([^/?#]+)/i;
+    if (!pattern.test(cleanUrl)) {
+      toast.error("Invalid GitHub URL format");
+    }
+    
+    setRepoUrl(cleanUrl);
+    e.preventDefault();
   };
 
   // Check if current setup mode requires GitHub code repository
@@ -973,6 +994,7 @@ function NewSessionFlowContent() {
                           required
                           value={repoUrl}
                           onChange={(e) => setRepoUrl(e.target.value)}
+                          onPaste={handleRepoUrlPaste}
                           className="w-full bg-[#0d1515] border border-[#3b494b] px-4 py-2.5 rounded-lg text-sm font-mono focus:outline-none focus:border-[#06B6D4] transition-colors"
                           placeholder="https://github.com/owner/repo"
                           type="text"

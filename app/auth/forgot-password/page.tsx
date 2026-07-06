@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
@@ -45,17 +45,13 @@ export default function ForgotPasswordPage() {
       setEmailSent(true);
       setResendCooldown(60);
     } catch (err: any) {
-      // Supabase returns a generic message even for unknown emails (security best practice),
-      // but we still surface real network / config errors.
       const msg = err?.message || '';
       if (msg.toLowerCase().includes('rate limit') || msg.toLowerCase().includes('too many')) {
         setError('Too many requests. Please wait a moment and try again.');
-      } else if (msg.toLowerCase().includes('invalid') || msg.toLowerCase().includes('not found')) {
-        setError('No account found with that email address.');
-      } else if (msg) {
-        setError(msg);
       } else {
-        setError('Failed to send reset email. Please try again.');
+        // Fallback to success page to prevent account enumeration
+        setEmailSent(true);
+        setResendCooldown(60);
       }
     } finally {
       setLoading(false);
@@ -105,9 +101,8 @@ export default function ForgotPasswordPage() {
                 </svg>
               </div>
               <p className="text-center text-sm text-muted-text leading-relaxed">
-                We sent a password reset link to{' '}
-                <strong className="text-text-main font-semibold">{email}</strong>.{' '}
-                Click the link in that email to reset your password.
+                If this email exists, you will receive a reset link.
+                Please check the inbox for <strong className="text-text-main font-semibold">{email}</strong>.
               </p>
               <p className="text-center text-xs text-muted-text/70">
                 Didn&apos;t receive it? Check your spam folder or resend below.

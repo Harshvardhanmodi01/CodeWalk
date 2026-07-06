@@ -60,10 +60,33 @@ export async function proxy(req: NextRequest) {
     }
   }
 
+  // Generate CSP nonce for HTML requests
+  const nonce = Buffer.from(crypto.randomUUID()).toString('base64');
+  const isDev = process.env.NODE_ENV === 'development';
+  const scriptSrc = isDev 
+    ? `'self' 'nonce-${nonce}' 'unsafe-eval'` 
+    : `'self' 'nonce-${nonce}'`;
+
+  const cspHeader = `
+    default-src 'self';
+    script-src ${scriptSrc};
+    style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+    font-src 'self' https://fonts.gstatic.com;
+    img-src 'self' data: https:;
+    connect-src 'self' https://*.supabase.co https://api.groq.com ws: wss:;
+    object-src 'none';
+    base-uri 'self';
+    form-action 'self';
+  `.replace(/\s{2,}/g, ' ').trim();
+
+  const requestHeaders = new Headers(req.headers);
+  requestHeaders.set('x-nonce', nonce);
+  requestHeaders.set('Content-Security-Policy', cspHeader);
+
   // 2. Existing Session & Route Protection
   let response = NextResponse.next({
     request: {
-      headers: req.headers,
+      headers: requestHeaders,
     },
   });
 
@@ -71,6 +94,7 @@ export async function proxy(req: NextRequest) {
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
   if (!supabaseUrl || !supabaseAnonKey) {
+    response.headers.set('Content-Security-Policy', cspHeader);
     return response;
   }
 
@@ -90,7 +114,7 @@ export async function proxy(req: NextRequest) {
             req.cookies.set(name, value);
             response = NextResponse.next({
               request: {
-                headers: req.headers,
+                headers: requestHeaders,
               },
             });
             response.cookies.set(name, value, options);
@@ -117,7 +141,9 @@ export async function proxy(req: NextRequest) {
   if (isProtectedRoute && !isCandidateRoute) {
     if (!user) {
       url.pathname = '/login';
-      return NextResponse.redirect(url);
+      const redirectResponse = NextResponse.redirect(url);
+      redirectResponse.headers.set('Content-Security-Policy', cspHeader);
+      return redirectResponse;
     }
   }
 
@@ -129,9 +155,12 @@ export async function proxy(req: NextRequest) {
 
   if (isAuthRoute && user) {
     url.pathname = '/dashboard';
-    return NextResponse.redirect(url);
+    const redirectResponse = NextResponse.redirect(url);
+    redirectResponse.headers.set('Content-Security-Policy', cspHeader);
+    return redirectResponse;
   }
 
+  response.headers.set('Content-Security-Policy', cspHeader);
   return response;
 }
 

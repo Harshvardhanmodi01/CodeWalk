@@ -4,6 +4,8 @@ import { GlobalProvider } from "@/app/context/GlobalContext";
 import AppContent from "@/app/AppContent";
 import { Toaster } from "react-hot-toast";
 
+import { headers } from "next/headers";
+
 // Use generic system fonts mock to allow offline building without Google Fonts network requests
 const geistSans = { variable: "font-sans" };
 const geistMono = { variable: "font-mono" };
@@ -13,16 +15,20 @@ export const metadata: Metadata = {
   description: "Index, comprehend, and walk through your codebases dynamically with AI. Perfect for interview prep, developer onboarding, and active recall code learning.",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const headersList = await headers();
+  const nonce = headersList.get('x-nonce') || undefined;
+
   return (
     <html
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased dark`}
       suppressHydrationWarning
+      nonce={nonce}
     >
       <head>
         <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:FILL,wght@0..1,100..700&display=swap" rel="stylesheet"/>
