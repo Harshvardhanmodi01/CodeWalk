@@ -1,3 +1,11 @@
+/**
+ * MANUAL SUPABASE DASHBOARD CONFIGURATION (Fix 6):
+ * 1. Navigate to your Supabase Project Settings > Authentication.
+ * 2. Set "JWT Expiry" (access_token lifespan) to 3600 seconds (1 hour).
+ * 3. Under "Session Settings", toggle "Enable Refresh Token Rotation" to ON.
+ * 4. Client-side authentication tokens are kept in HttpOnly cookies by @supabase/ssr.
+ */
+
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
@@ -6,8 +14,12 @@ interface RateLimitRecord {
   resetTime: number;
 }
 
-// Simple in-memory rate limiting map.
 const limiters = new Map<string, RateLimitRecord>();
+
+const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function validateUUID(uuid: string) {
+  return uuidRegex.test(uuid);
+}
 
 export async function proxy(req: NextRequest) {
   const url = req.nextUrl.clone();
@@ -69,11 +81,11 @@ export async function proxy(req: NextRequest) {
 
   const cspHeader = `
     default-src 'self';
-    script-src ${scriptSrc};
+    script-src ${scriptSrc} https://www.googletagmanager.com https://www.google-analytics.com;
     style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
     font-src 'self' https://fonts.gstatic.com;
-    img-src 'self' data: https:;
-    connect-src 'self' https://*.supabase.co https://api.groq.com ws: wss:;
+    img-src 'self' data: https: https://www.google-analytics.com https://www.googletagmanager.com;
+    connect-src 'self' https://*.supabase.co https://api.groq.com ws: wss: https://www.google-analytics.com https://www.googletagmanager.com https://analytics.google.com;
     object-src 'none';
     base-uri 'self';
     form-action 'self';
@@ -158,6 +170,52 @@ export async function proxy(req: NextRequest) {
     const redirectResponse = NextResponse.redirect(url);
     redirectResponse.headers.set('Content-Security-Policy', cspHeader);
     return redirectResponse;
+  }
+
+  // IDOR Protection for Frontend pages (Fix 2)
+  if (user) {
+    const parts = path.split('/');
+    
+    // Protect `/session/[sessionId]` (recruiter route)
+    if (path.startsWith('/session/') && parts[2]) {
+      const sessionId = parts[2];
+      if (validateUUID(sessionId)) {
+        // Query sessions via client to verify ownership (RLS handles this)
+        const { data: sessionData } = await supabase
+          .from('sessions')
+          .select('recruiter_id')
+          .eq('id', sessionId)
+          .maybeSingle();
+
+        if (!sessionData) {
+          url.pathname = '/dashboard';
+          url.searchParams.set('error', 'Access denied');
+          const redirectResponse = NextResponse.redirect(url);
+          redirectResponse.headers.set('Content-Security-Policy', cspHeader);
+          return redirectResponse;
+        }
+      }
+    }
+
+    // Protect `/candidates/[candidateId]` (recruiter route)
+    if (path.startsWith('/candidates/') && parts[2]) {
+      const candidateId = parts[2];
+      if (validateUUID(candidateId)) {
+        const { data: candidateData } = await supabase
+          .from('candidates')
+          .select('recruiter_id')
+          .eq('id', candidateId)
+          .maybeSingle();
+
+        if (!candidateData) {
+          url.pathname = '/candidates';
+          url.searchParams.set('error', 'Access denied');
+          const redirectResponse = NextResponse.redirect(url);
+          redirectResponse.headers.set('Content-Security-Policy', cspHeader);
+          return redirectResponse;
+        }
+      }
+    }
   }
 
   response.headers.set('Content-Security-Policy', cspHeader);

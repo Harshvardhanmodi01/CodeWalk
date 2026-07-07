@@ -5,6 +5,12 @@ import { cookies } from 'next/headers';
  * Creates a Supabase server client that properly reads auth session
  * from the HTTP request cookies (compatible with Next.js App Router).
  * Use this in Server Components and API Route Handlers.
+ * 
+ * MANUAL SUPABASE DASHBOARD CONFIGURATION (Fix 6):
+ * 1. Navigate to your Supabase Project Settings > Authentication.
+ * 2. Set "JWT Expiry" (access_token lifespan) to 3600 seconds (1 hour).
+ * 3. Under "Session Settings", toggle "Enable Refresh Token Rotation" to ON.
+ * 4. Client-side authentication tokens are kept in HttpOnly cookies by @supabase/ssr.
  */
 export async function createServerSupabaseClient() {
   const cookieStore = await cookies();

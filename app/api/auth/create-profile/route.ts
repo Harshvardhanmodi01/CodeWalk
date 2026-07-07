@@ -1,9 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/app/lib/supabaseAdmin';
+import { pickAllowed } from '@/app/lib/whitelist';
 
 export async function POST(req: NextRequest) {
+  const forwarded = req.headers.get('x-forwarded-for');
+  const ip = forwarded ? forwarded.split(',')[0].trim() : ((req as any).ip || '127.0.0.1');
+
   try {
-    const { userId, name, email, company, tokensTotal } = await req.json();
+    const body = await req.json().catch(() => ({}));
+    const allowedFields = ['userId', 'name', 'email', 'company'];
+    const restrictedFields = ['plan', 'tokensTotal', 'tokens_total', 'tokens_used', 'role', 'is_admin'];
+    const whitelistedData = pickAllowed(body, allowedFields, restrictedFields, {
+      eventType: 'MASS_ASSIGNMENT_ATTEMPT_CREATE_PROFILE',
+      ip,
+      userId: body.userId || null
+    });
+
+    const { userId, name, email, company } = whitelistedData;
 
     if (!userId || !email) {
       return NextResponse.json({ error: 'userId and email are required' }, { status: 400 });
@@ -19,8 +32,8 @@ export async function POST(req: NextRequest) {
         full_name: name,
         company: company || '',
         company_name: company || '',
-        plan: 'enterprise',
-        tokens_total: typeof tokensTotal === 'number' ? tokensTotal : 999999,
+        plan: 'free',
+        tokens_total: 5,
         tokens_used: 0,
         created_at: new Date().toISOString(),
       }, { onConflict: 'id' });

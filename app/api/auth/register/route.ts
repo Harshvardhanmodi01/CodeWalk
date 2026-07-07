@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/app/lib/supabaseServer';
-import { sanitizeString, validateEmail } from '@/app/lib/validation';
+import { sanitizeString, validateEmail, validatePassword } from '@/app/lib/validation';
 import { logSecurityEvent, validateNonceAndTimestamp } from '@/app/lib/security';
+import { pickAllowed } from '@/app/lib/whitelist';
 
 export async function POST(req: NextRequest) {
   const forwarded = req.headers.get('x-forwarded-for');
@@ -23,7 +24,15 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json().catch(() => ({}));
-    let { email, password, fullName, company, redirectTo } = body;
+    const allowedFields = ['email', 'password', 'fullName', 'company', 'redirectTo'];
+    const restrictedFields = ['plan', 'tokens_total', 'tokens_used', 'role', 'is_admin', 'recruiter_id'];
+    const whitelistedData = pickAllowed(body, allowedFields, restrictedFields, {
+      eventType: 'MASS_ASSIGNMENT_ATTEMPT_REGISTER',
+      ip,
+      userId: null
+    });
+
+    let { email, password, fullName, company, redirectTo } = whitelistedData;
 
     // 1. Sanitize and validate email
     email = sanitizeString(email, ip);
@@ -35,13 +44,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Email must be at most 254 characters' }, { status: 400 });
     }
 
-    // 2. Validate password length (Fix 4: LPDoS)
-    if (!password || typeof password !== 'string') {
-      return NextResponse.json({ error: 'Password is required' }, { status: 400 });
-    }
-
-    if (password.length < 8 || password.length > 72) {
-      return NextResponse.json({ error: 'Password must be between 8 and 72 characters' }, { status: 400 });
+    // 2. Validate password strength (Fix 4: Password Strength Enforcement)
+    const passwordCheck = validatePassword(password);
+    if (!passwordCheck.valid) {
+      return NextResponse.json({ error: passwordCheck.error }, { status: 400 });
     }
 
     // 3. Sanitize other inputs

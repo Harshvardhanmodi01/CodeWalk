@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
         email,
         reason: lockoutStatus.reason,
         failedAttemptsCount: lockoutStatus.failedAttemptsCount
-      });
+      }, 'critical');
 
       const statusCode = lockoutStatus.reason?.includes('IP') ? 403 : 429;
       return NextResponse.json({ error: lockoutStatus.reason }, { status: statusCode });
@@ -71,7 +71,7 @@ export async function POST(req: NextRequest) {
         await logSecurityEvent('LOGIN_CAPTCHA_FAILED', ip, null, {
           email,
           failedAttemptsCount: lockoutStatus.failedAttemptsCount
-        });
+        }, 'warning');
 
         const remaining = 5 - lockoutStatus.failedAttemptsCount;
         return NextResponse.json({
@@ -98,7 +98,7 @@ export async function POST(req: NextRequest) {
       await logSecurityEvent('LOGIN_FAILED', ip, null, {
         email,
         authError: error.message
-      });
+      }, 'warning');
 
       // Get updated lockout status to determine new attempts state
       const updatedLockout = await checkLoginLockout(email, ip);
@@ -137,7 +137,7 @@ export async function POST(req: NextRequest) {
     
     await logSecurityEvent('LOGIN_SUCCESS', ip, user?.id || null, {
       email
-    });
+    }, 'info');
 
     return NextResponse.json({
       success: true,

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useGlobal } from '@/app/context/GlobalContext';
 import { toast } from 'react-hot-toast';
+import { supabase } from '@/app/lib/supabaseClient';
 
 export default function AppContent({ children }: { children: React.ReactNode }) {
   const { user, signOut, theme, toggleTheme, subscription } = useGlobal();
@@ -35,6 +36,26 @@ export default function AppContent({ children }: { children: React.ReactNode }) 
 
   useEffect(() => {
     setMounted(true);
+
+    // Global fetch interceptor (Fix 6)
+    const originalFetch = window.fetch;
+    window.fetch = async function (input, init) {
+      let response = await originalFetch(input, init);
+      
+      if (response.status === 401) {
+        console.warn('API returned 401, attempting token refresh...');
+        const { data, error } = await supabase.auth.refreshSession();
+        if (data?.session) {
+          // Retry original request once
+          response = await originalFetch(input, init);
+        } else {
+          // Refresh failed, clear session and redirect to login
+          console.error('Session refresh failed, redirecting to login...');
+          window.location.replace('/login');
+        }
+      }
+      return response;
+    };
 
     const handleGlobalPaste = (e: ClipboardEvent) => {
       const target = e.target as HTMLInputElement | HTMLTextAreaElement;
@@ -69,6 +90,7 @@ export default function AppContent({ children }: { children: React.ReactNode }) 
     document.addEventListener('paste', handleGlobalPaste);
     return () => {
       document.removeEventListener('paste', handleGlobalPaste);
+      window.fetch = originalFetch;
     };
   }, []);
 
@@ -505,8 +527,11 @@ export default function AppContent({ children }: { children: React.ReactNode }) 
               <Link href="/support" className="text-xs text-muted-text hover:text-primary transition-colors">
                 Support Center
               </Link>
-              <Link href="/policy" className="text-xs text-muted-text hover:text-primary transition-colors">
-                Privacy & Terms
+              <Link href="/privacy" className="text-xs text-muted-text hover:text-primary transition-colors">
+                Privacy Policy
+              </Link>
+              <Link href="/terms" className="text-xs text-muted-text hover:text-primary transition-colors">
+                Terms of Service
               </Link>
             </div>
 

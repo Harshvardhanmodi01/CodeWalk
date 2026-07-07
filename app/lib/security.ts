@@ -117,21 +117,38 @@ export async function logSecurityEvent(
   eventType: string,
   ip: string,
   userId: string | null,
-  details: any
+  details: any,
+  severity: 'info' | 'warning' | 'critical' = 'info'
 ): Promise<void> {
   try {
     const sanitizedDetails = sanitizeLogData(details);
     
     // Log to console for observability
-    console.warn(`[SECURITY EVENT] Type: ${eventType} | IP: ${ip} | User: ${userId || 'N/A'} | Details:`, JSON.stringify(sanitizedDetails));
+    console.warn(`[SECURITY EVENT] [${severity.toUpperCase()}] Type: ${eventType} | IP: ${ip} | User: ${userId || 'N/A'} | Details:`, JSON.stringify(sanitizedDetails));
 
-    await supabaseAdmin.from('security_logs').insert({
+    const logObj: any = {
       event_type: eventType,
       ip_address: ip,
       user_id: userId,
-      details: sanitizedDetails,
+      details: { ...sanitizedDetails, severity },
+      severity,
       created_at: new Date().toISOString()
-    });
+    };
+
+    const { error } = await supabaseAdmin.from('security_logs').insert(logObj);
+    
+    if (error) {
+      if (error.message.includes('severity') || error.code === 'PGRST204') {
+        // Fallback: Database does not have severity column yet
+        delete logObj.severity;
+        const { error: fallbackErr } = await supabaseAdmin.from('security_logs').insert(logObj);
+        if (fallbackErr) {
+          console.error('Failed fallback security log insert:', fallbackErr);
+        }
+      } else {
+        console.error('Failed security log insert:', error);
+      }
+    }
   } catch (err) {
     console.error('Failed to log security event:', err);
   }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/app/lib/supabaseAdmin';
 import { validateUUID } from '@/app/lib/validation';
+import { sanitizeSession } from '@/app/lib/response-sanitizer';
 
 /**
  * Public/Candidate API to fetch session details, questions, and answers.
@@ -19,7 +20,7 @@ export async function GET(req: NextRequest) {
     // 1. Fetch session details
     const { data: session, error: sessionErr } = await supabaseAdmin
       .from('sessions')
-      .select('*')
+      .select('id, candidate_id, status, started_at, ended_at, timer_duration_minutes, repo_url, remaining_seconds, created_at')
       .eq('id', sessionId)
       .single();
 
@@ -52,7 +53,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      session,
+      session: sanitizeSession(session),
       questions: questions || [],
       answers: answers || []
     });

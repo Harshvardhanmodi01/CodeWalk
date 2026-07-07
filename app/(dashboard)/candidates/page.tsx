@@ -73,6 +73,18 @@ export default function CandidatesPage() {
   };
 
   useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const errorParam = params.get('error');
+      if (errorParam) {
+        toast.error(errorParam);
+        const newUrl = window.location.pathname;
+        window.history.replaceState({}, '', newUrl);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
     if (user?.id) {
       fetchCandidates();
     }
@@ -300,9 +312,10 @@ export default function CandidatesPage() {
         });
 
         setParsingProgress(prev => ({ ...prev, [file.name]: 'success' }));
-      } catch (err) {
+      } catch (err: any) {
         console.error('Error parsing resume:', err);
         setParsingProgress(prev => ({ ...prev, [file.name]: 'error' }));
+        toast.error(`${file.name}: ${err.message || 'Failed to parse resume.'}`);
         // Add default empty state for correction
         parsedResults.push({
           fileName: file.name,

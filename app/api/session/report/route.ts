@@ -2,8 +2,12 @@ import { NextResponse } from 'next/server';
 import Groq from 'groq-sdk';
 import { requireAuth } from '@/app/lib/auth-middleware';
 import { validateUUID } from '@/app/lib/validation';
+import { verifySessionOwnership, ForbiddenError } from '@/app/lib/ownership-check';
 
 export async function POST(req: Request) {
+  const forwarded = req.headers.get('x-forwarded-for');
+  const ip = forwarded ? forwarded.split(',')[0].trim() : ((req as any).ip || '127.0.0.1');
+
   try {
     const authResult = await requireAuth(req);
     if (authResult instanceof Response) {
@@ -15,6 +19,17 @@ export async function POST(req: Request) {
     
     if (sessionId && !validateUUID(sessionId)) {
       return NextResponse.json({ error: 'Invalid sessionId format' }, { status: 400 });
+    }
+
+    if (sessionId) {
+      try {
+        await verifySessionOwnership(sessionId, authResult.id, ip);
+      } catch (err: any) {
+        if (err instanceof ForbiddenError) {
+          return NextResponse.json({ error: 'Access denied' }, { status: 403 });
+        }
+        return NextResponse.json({ error: 'Session not found or access denied' }, { status: 404 });
+      }
     }
 
     if (!answers || !Array.isArray(answers)) {

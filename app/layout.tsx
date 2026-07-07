@@ -3,6 +3,7 @@ import "./globals.css";
 import { GlobalProvider } from "@/app/context/GlobalContext";
 import AppContent from "@/app/AppContent";
 import { Toaster } from "react-hot-toast";
+import CookieConsent from "@/components/CookieConsent";
 
 import { headers } from "next/headers";
 
@@ -46,6 +47,7 @@ export default async function RootLayout({
               },
             }}
           />
+          <CookieConsent />
         </GlobalProvider>
       </body>
     </html>

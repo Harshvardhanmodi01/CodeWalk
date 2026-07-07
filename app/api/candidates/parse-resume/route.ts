@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server';
 import Groq from 'groq-sdk';
+import path from 'path';
+import { requireAuth } from '@/app/lib/auth-middleware';
+import { logSecurityEvent } from '@/app/lib/security';
 
 // Polyfill global DOM objects for pdf-parse/pdfjs evaluation in Node.js
 if (typeof global !== 'undefined') {
@@ -16,48 +19,83 @@ if (typeof global !== 'undefined') {
 
 const pdf = require('pdf-parse');
 
-import { requireAuth } from '@/app/lib/auth-middleware';
-
 export const dynamic = 'force-dynamic';
 
+function sanitizeFilename(filename: string): string {
+  let cleaned = filename.replace(/\.\.+\//g, '').replace(/\.\.+\\/g, '');
+  cleaned = path.basename(cleaned);
+  cleaned = cleaned.replace(/[^a-zA-Z0-9\.\-_]/g, '_');
+  return cleaned;
+}
+
 export async function POST(req: Request) {
+  const forwarded = req.headers.get('x-forwarded-for');
+  const ip = forwarded ? forwarded.split(',')[0].trim() : ((req as any).ip || '127.0.0.1');
+
   try {
     const authResult = await requireAuth(req);
     if (authResult instanceof Response) {
       return authResult;
     }
 
-    const formData = await req.formData();
-    const file = formData.get('file') as File;
+    const formData = await req.formData().catch(() => null);
+    if (!formData) {
+      return NextResponse.json({ error: 'Invalid form data' }, { status: 400 });
+    }
+
+    const file = formData.get('file') as File | null;
     if (!file) {
       return NextResponse.json({ error: 'No file uploaded' }, { status: 400 });
     }
 
+    // 1. Enforce 5MB size limit server-side
+    const maxSizeBytes = 5 * 1024 * 1024;
+    if (file.size > maxSizeBytes) {
+      await logSecurityEvent('UPLOAD_REJECTED_SIZE', ip, authResult.id, {
+        fileName: file.name,
+        fileSize: file.size,
+        maxSize: maxSizeBytes,
+      }, 'warning');
+      return NextResponse.json({ error: 'File size exceeds maximum limit of 5MB' }, { status: 400 });
+    }
+
+    // 2. Validate file extension: Only .pdf allowed
+    const fileExt = path.extname(file.name).toLowerCase();
+    if (fileExt !== '.pdf') {
+      await logSecurityEvent('UPLOAD_REJECTED_INVALID_EXTENSION', ip, authResult.id, {
+        fileName: file.name,
+        extension: fileExt,
+      }, 'warning');
+      return NextResponse.json({ error: 'Only PDF resumes are allowed' }, { status: 400 });
+    }
+
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
+
+    // 3. Verify PDF Magic Bytes (first 4 bytes: 25 50 44 46, which is %PDF)
+    const hex = buffer.toString('hex', 0, 4).toLowerCase();
+    if (hex !== '25504446') {
+      await logSecurityEvent('UPLOAD_REJECTED_MAGIC_BYTES_MISMATCH', ip, authResult.id, {
+        fileName: file.name,
+        hexSignature: hex,
+      }, 'warning');
+      return NextResponse.json({ error: 'Invalid file type' }, { status: 400 });
+    }
+
+    const sanitizedName = sanitizeFilename(file.name);
     let text = '';
 
-    const fileNameLower = file.name.toLowerCase();
-    
-    if (fileNameLower.endsWith('.docx')) {
-      const mammoth = require('mammoth');
-      const docxResult = await mammoth.extractRawText({ buffer });
-      text = docxResult.value || '';
-    } else {
-      // PDF text extraction
-      try {
-        const pdfData = await pdf(buffer);
-        text = pdfData.text || '';
-      } catch (pdfErr: any) {
-        console.error('pdf-parse failed, attempting simple string extraction fallback:', pdfErr);
-        // Clean fallback: search buffer for plain-text strings to avoid failing completely
-        const strings = buffer.toString('utf-8').match(/[\w\.\-]+@[\w\.\-]+\.[\w]{2,4}/gi);
-        if (strings && strings.length > 0) {
-          text = `Email found in fallback: ${strings.join(', ')}`;
-        } else {
-          // Instead of throwing, set text empty to trigger file name fallback
-          text = '';
-        }
+    // PDF text extraction (always safe / not executing code)
+    try {
+      const pdfData = await pdf(buffer);
+      text = pdfData.text || '';
+    } catch (pdfErr: any) {
+      console.error('pdf-parse failed, attempting simple string extraction fallback:', pdfErr);
+      const strings = buffer.toString('utf-8').match(/[\w\.\-]+@[\w\.\-]+\.[\w]{2,4}/gi);
+      if (strings && strings.length > 0) {
+        text = `Email found in fallback: ${strings.join(', ')}`;
+      } else {
+        text = '';
       }
     }
 
@@ -152,17 +190,17 @@ Return ONLY valid JSON. No markdown code blocks, no text surrounding the JSON. I
     if (parsed) {
       // Validate email and github url fallback
       const finalParsed = {
-        name: parsed.name || parseWithRegex(text, file.name).name,
-        email: parsed.email || parseWithRegex(text, file.name).email,
-        github_url: parsed.github_url || parseWithRegex(text, file.name).github_url,
-        linkedin_url: parsed.linkedin_url || parseWithRegex(text, file.name).linkedin_url,
+        name: parsed.name || parseWithRegex(text, sanitizedName).name,
+        email: parsed.email || parseWithRegex(text, sanitizedName).email,
+        github_url: parsed.github_url || parseWithRegex(text, sanitizedName).github_url,
+        linkedin_url: parsed.linkedin_url || parseWithRegex(text, sanitizedName).linkedin_url,
         skills: parsed.skills || [],
         years_experience: parsed.years_experience || '',
         current_title: parsed.current_title || parsed.role_applied || ''
       };
       return NextResponse.json({ parsed: finalParsed });
     } else {
-      return NextResponse.json({ parsed: parseWithRegex(text, file.name) });
+      return NextResponse.json({ parsed: parseWithRegex(text, sanitizedName) });
     }
   } catch (err: any) {
     console.error('Resume parsing API error:', err);

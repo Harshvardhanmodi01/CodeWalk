@@ -100,6 +100,18 @@ export default function RecruiterDashboard() {
   const [activeCardMenu, setActiveCardMenu] = useState<string | null>(null);
 
   useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const errorParam = params.get('error');
+      if (errorParam) {
+        toast.error(errorParam);
+        const newUrl = window.location.pathname;
+        window.history.replaceState({}, '', newUrl);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
     if (!user) return;
 
     // Initial fetch
