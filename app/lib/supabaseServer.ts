@@ -54,19 +54,25 @@ export async function createServerSupabaseClient() {
         if (originalLimit) {
           proto.limit = function (this: any, ...args: any[]) {
             this._hasLimit = true;
-            return originalLimit.apply(this, args);
+            const res = originalLimit.apply(this, args);
+            if (res) res._hasLimit = true;
+            return res;
           };
         }
         if (originalSingle) {
           proto.single = function (this: any, ...args: any[]) {
             this._hasSingle = true;
-            return originalSingle.apply(this, args);
+            const res = originalSingle.apply(this, args);
+            if (res) res._hasSingle = true;
+            return res;
           };
         }
         if (originalMaybeSingle) {
           proto.maybeSingle = function (this: any, ...args: any[]) {
             this._hasSingle = true;
-            return originalMaybeSingle.apply(this, args);
+            const res = originalMaybeSingle.apply(this, args);
+            if (res) res._hasSingle = true;
+            return res;
           };
         }
 

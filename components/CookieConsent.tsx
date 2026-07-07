@@ -35,6 +35,12 @@ export default function CookieConsent() {
     const script = document.createElement('script');
     script.src = 'https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX';
     script.async = true;
+
+    // Retrieve active request nonce from the layout meta tag (Fix 1)
+    const nonce = document.querySelector('meta[name="csp-nonce"]')?.getAttribute('content');
+    if (nonce) {
+      script.nonce = nonce;
+    }
     document.head.appendChild(script);
 
     // Initialize gtag
@@ -45,6 +51,9 @@ export default function CookieConsent() {
       gtag('js', new Date());
       gtag('config', 'G-XXXXXXXXXX', { 'anonymize_ip': true });
     `;
+    if (nonce) {
+      inlineScript.nonce = nonce;
+    }
     document.head.appendChild(inlineScript);
   };
 

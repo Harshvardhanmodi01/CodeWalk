@@ -55,12 +55,16 @@ export default function ResetPasswordPage() {
       });
       subscriptionObj = subscription;
 
-      // 4. Fallback: wait a bit, then mark as invalid if still no session
+      // 4. Fallback: wait a bit, then check session status
       timeoutId = setTimeout(async () => {
         if (!active) return;
         const { data: { session: currentSession } } = await supabase.auth.getSession();
-        if (!currentSession && active) {
-          setTokenValid(false);
+        if (active) {
+          if (currentSession) {
+            setTokenValid(true);
+          } else {
+            setTokenValid(false);
+          }
         }
       }, 2000);
     };
