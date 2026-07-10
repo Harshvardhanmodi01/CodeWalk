@@ -5,6 +5,7 @@ import { useRouter, useParams } from 'next/navigation';
 import { useGlobal } from '@/app/context/GlobalContext';
 import { supabase } from '@/app/lib/supabaseClient';
 import { toast } from 'react-hot-toast';
+import AssignProjectModal from '@/components/modals/AssignProjectModal';
 
 interface PositionDetails {
   id: string;
@@ -74,6 +75,9 @@ export default function PositionDetailPage() {
   const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
   const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false);
   const [exportModalOpen, setExportModalOpen] = useState(false);
+
+  const [assignProjectModalOpen, setAssignProjectModalOpen] = useState(false);
+  const [selectedCandidateForProject, setSelectedCandidateForProject] = useState<any>(null);
 
   // Import Tab states
   const [importTab, setImportTab] = useState<'csv' | 'resume'>('csv');
@@ -1196,6 +1200,15 @@ export default function PositionDetailPage() {
                               Profile
                             </button>
                             <button
+                              onClick={() => {
+                                setSelectedCandidateForProject(cand);
+                                setAssignProjectModalOpen(true);
+                              }}
+                              className="px-2.5 py-1.5 bg-purple-500/10 hover:bg-purple-500 text-purple-400 hover:text-white border border-purple-500 text-[10px] font-bold uppercase rounded transition-all cursor-pointer"
+                            >
+                              Assign Project
+                            </button>
+                            <button
                               onClick={() => router.push(`/dashboard/new-session?candidateId=${cand.id}`)}
                               className="px-2.5 py-1.5 bg-[#06B6D4] hover:brightness-110 text-[#0d1515] text-[10px] font-bold uppercase rounded transition-all cursor-pointer"
                             >
@@ -1846,6 +1859,18 @@ export default function PositionDetailPage() {
             </div>
           </div>
         </div>
+      )}
+      {assignProjectModalOpen && (
+        <AssignProjectModal
+          isOpen={assignProjectModalOpen}
+          onClose={() => {
+            setAssignProjectModalOpen(false);
+            setSelectedCandidateForProject(null);
+          }}
+          candidate={selectedCandidateForProject}
+          positionId={positionId}
+          onSuccess={fetchCandidates}
+        />
       )}
     </div>
   );

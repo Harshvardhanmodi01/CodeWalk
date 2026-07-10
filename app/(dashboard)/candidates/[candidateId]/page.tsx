@@ -6,6 +6,7 @@ import { supabase } from '@/app/lib/supabaseClient';
 import { useGlobal } from '@/app/context/GlobalContext';
 import { toast } from 'react-hot-toast';
 import ScheduleInterviewModal from '@/components/modals/ScheduleInterviewModal';
+import AssignProjectModal from '@/components/modals/AssignProjectModal';
 import RadarChart from '@/components/dashboard/RadarChart';
 
 interface Candidate {
@@ -63,6 +64,7 @@ export default function CandidateProfilePage() {
   const [loadingRepos, setLoadingRepos] = useState(false);
   const [events, setEvents] = useState<any[]>([]);
   const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
+  const [assignProjectModalOpen, setAssignProjectModalOpen] = useState(false);
 
   const fetchCandidateDetails = async () => {
     try {
@@ -398,6 +400,12 @@ export default function CandidateProfilePage() {
         </div>
 
         <div className="flex gap-3">
+          <button
+            onClick={() => setAssignProjectModalOpen(true)}
+            className="px-4 py-2 bg-[#06B6D4] hover:bg-[#06B6D4]/90 text-[#0d1515] text-xs font-bold uppercase rounded-lg transition-colors cursor-pointer"
+          >
+            Assign Project
+          </button>
           <button
             onClick={handleScheduleInterview}
             className="px-4 py-2 border border-[#3b494b] hover:border-[#94A3B8] text-white text-xs font-bold uppercase rounded-lg transition-colors cursor-pointer"
@@ -816,6 +824,15 @@ export default function CandidateProfilePage() {
           candidateName={candidate.name}
           candidateEmail={candidate.email}
           onScheduleSuccess={fetchCandidateDetails}
+        />
+      )}
+
+      {assignProjectModalOpen && (
+        <AssignProjectModal
+          isOpen={assignProjectModalOpen}
+          onClose={() => setAssignProjectModalOpen(false)}
+          candidate={candidate}
+          onSuccess={fetchCandidateDetails}
         />
       )}
 

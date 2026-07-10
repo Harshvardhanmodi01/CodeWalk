@@ -6,6 +6,7 @@ import { useGlobal } from '@/app/context/GlobalContext';
 import { supabase } from '@/app/lib/supabaseClient';
 import { toast } from 'react-hot-toast';
 import CodeBlock from '@/components/dashboard/CodeBlock';
+import AssignProjectModal from '@/components/modals/AssignProjectModal';
 
 interface QuestionItem {
   question_text: string;
@@ -77,6 +78,49 @@ function NewSessionFlowContent() {
   const [gitRepos, setGitRepos] = useState<any[]>([]);
   const [fetchingRepos, setFetchingRepos] = useState(false);
   const [repoSource, setRepoSource] = useState<'dropdown' | 'custom'>('custom');
+
+  // Take-home project flow states
+  const [flowMode, setFlowMode] = useState<'public' | 'private'>('public');
+  const [candidateExperience, setCandidateExperience] = useState('3');
+  const [candidateTechStack, setCandidateTechStack] = useState('');
+  const [candidateTechTags, setCandidateTechTags] = useState<string[]>([]);
+  const [takeHomeProjectsList, setTakeHomeProjectsList] = useState<any[]>([]);
+  const [selectedTakeHomeProject, setSelectedTakeHomeProject] = useState('');
+  const [assignProjectModalOpen, setAssignProjectModalOpen] = useState(false);
+
+  // Fetch candidate's take home projects
+  useEffect(() => {
+    if (!user?.id) return;
+    const fetchTakeHomeProjects = async () => {
+      let query = supabase
+        .from('take_home_projects')
+        .select(`
+          id,
+          project_title,
+          submission_repo_url,
+          status,
+          candidate_id,
+          candidates:candidate_id(name)
+        `)
+        .eq('recruiter_id', user.id);
+        
+      if (paramCandidateId) {
+        query = query.eq('candidate_id', paramCandidateId);
+      }
+      
+      const { data, error } = await query;
+      if (!error && data) {
+        setTakeHomeProjectsList(data);
+        // Pre-select if there is a submitted repository
+        const submitted = data.find(p => p.submission_repo_url && (p.status === 'submitted' || p.status === 'evaluated'));
+        if (submitted) {
+          setSelectedTakeHomeProject(submitted.id);
+          setRepoUrl(submitted.submission_repo_url);
+        }
+      }
+    };
+    fetchTakeHomeProjects();
+  }, [user, paramCandidateId, flowMode]);
 
   useEffect(() => {
     if (paramRepoUrl) {
@@ -929,78 +973,203 @@ function NewSessionFlowContent() {
                 {/* GitHub Repo Setup (Modes: Technical, Full Stack, Custom-with-Technical) */}
                 {requiresRepo() && (
                   <div className="space-y-4 bg-[#0d1515]/30 p-4 border border-[#3b494b]/50 rounded-lg">
-                    <div className="space-y-2">
-                      <div className="flex justify-between items-center">
-                        <label className="text-xs font-bold text-[#94A3B8] uppercase tracking-wider block">GitHub Repository URL</label>
-                        {user?.githubConnected && (
-                          <div className="flex bg-[#0d1515] p-0.5 rounded border border-[#3b494b] text-[10px] font-bold">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setRepoSource('dropdown');
-                                if (gitRepos.length > 0) setRepoUrl(gitRepos[0].html_url);
-                              }}
-                              className={`px-2.5 py-1 rounded transition-all ${
-                                repoSource === 'dropdown'
-                                  ? 'bg-[#06B6D4] text-[#0d1515]'
-                                  : 'text-[#94A3B8] hover:text-[#F1F5F9]'
-                              }`}
-                            >
-                              Select Repo
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setRepoSource('custom');
-                                setRepoUrl('');
-                              }}
-                              className={`px-2.5 py-1 rounded transition-all ${
-                                repoSource === 'custom'
-                                  ? 'bg-[#06B6D4] text-[#0d1515]'
-                                  : 'text-[#94A3B8] hover:text-[#F1F5F9]'
-                              }`}
-                            >
-                              Custom URL
-                            </button>
-                          </div>
-                        )}
-                      </div>
+                    {/* Toggle at the top */}
+                    <div className="flex bg-[#0d1515] p-1 rounded-lg border border-[#3b494b]/60 w-full font-bold text-xs select-none">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setFlowMode('public');
+                          setRepoUrl('');
+                        }}
+                        className={`flex-1 py-2 text-center rounded-md transition-all cursor-pointer ${
+                          flowMode === 'public'
+                            ? 'bg-[#06B6D4] text-[#0d1515]'
+                            : 'text-[#94A3B8] hover:text-white'
+                        }`}
+                      >
+                        Candidate has public repo
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setFlowMode('private');
+                          setRepoUrl('');
+                        }}
+                        className={`flex-1 py-2 text-center rounded-md transition-all cursor-pointer ${
+                          flowMode === 'private'
+                            ? 'bg-[#06B6D4] text-[#0d1515]'
+                            : 'text-[#94A3B8] hover:text-white'
+                        }`}
+                      >
+                        Experienced candidate (private repos)
+                      </button>
+                    </div>
 
-                      {user?.githubConnected && repoSource === 'dropdown' ? (
-                        fetchingRepos ? (
-                          <div className="w-full bg-[#0d1515] border border-[#3b494b] px-4 py-3 rounded-lg flex items-center justify-center gap-2 text-xs text-[#94A3B8]">
-                            <span className="material-symbols-outlined text-sm animate-spin">sync</span>
-                            Fetching repositories from GitHub...
-                          </div>
-                        ) : gitRepos.length === 0 ? (
-                          <div className="w-full bg-[#0d1515] border border-dashed border-[#3b494b] px-4 py-3 rounded-lg text-center text-xs text-[#94A3B8]">
-                            No repositories found. Ensure your GitHub account has repositories or use a Custom URL.
-                          </div>
+                    {flowMode === 'public' ? (
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-center">
+                          <label className="text-xs font-bold text-[#94A3B8] uppercase tracking-wider block">GitHub Repository URL</label>
+                          {user?.githubConnected && (
+                            <div className="flex bg-[#0d1515] p-0.5 rounded border border-[#3b494b] text-[10px] font-bold">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setRepoSource('dropdown');
+                                  if (gitRepos.length > 0) setRepoUrl(gitRepos[0].html_url);
+                                }}
+                                className={`px-2.5 py-1 rounded transition-all ${
+                                  repoSource === 'dropdown'
+                                    ? 'bg-[#06B6D4] text-[#0d1515]'
+                                    : 'text-[#94A3B8] hover:text-[#F1F5F9]'
+                                }`}
+                              >
+                                Select Repo
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setRepoSource('custom');
+                                  setRepoUrl('');
+                                }}
+                                className={`px-2.5 py-1 rounded transition-all ${
+                                  repoSource === 'custom'
+                                    ? 'bg-[#06B6D4] text-[#0d1515]'
+                                    : 'text-[#94A3B8] hover:text-[#F1F5F9]'
+                                }`}
+                              >
+                                Custom URL
+                              </button>
+                            </div>
+                          )}
+                        </div>
+
+                        {user?.githubConnected && repoSource === 'dropdown' ? (
+                          fetchingRepos ? (
+                            <div className="w-full bg-[#0d1515] border border-[#3b494b] px-4 py-3 rounded-lg flex items-center justify-center gap-2 text-xs text-[#94A3B8]">
+                              <span className="material-symbols-outlined text-sm animate-spin">sync</span>
+                              Fetching repositories from GitHub...
+                            </div>
+                          ) : gitRepos.length === 0 ? (
+                            <div className="w-full bg-[#0d1515] border border-dashed border-[#3b494b] px-4 py-3 rounded-lg text-center text-xs text-[#94A3B8]">
+                              No repositories found. Ensure your GitHub account has repositories or use a Custom URL.
+                            </div>
+                          ) : (
+                            <select
+                              value={repoUrl}
+                              onChange={(e) => setRepoUrl(e.target.value)}
+                              className="w-full bg-[#0d1515] border border-[#3b494b] px-4 py-2.5 rounded-lg text-sm focus:outline-none focus:border-[#06B6D4] transition-colors"
+                            >
+                              {gitRepos.map((repo: any) => (
+                                <option key={repo.id} value={repo.html_url}>
+                                  {repo.full_name} {repo.language ? `(${repo.language})` : ''}
+                                </option>
+                              ))}
+                            </select>
+                          )
                         ) : (
-                          <select
+                          <input 
+                            required
                             value={repoUrl}
                             onChange={(e) => setRepoUrl(e.target.value)}
-                            className="w-full bg-[#0d1515] border border-[#3b494b] px-4 py-2.5 rounded-lg text-sm focus:outline-none focus:border-[#06B6D4] transition-colors"
-                          >
-                            {gitRepos.map((repo: any) => (
-                              <option key={repo.id} value={repo.html_url}>
-                                {repo.full_name} {repo.language ? `(${repo.language})` : ''}
-                              </option>
-                            ))}
-                          </select>
-                        )
-                      ) : (
-                        <input 
-                          required
-                          value={repoUrl}
-                          onChange={(e) => setRepoUrl(e.target.value)}
-                          onPaste={handleRepoUrlPaste}
-                          className="w-full bg-[#0d1515] border border-[#3b494b] px-4 py-2.5 rounded-lg text-sm font-mono focus:outline-none focus:border-[#06B6D4] transition-colors"
-                          placeholder="https://github.com/owner/repo"
-                          type="text"
-                        />
-                      )}
-                    </div>
+                            onPaste={handleRepoUrlPaste}
+                            className="w-full bg-[#0d1515] border border-[#3b494b] px-4 py-2.5 rounded-lg text-sm font-mono focus:outline-none focus:border-[#06B6D4] transition-colors"
+                            placeholder="https://github.com/owner/repo"
+                            type="text"
+                          />
+                        )}
+                      </div>
+                    ) : (
+                      /* PRIVATE REPO FLOW */
+                      <div className="space-y-4 pt-2">
+                        <div className="bg-[#151d1e] p-4 border border-[#3b494b]/60 rounded-xl space-y-4">
+                          <div>
+                            <h4 className="text-xs font-bold text-white uppercase tracking-wider mb-2">Assign Take-Home Assignment</h4>
+                            <p className="text-[11px] text-[#94A3B8] leading-relaxed mb-3">
+                              If the candidate does not have a public portfolio, assign them a custom take-home project. Once they submit, their project codebase will be evaluated here.
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() => setAssignProjectModalOpen(true)}
+                              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold uppercase rounded-lg text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+                            >
+                              <span className="material-symbols-outlined text-sm">assignment</span>
+                              <span>Assign Take-Home Project</span>
+                            </button>
+                          </div>
+
+                          {takeHomeProjectsList.length > 0 && (
+                            <div className="border-t border-[#3b494b]/40 pt-4 space-y-2">
+                              <h4 className="text-xs font-bold text-white uppercase tracking-wider">Candidate already submitted project</h4>
+                              <p className="text-[11px] text-[#94A3B8] mb-2">Select a submitted take-home project repository to load for this interview:</p>
+                              <select
+                                value={selectedTakeHomeProject}
+                                onChange={(e) => {
+                                  setSelectedTakeHomeProject(e.target.value);
+                                  const match = takeHomeProjectsList.find(p => p.id === e.target.value);
+                                  if (match && match.submission_repo_url) {
+                                    setRepoUrl(match.submission_repo_url);
+                                    toast.success(`Loaded submission repo: ${match.submission_repo_url}`);
+                                  } else {
+                                    setRepoUrl('');
+                                  }
+                                }}
+                                className="w-full bg-[#0d1515] border border-[#3b494b] px-4 py-2 rounded-lg text-xs focus:outline-none focus:border-[#06B6D4] text-white cursor-pointer"
+                              >
+                                <option value="">-- Select Submitted Project --</option>
+                                {takeHomeProjectsList
+                                  .filter(p => p.status === 'submitted' || p.status === 'evaluated')
+                                  .map(p => (
+                                    <option key={p.id} value={p.id}>
+                                      {p.project_title} (Repo: {p.submission_repo_url})
+                                    </option>
+                                  ))}
+                              </select>
+                            </div>
+                          )}
+
+                          {/* Candidate Experience and Tech Stack inputs for project creation */}
+                          <div className="border-t border-[#3b494b]/40 pt-4 space-y-4">
+                            <h4 className="text-xs font-bold text-white uppercase tracking-wider">Candidate Details (For AI Generation)</h4>
+                            <div className="grid grid-cols-2 gap-4">
+                              <div className="space-y-1.5">
+                                <label className="text-[10px] text-[#94A3B8] font-bold uppercase tracking-wider block">Years of Experience</label>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  value={candidateExperience}
+                                  onChange={(e) => setCandidateExperience(e.target.value)}
+                                  className="w-full bg-[#0d1515] border border-[#3b494b] px-3 py-2 rounded-lg text-xs text-white"
+                                />
+                              </div>
+                              <div className="space-y-1.5">
+                                <label className="text-[10px] text-[#94A3B8] font-bold uppercase tracking-wider block">Tech Stack (Comma Separated)</label>
+                                <input
+                                  type="text"
+                                  value={candidateTechStack}
+                                  placeholder="React, Node.js, postgres"
+                                  onChange={(e) => {
+                                    setCandidateTechStack(e.target.value);
+                                    setCandidateTechTags(e.target.value.split(',').map(s => s.trim()).filter(Boolean));
+                                  }}
+                                  className="w-full bg-[#0d1515] border border-[#3b494b] px-3 py-2 rounded-lg text-xs text-white"
+                                />
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="space-y-1.5 pt-2">
+                            <label className="text-[10px] text-[#94A3B8] font-bold uppercase tracking-wider block">Repository URL Input</label>
+                            <input
+                              type="text"
+                              value={repoUrl}
+                              onChange={(e) => setRepoUrl(e.target.value)}
+                              placeholder="https://github.com/owner/repo (Pre-filled or manual)"
+                              className="w-full bg-[#0d1515] border border-[#3b494b] px-3 py-2 rounded-lg text-xs font-mono text-white focus:outline-none focus:border-[#06B6D4]"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
 
                     <div className="space-y-1.5">
                       <div className="flex justify-between items-center">
@@ -1392,6 +1561,44 @@ function NewSessionFlowContent() {
             </div>
           )}
 
+      {assignProjectModalOpen && (
+        <AssignProjectModal
+          isOpen={assignProjectModalOpen}
+          onClose={() => setAssignProjectModalOpen(false)}
+          candidate={
+            paramCandidateId
+              ? {
+                  id: paramCandidateId,
+                  name: candidateName,
+                  email: candidateEmail,
+                  role_applied: interviewMode || '',
+                  tech_stack: candidateTechTags,
+                  years_experience: candidateExperience
+                }
+              : undefined
+          }
+          onSuccess={() => {
+            const triggerRefresh = async () => {
+              if (!user?.id) return;
+              const { data } = await supabase
+                .from('take_home_projects')
+                .select('*')
+                .eq('recruiter_id', user.id);
+              if (data) {
+                setTakeHomeProjectsList(data);
+                if (data.length > 0) {
+                  const sorted = [...data].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+                  setSelectedTakeHomeProject(sorted[0].id);
+                  if (sorted[0].submission_repo_url) {
+                    setRepoUrl(sorted[0].submission_repo_url);
+                  }
+                }
+              }
+            };
+            triggerRefresh();
+          }}
+        />
+      )}
         </div>
       </div>
     </div>

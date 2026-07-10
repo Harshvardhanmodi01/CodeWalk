@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '@/app/lib/supabaseClient';
 import { useGlobal } from '@/app/context/GlobalContext';
 import { toast } from 'react-hot-toast';
+import AssignProjectModal from '@/components/modals/AssignProjectModal';
 
 interface Candidate {
   id: string;
@@ -52,6 +53,9 @@ export default function CandidatesPage() {
   const [resumeFiles, setResumeFiles] = useState<File[]>([]);
   const [parsedResumes, setParsedResumes] = useState<any[]>([]);
   const [parsingProgress, setParsingProgress] = useState<Record<string, 'pending' | 'parsing' | 'success' | 'error'>>({});
+
+  const [assignProjectModalOpen, setAssignProjectModalOpen] = useState(false);
+  const [selectedCandidateForProject, setSelectedCandidateForProject] = useState<any>(null);
 
   // Fetch Candidates
   const fetchCandidates = async () => {
@@ -635,6 +639,15 @@ export default function CandidatesPage() {
                               View Profile
                             </button>
                             <button
+                              onClick={() => {
+                                setSelectedCandidateForProject(cand);
+                                setAssignProjectModalOpen(true);
+                              }}
+                              className="px-2.5 py-1.5 bg-purple-500/10 hover:bg-purple-500 text-purple-400 hover:text-white border border-purple-500 rounded-lg text-[10px] font-bold uppercase transition-all cursor-pointer"
+                            >
+                              Assign Project
+                            </button>
+                            <button
                               onClick={() => handleStartInterviewFromCandidate(cand)}
                               className="px-2.5 py-1.5 bg-[#06B6D4]/10 hover:bg-[#06B6D4] text-[#06B6D4] hover:text-[#0d1515] border border-[#06B6D4] rounded-lg text-[10px] font-bold uppercase transition-all cursor-pointer"
                             >
@@ -675,6 +688,18 @@ export default function CandidatesPage() {
             </div>
           )}
         </div>
+      )}
+
+      {assignProjectModalOpen && (
+        <AssignProjectModal
+          isOpen={assignProjectModalOpen}
+          onClose={() => {
+            setAssignProjectModalOpen(false);
+            setSelectedCandidateForProject(null);
+          }}
+          candidate={selectedCandidateForProject}
+          onSuccess={fetchCandidates}
+        />
       )}
 
       {/* IMPORT CANDIDATES MODAL */}
