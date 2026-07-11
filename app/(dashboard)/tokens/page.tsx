@@ -9,12 +9,13 @@ import { useGlobal } from '@/app/context/GlobalContext';
 
 export default function TokenUsageDashboard() {
   const router = useRouter();
-  const { user } = useGlobal();
+  const { user, refreshUserData } = useGlobal();
 
   useEffect(() => {
-    // Re-fetch or sync state when auth changes
-    console.log('TokenUsageDashboard: auth session changed, user =', user?.email || 'guest');
-  }, [user]);
+    if (refreshUserData) {
+      refreshUserData();
+    }
+  }, []);
 
   return (
     <div className="flex-grow flex flex-col bg-[#0d1515] overflow-hidden min-h-screen text-[#F1F5F9]">

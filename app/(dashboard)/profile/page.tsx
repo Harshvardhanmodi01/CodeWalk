@@ -24,10 +24,10 @@ export default function ProfilePage() {
   // Custom Avatar state
   const [avatarUrl, setAvatarUrl] = useState('');
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
 
   const getAvatarUrl = () => {
     if (avatarUrl) return avatarUrl;
-    if (user?.githubConnected && user?.githubAvatar) return user.githubAvatar;
     return null;
   };
 
@@ -53,8 +53,97 @@ export default function ProfilePage() {
   const [pendingGithubAvatar, setPendingGithubAvatar] = useState('');
   const [correctGithubOtp, setCorrectGithubOtp] = useState('');
 
+  // Password change states
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [updatingPassword, setUpdatingPassword] = useState(false);
+
+  // Account deletion states
+  const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
+  const [deleteConfirmEmail, setDeleteConfirmEmail] = useState('');
+  const [deletingAccount, setDeletingAccount] = useState(false);
+
   // Sync profile details on mount
   useEffect(() => {
+    const fetchProfile = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) return;
+
+        // Fetch full_name and company directly from profiles table
+        let { data: profile, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', session.user.id)
+          .single();
+
+        if (error || !profile) {
+          // If profiles table row does not exist for current user, create it using user.user_metadata
+          const authUser = session.user;
+          const metaName = authUser.user_metadata?.full_name || authUser.user_metadata?.name || authUser.email?.split('@')[0] || '';
+          const metaCompany = authUser.user_metadata?.company || authUser.user_metadata?.companyName || '';
+
+          const { data: newProfile, error: createErr } = await supabase
+            .from('profiles')
+            .upsert({
+              id: authUser.id,
+              email: authUser.email || '',
+              full_name: metaName,
+              company: metaCompany,
+              name: metaName,
+              company_name: metaCompany,
+              role: 'HR / Recruiter',
+              plan: 'free',
+              tokens_used: 0,
+              tokens_total: 5,
+              onboarding_completed: false,
+              created_at: new Date().toISOString()
+            }, { onConflict: 'id' })
+            .select()
+            .single();
+
+          if (!createErr && newProfile) {
+            profile = newProfile;
+          }
+        }
+
+        if (profile) {
+          setName(profile.full_name || profile.name || '');
+          setCompanyName(profile.company || profile.company_name || '');
+          setRole(profile.role || 'HR / Recruiter');
+          setCompanySize(profile.company_size || '11 to 50');
+          setHiresPerMonth(profile.hires_per_month || '1 to 5');
+          setAvatarUrl(profile.avatar_url || '');
+        }
+      } catch (err) {
+        console.error('Failed to load profile directly on mount:', err);
+      }
+
+      // Check for newly connected GitHub identity via OAuth redirection
+      try {
+        const { data: { user: authUser } } = await supabase.auth.getUser();
+        const githubIdentity = authUser?.identities?.find(id => id.provider === 'github');
+        if (authUser && githubIdentity && user && !user.githubConnected) {
+          const githubUsername = authUser.user_metadata?.user_name || authUser.user_metadata?.preferred_username || '';
+          const githubAvatar = authUser.user_metadata?.avatar_url || '';
+          
+          setPendingGithubUsername(githubUsername);
+          setPendingGithubAvatar(githubAvatar);
+          
+          // Generate verification OTP
+          const generatedOtp = Math.floor(100000 + Math.random() * 900000).toString();
+          setCorrectGithubOtp(generatedOtp);
+          setShowGithubVerifyModal(true);
+          
+          console.log(`[DEMO] GitHub Verification OTP: ${generatedOtp}`);
+          toast.success(`[DEMO] GitHub Verification OTP: ${generatedOtp}`, { duration: 12000 });
+        }
+      } catch (e) {
+        console.error('Failed to link GitHub:', e);
+      }
+    };
+
     if (user) {
       setName(user.name || '');
       setCompanyName(user.companyName || '');
@@ -62,42 +151,10 @@ export default function ProfilePage() {
       setCompanySize(user.companySize || '11 to 50');
       setHiresPerMonth(user.hiresPerMonth || '1 to 5');
       setAvatarUrl(user.avatarUrl || '');
-
-      // Load 2FA state
-      if (user.twoFactorEnabled) {
-        setTwoFactorEnabled(true);
-      } else {
-        setTwoFactorEnabled(false);
-      }
-
-      // Load connected repos
+      setTwoFactorEnabled(!!user.twoFactorEnabled);
       setRepos(user.githubRepos || []);
 
-      // Check for newly connected GitHub identity via OAuth redirection
-      const checkGitHubLink = async () => {
-        try {
-          const { data: { user: authUser } } = await supabase.auth.getUser();
-          const githubIdentity = authUser?.identities?.find(id => id.provider === 'github');
-          if (authUser && githubIdentity && !user.githubConnected) {
-            const githubUsername = authUser.user_metadata?.user_name || authUser.user_metadata?.preferred_username || '';
-            const githubAvatar = authUser.user_metadata?.avatar_url || '';
-            
-            setPendingGithubUsername(githubUsername);
-            setPendingGithubAvatar(githubAvatar);
-            
-            // Generate verification OTP
-            const generatedOtp = Math.floor(100000 + Math.random() * 900000).toString();
-            setCorrectGithubOtp(generatedOtp);
-            setShowGithubVerifyModal(true);
-            
-            console.log(`[DEMO] GitHub Verification OTP: ${generatedOtp}`);
-            toast.success(`[DEMO] GitHub Verification OTP: ${generatedOtp}`, { duration: 12000 });
-          }
-        } catch (e) {
-          console.error('Failed to link GitHub:', e);
-        }
-      };
-      checkGitHubLink();
+      fetchProfile();
     }
   }, [user]);
 
@@ -147,57 +204,22 @@ export default function ProfilePage() {
     }
     setSavingPersonalInfo(true);
     try {
-      // 1. Try to upsert into recruiters table
-      await supabase
-        .from('recruiters')
-        .upsert({
-          id: user.id,
-          email: user.email,
+      const res = await fetch('/api/user/profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           full_name: name.trim(),
           company: companyName.trim(),
-        }, { onConflict: 'id' });
+          role: role,
+        }),
+      });
 
-      // 2. Upsert/Update profiles table with correct registration keys (resilient to missing columns)
-      try {
-        const { error: profErr } = await supabase
-          .from('profiles')
-          .upsert({
-            id: user.id,
-            email: user.email,
-            full_name: name.trim(),
-            company: companyName.trim(),
-            role,
-            name: name.trim(),
-            company_name: companyName.trim(),
-            updated_at: new Date().toISOString()
-          }, { onConflict: 'id' });
-
-        if (profErr) {
-          console.warn('Profiles upsert with new columns failed, trying old columns fallback:', profErr);
-          await supabase
-            .from('profiles')
-            .upsert({
-              id: user.id,
-              email: user.email,
-              name: name.trim(),
-              company_name: companyName.trim(),
-              updated_at: new Date().toISOString()
-            }, { onConflict: 'id' });
-        }
-      } catch (err) {
-        console.warn('Profiles upsert with new columns threw error, trying old columns fallback:', err);
-        await supabase
-          .from('profiles')
-          .upsert({
-            id: user.id,
-            email: user.email,
-            name: name.trim(),
-            company_name: companyName.trim(),
-            updated_at: new Date().toISOString()
-          }, { onConflict: 'id' });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || 'Failed to update personal details');
       }
 
-      // 3. Update Supabase Auth User Metadata to keep everything in sync
+      // Update Supabase Auth User Metadata to keep everything in sync
       await supabase.auth.updateUser({
         data: {
           name: name.trim(),
@@ -222,16 +244,19 @@ export default function ProfilePage() {
     if (!user) return;
     setSavingHiringPreferences(true);
     try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({
+      const res = await fetch('/api/user/profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           company_size: companySize,
           hires_per_month: hiresPerMonth,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', user.id);
+        }),
+      });
 
-      if (error) throw error;
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || 'Failed to update hiring preferences');
+      }
 
       await refreshUserData();
       toast.success('Hiring preferences updated successfully!');
@@ -247,55 +272,73 @@ export default function ProfilePage() {
     const file = e.target.files?.[0];
     if (!file || !user) return;
 
-    if (file.type !== 'image/png' && file.type !== 'image/jpeg' && file.type !== 'image/jpg') {
-      toast.error('Only PNG, JPG, and JPEG images are allowed.');
+    const allowedMimeTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
+    if (!allowedMimeTypes.includes(file.type)) {
+      toast.error('Only JPG, PNG and WebP files are allowed');
+      return;
+    }
+
+    const fileExt = file.name.split('.').pop()?.toLowerCase();
+    if (fileExt !== 'png' && fileExt !== 'jpg' && fileExt !== 'jpeg' && fileExt !== 'webp') {
+      toast.error('Only JPG, PNG and WebP files are allowed');
+      return;
+    }
+
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error('Image must be under 2MB');
       return;
     }
 
     setUploadingPhoto(true);
+    setUploadProgress(10);
+    
+    // Simulate upload progress
+    const progressInterval = setInterval(() => {
+      setUploadProgress((prev) => (prev < 90 ? prev + 10 : prev));
+    }, 100);
+
     try {
-      // 1. Ensure the 'avatars' bucket exists
-      try {
-        await supabase.storage.createBucket('avatars', { public: true });
-      } catch (bucketErr) {
-        console.log('Bucket check completed or skipped:', bucketErr);
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const uploadRes = await fetch('/api/user/avatar/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!uploadRes.ok) {
+        const errData = await uploadRes.json().catch(() => ({}));
+        throw new Error(errData.error || 'Failed to upload photo');
       }
 
-      // 2. Upload file to avatars bucket
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${user.id}-${Math.random().toString(36).substring(2)}.${fileExt}`;
-      const filePath = `avatar-${fileName}`;
+      const { publicUrl } = await uploadRes.json();
 
-      const { data: uploadData, error: uploadErr } = await supabase.storage
-        .from('avatars')
-        .upload(filePath, file, {
-          cacheControl: '3600',
-          upsert: true
-        });
+      // Update in profiles table via secure endpoint
+      const updateRes = await fetch('/api/user/profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ avatar_url: publicUrl }),
+      });
 
-      if (uploadErr) throw uploadErr;
-
-      // 3. Get public URL of the uploaded image
-      const { data: { publicUrl } } = supabase.storage
-        .from('avatars')
-        .getPublicUrl(filePath);
-
-      // 4. Update profiles table avatar_url
-      const { error: dbErr } = await supabase
-        .from('profiles')
-        .update({ avatar_url: publicUrl })
-        .eq('id', user.id);
-
-      if (dbErr) throw dbErr;
+      if (!updateRes.ok) {
+        const errData = await updateRes.json().catch(() => ({}));
+        throw new Error(errData.error || 'Failed to save photo reference');
+      }
 
       setAvatarUrl(publicUrl);
+      clearInterval(progressInterval);
+      setUploadProgress(100);
+      
+      // Immediately update context user avatar
       await refreshUserData();
-      toast.success('Profile photo uploaded and updated successfully!');
+      toast.success('Profile photo updated');
     } catch (err: any) {
+      clearInterval(progressInterval);
       console.error('Error uploading photo:', err);
       toast.error(err.message || 'Failed to upload photo.');
     } finally {
       setUploadingPhoto(false);
+      setUploadProgress(0);
     }
   };
 
@@ -389,15 +432,79 @@ export default function ProfilePage() {
   };
 
   const handleDeleteAccount = () => {
-    if (confirm('CAUTION: Deleting your account is permanent. All recruiter history, session logs, and reports will be wiped. Proceed?')) {
+    setDeleteConfirmEmail('');
+    setShowDeleteConfirmModal(true);
+  };
+
+  const handlePerformDeleteAccount = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) return;
+    if (deleteConfirmEmail.trim().toLowerCase() !== user.email?.toLowerCase()) {
+      toast.error('Email confirmation does not match your registered email.');
+      return;
+    }
+
+    setDeletingAccount(true);
+    try {
+      const res = await fetch('/api/user/delete-account', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confirmEmail: deleteConfirmEmail.trim() }),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || 'Failed to delete account');
+      }
+
+      toast.success('Your account and all associated data have been permanently deleted.');
+      
+      // Clear session, local storage and sign out
+      await supabase.auth.signOut();
       localStorage.clear();
       router.push('/');
+    } catch (err: any) {
+      console.error('Account deletion error:', err);
+      toast.error(err.message || 'Failed to delete account.');
+      setDeletingAccount(false);
     }
   };
 
-  const handlePasswordSubmit = (e: React.FormEvent) => {
+  const handlePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    alert('Password updated successfully!');
+    if (newPassword !== confirmNewPassword) {
+      toast.error('New passwords do not match.');
+      return;
+    }
+    
+    setUpdatingPassword(true);
+    try {
+      const res = await fetch('/api/auth/change-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          currentPassword,
+          newPassword
+        })
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || 'Failed to update password');
+      }
+
+      toast.success('Password updated successfully! Other sessions have been signed out.');
+      
+      // Clear password inputs
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmNewPassword('');
+    } catch (err: any) {
+      console.error('Password change error:', err);
+      toast.error(err.message || 'Failed to update password.');
+    } finally {
+      setUpdatingPassword(false);
+    }
   };
 
   if (!user) {
@@ -619,6 +726,8 @@ export default function ProfilePage() {
                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#06B6D4]/50 font-mono select-none">$</span>
                       <input 
                         required
+                        value={currentPassword}
+                        onChange={(e) => setCurrentPassword(e.target.value)}
                         className="w-full bg-[#0d1515] border border-[#3b494b] focus:border-[#06B6D4] transition-all rounded pl-8 text-white py-2.5 font-mono text-xs outline-none" 
                         placeholder="••••••••" 
                         type="password"
@@ -632,6 +741,8 @@ export default function ProfilePage() {
                         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#06B6D4]/50 font-mono select-none">&gt;</span>
                         <input 
                           required
+                          value={newPassword}
+                          onChange={(e) => setNewPassword(e.target.value)}
                           className="w-full bg-[#0d1515] border border-[#3b494b] focus:border-[#06B6D4] transition-all rounded pl-8 text-white py-2.5 font-mono text-xs outline-none" 
                           placeholder="New Secret" 
                           type="password"
@@ -644,6 +755,8 @@ export default function ProfilePage() {
                         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#06B6D4]/50 font-mono select-none">&gt;</span>
                         <input 
                           required
+                          value={confirmNewPassword}
+                          onChange={(e) => setConfirmNewPassword(e.target.value)}
                           className="w-full bg-[#0d1515] border border-[#3b494b] focus:border-[#06B6D4] transition-all rounded pl-8 text-white py-2.5 font-mono text-xs outline-none" 
                           placeholder="Confirm" 
                           type="password"
@@ -653,10 +766,11 @@ export default function ProfilePage() {
                   </div>
                   <div className="pt-4 flex justify-end">
                     <button 
-                      className="bg-[#151d1e] border border-[#3b494b] text-white hover:text-[#06B6D4] hover:border-[#06B6D4] text-xs px-6 py-2.5 rounded transition-all font-bold uppercase tracking-wider cursor-pointer" 
+                      disabled={updatingPassword}
+                      className="bg-[#151d1e] border border-[#3b494b] text-white hover:text-[#06B6D4] hover:border-[#06B6D4] text-xs px-6 py-2.5 rounded transition-all font-bold uppercase tracking-wider cursor-pointer disabled:opacity-50" 
                       type="submit"
                     >
-                      Update Password
+                      {updatingPassword ? 'Updating...' : 'Update Password'}
                     </button>
                   </div>
                 </form>
@@ -744,7 +858,7 @@ export default function ProfilePage() {
                       {uploadingPhoto ? (
                         <span className="flex items-center justify-center gap-1">
                           <div className="animate-spin rounded-full h-2.5 w-2.5 border-t-2 border-[#0d1515]"></div>
-                          <span>Uploading...</span>
+                          <span>Uploading ({uploadProgress}%)</span>
                         </span>
                       ) : (
                         <span>Upload Photo</span>
@@ -1073,6 +1187,67 @@ export default function ProfilePage() {
                   disabled={githubVerifyLoading}
                 >
                   Confirm & Link
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Account Deletion Confirmation Modal (Fix 11) */}
+      {showDeleteConfirmModal && (
+        <div className="fixed inset-0 bg-[#0d1515]/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 select-none">
+          <div className="w-full max-w-md bg-[#151d1e] border border-red-500/30 p-6 rounded-xl shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center gap-2.5 text-red-400">
+              <span className="material-symbols-outlined text-2xl">warning</span>
+              <h4 className="font-extrabold text-sm uppercase tracking-wider">Danger Zone: Delete Account</h4>
+            </div>
+            
+            <p className="text-xs text-[#94A3B8] leading-relaxed">
+              This action is permanent and <strong className="text-white">cannot be undone</strong>. This will permanently delete all your data including screening sessions, candidates, positions, and AI reports.
+            </p>
+
+            <form onSubmit={handlePerformDeleteAccount} className="space-y-4 pt-2">
+              <div className="space-y-2">
+                <label className="text-[10px] text-[#94A3B8] font-bold uppercase tracking-wider block">
+                  Type your email <span className="text-white font-mono">({user.email})</span> to confirm:
+                </label>
+                <input
+                  type="email"
+                  required
+                  value={deleteConfirmEmail}
+                  onChange={(e) => setDeleteConfirmEmail(e.target.value)}
+                  placeholder={user.email || ''}
+                  className="w-full bg-[#0d1515] border border-[#3b494b] focus:border-red-500 transition-all rounded px-3 py-2.5 font-mono text-xs text-white outline-none"
+                  disabled={deletingAccount}
+                />
+              </div>
+
+              {deletingAccount && (
+                <div className="flex items-center gap-2 text-xs font-mono text-red-400">
+                  <div className="animate-spin rounded-full h-3.5 w-3.5 border-t-2 border-red-400"></div>
+                  <span>Deleting your data...</span>
+                </div>
+              )}
+
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowDeleteConfirmModal(false);
+                    setDeleteConfirmEmail('');
+                  }}
+                  className="px-4 py-2 bg-[#0d1515] border border-[#3b494b] text-xs font-bold uppercase tracking-wider rounded text-[#94A3B8] hover:text-white transition-colors cursor-pointer"
+                  disabled={deletingAccount}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-bold uppercase tracking-wider rounded transition-colors disabled:opacity-50 cursor-pointer shadow-lg shadow-red-600/10"
+                  disabled={deletingAccount || deleteConfirmEmail.trim().toLowerCase() !== user.email?.toLowerCase()}
+                >
+                  Permanently Delete
                 </button>
               </div>
             </form>

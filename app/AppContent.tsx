@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useGlobal } from '@/app/context/GlobalContext';
 import { toast } from 'react-hot-toast';
+import { supabase } from '@/app/lib/supabaseClient';
 
 export default function AppContent({ children }: { children: React.ReactNode }) {
   const { user, signOut, theme, toggleTheme, subscription } = useGlobal();
@@ -35,6 +36,62 @@ export default function AppContent({ children }: { children: React.ReactNode }) 
 
   useEffect(() => {
     setMounted(true);
+
+    // Global fetch interceptor (Fix 6)
+    const originalFetch = window.fetch;
+    window.fetch = async function (input, init) {
+      let response = await originalFetch(input, init);
+      
+      if (response.status === 401) {
+        console.warn('API returned 401, attempting token refresh...');
+        const { data, error } = await supabase.auth.refreshSession();
+        if (data?.session) {
+          // Retry original request once
+          response = await originalFetch(input, init);
+        } else {
+          // Refresh failed, clear session and redirect to login
+          console.error('Session refresh failed, redirecting to login...');
+          window.location.replace('/login');
+        }
+      }
+      return response;
+    };
+
+    const handleGlobalPaste = (e: ClipboardEvent) => {
+      const target = e.target as HTMLInputElement | HTMLTextAreaElement;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) {
+        const clipboardData = e.clipboardData || (window as any).clipboardData;
+        if (!clipboardData) return;
+        const pastedText = clipboardData.getData('text');
+        if (!pastedText) return;
+
+        // Zero-width spaces, RTL override, and other control/invisible character ranges
+        const dangerousUnicodeRegex = /[\u200B-\u200D\uFEFF\u202E\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/g;
+        if (dangerousUnicodeRegex.test(pastedText)) {
+          e.preventDefault();
+          const sanitizedText = pastedText.replace(dangerousUnicodeRegex, '');
+          
+          const start = target.selectionStart || 0;
+          const end = target.selectionEnd || 0;
+          const val = target.value;
+          
+          target.value = val.substring(0, start) + sanitizedText + val.substring(end);
+          target.selectionStart = target.selectionEnd = start + sanitizedText.length;
+          
+          // Trigger React onChange state synchronization
+          const inputEvent = new Event('input', { bubbles: true });
+          target.dispatchEvent(inputEvent);
+          
+          toast.error("Pasted content was sanitized for security");
+        }
+      }
+    };
+
+    document.addEventListener('paste', handleGlobalPaste);
+    return () => {
+      document.removeEventListener('paste', handleGlobalPaste);
+      window.fetch = originalFetch;
+    };
   }, []);
 
   // Close dropdowns on path change
@@ -199,6 +256,7 @@ export default function AppContent({ children }: { children: React.ReactNode }) 
     pathname?.startsWith('/register') || 
     pathname?.startsWith('/signup') || 
     pathname?.startsWith('/verify-email') ||
+    pathname?.startsWith('/auth/') ||
     pathname?.startsWith('/session') ||
     pathname?.startsWith('/candidate') ||
     pathname?.startsWith('/onboarding');
@@ -469,8 +527,11 @@ export default function AppContent({ children }: { children: React.ReactNode }) 
               <Link href="/support" className="text-xs text-muted-text hover:text-primary transition-colors">
                 Support Center
               </Link>
-              <Link href="/policy" className="text-xs text-muted-text hover:text-primary transition-colors">
-                Privacy & Terms
+              <Link href="/privacy" className="text-xs text-muted-text hover:text-primary transition-colors">
+                Privacy Policy
+              </Link>
+              <Link href="/terms" className="text-xs text-muted-text hover:text-primary transition-colors">
+                Terms of Service
               </Link>
             </div>
 

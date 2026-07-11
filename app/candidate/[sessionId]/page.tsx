@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { supabase } from '@/app/lib/supabaseClient';
+import CodeBlock from '@/components/dashboard/CodeBlock';
 
 interface Question {
   id: string;
@@ -14,7 +15,7 @@ interface Question {
   difficulty: 'easy' | 'medium' | 'hard';
   category: 'frontend' | 'backend' | 'dsa' | 'system-design';
   order_index: number;
-  expected_answer?: string;
+  shared_answer?: string;
   show_expected_answer?: boolean;
 }
 
@@ -54,19 +55,21 @@ export default function CandidateSessionPage() {
     const loadCandidateWorkspace = async () => {
       try {
         setLoading(true);
-        // 1. Fetch Session (No auth required because of public SELECT policy)
-        const { data: sessData, error: sessErr } = await supabase
-          .from('sessions')
-          .select('*')
-          .eq('id', sessionId)
-          .single();
+        // Call public candidate session verification API
+        const res = await fetch(`/api/candidate/session?sessionId=${sessionId}`);
+        const data = await res.json();
 
-        if (sessErr || !sessData) {
-          setValidationError('NOT_FOUND');
+        if (!res.ok || data.error) {
+          if (res.status === 404) {
+            setValidationError('NOT_FOUND');
+          } else {
+            setError(data.error || 'Failed to load candidate workspace.');
+          }
           setLoading(false);
           return;
         }
 
+        const sessData = data.session;
         setSession(sessData);
 
         if (sessData.status === 'completed') {
@@ -95,32 +98,16 @@ export default function CandidateSessionPage() {
           }
         }
 
-        // 2. Fetch Questions
-        const { data: qData, error: qErr } = await supabase
-          .from('questions')
-          .select('*')
-          .eq('session_id', sessionId)
-          .order('order_index', { ascending: true });
+        setQuestions(data.questions || []);
 
-        if (qErr) throw qErr;
-        setQuestions(qData || []);
-
-        // 3. Fetch existing answers (so candidate notes are restored if they refresh)
-        const { data: ansData, error: ansErr } = await supabase
-          .from('answers')
-          .select('*')
-          .eq('session_id', sessionId);
-
-        if (ansErr) throw ansErr;
-        
         const restoredNotes: Record<string, string> = {};
-        (ansData || []).forEach(a => {
+        (data.answers || []).forEach((a: any) => {
           restoredNotes[a.question_id] = a.answer_text || '';
         });
         setCandidateNotes(restoredNotes);
       } catch (err: any) {
         console.error(err);
-        setError(err.message || 'Failed to load candidate workspace.');
+        setError('Failed to load candidate workspace.');
       } finally {
         setLoading(false);
       }
@@ -135,13 +122,11 @@ export default function CandidateSessionPage() {
 
     const interval = setInterval(async () => {
       try {
-        // 1. Fetch Session status & timer
-        const { data: sessData } = await supabase
-          .from('sessions')
-          .select('status, is_paused, remaining_seconds, started_at, timer_duration_minutes')
-          .eq('id', sessionId)
-          .single();
+        const res = await fetch(`/api/candidate/session?sessionId=${sessionId}`);
+        if (!res.ok) return;
+        const data = await res.json();
 
+        const sessData = data.session;
         if (sessData) {
           setSession((prev: any) => prev ? { ...prev, ...sessData } : sessData);
           if (sessData.status === 'completed') {
@@ -164,20 +149,14 @@ export default function CandidateSessionPage() {
           }
         }
 
-        // 2. Fetch Questions to sync show_expected_answer and expected_answer columns
-        const { data: qData } = await supabase
-          .from('questions')
-          .select('id, expected_answer, show_expected_answer')
-          .eq('session_id', sessionId);
-
-        if (qData) {
+        if (data.questions) {
           setQuestions(prevQuestions => {
             return prevQuestions.map(prevQ => {
-              const updatedQ = qData.find(q => q.id === prevQ.id);
+              const updatedQ = data.questions.find((q: any) => q.id === prevQ.id);
               if (updatedQ) {
                 return {
                   ...prevQ,
-                  expected_answer: updatedQ.expected_answer,
+                  shared_answer: updatedQ.shared_answer,
                   show_expected_answer: updatedQ.show_expected_answer
                 };
               }
@@ -189,7 +168,6 @@ export default function CandidateSessionPage() {
         console.error('Failed to run background status check:', e);
       }
     }, 5000); // 5 seconds
-
 
     return () => clearInterval(interval);
   }, [sessionId, validationError, loading, timerExpired]);
@@ -210,44 +188,23 @@ export default function CandidateSessionPage() {
     return () => clearInterval(interval);
   }, [timeLeftSeconds, timerExpired, session?.is_paused]);
 
-  // Save notes to Supabase (autosave)
+  // Save notes to Supabase via candidate/answer API
   const saveCandidateAnswer = async (qId: string, text: string) => {
     if (timerExpired || !sessionId) return;
     setSavingAnswer(prev => ({ ...prev, [qId]: true }));
     try {
-      // Check if answer already exists
-      const { data: existing, error: findErr } = await supabase
-        .from('answers')
-        .select('id, ai_score')
-        .eq('session_id', sessionId)
-        .eq('question_id', qId)
-        .maybeSingle();
-
-      if (findErr) throw findErr;
-
-      const currentScore = existing?.ai_score || 5;
-
-      if (existing) {
-        // Update candidate notes while keeping recruiter score intact
-        const { error: updErr } = await supabase
-          .from('answers')
-          .update({
-            answer_text: text,
-            submitted_at: new Date().toISOString()
-          })
-          .eq('id', existing.id);
-        if (updErr) throw updErr;
-      } else {
-        // Insert new answer log
-        const { error: insErr } = await supabase
-          .from('answers')
-          .insert({
-            session_id: sessionId,
-            question_id: qId,
-            answer_text: text,
-            ai_score: currentScore
-          });
-        if (insErr) throw insErr;
+      const res = await fetch('/api/candidate/answer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId,
+          questionId: qId,
+          answerText: text
+        })
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        throw new Error(data.error || 'Failed to save');
       }
     } catch (err) {
       console.warn('Failed to autosave response thoughts:', err);
@@ -423,7 +380,7 @@ export default function CandidateSessionPage() {
               </div>
 
               {/* Ideal Answer Shared by Interviewer */}
-              {currentQ.show_expected_answer && currentQ.expected_answer && (
+              {currentQ.show_expected_answer && currentQ.shared_answer && (
                 <div className="bg-[#06B6D4]/10 border border-[#06B6D4]/40 rounded-xl p-5 shadow-xl space-y-3 animate-in fade-in slide-in-from-top-4 duration-500">
                   <div className="flex items-center gap-2 text-cyan-400 font-extrabold uppercase tracking-widest text-xs select-none">
                     <span className="material-symbols-outlined text-sm text-[13px]">info</span>
@@ -431,21 +388,20 @@ export default function CandidateSessionPage() {
                     <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse ml-auto" title="Active Solution Guide Shared"></span>
                   </div>
                   <div className="whitespace-pre-line text-xs leading-relaxed text-[#F1F5F9] bg-[#0d1515]/60 p-4 rounded-lg border border-[#3b494b]/60 font-medium">
-                    {currentQ.expected_answer}
+                    {currentQ.shared_answer}
                   </div>
                 </div>
               )}
 
               {/* Code Snippet Box */}
               {currentQ.code_snippet ? (
-                <div className="bg-[#0d1515] border border-[#3b494b] rounded-xl overflow-hidden shadow-lg flex flex-col flex-grow">
-                  <div className="px-4 py-2 border-b border-[#3b494b] bg-[#151d1e]/40 flex items-center justify-between text-[10px] font-mono text-[#94A3B8]">
-                    <span>Snippet Reference</span>
-                    <span>Read-Only</span>
-                  </div>
-                  <div className="p-4 overflow-auto custom-scrollbar flex-1 font-mono text-xs text-[#94A3B8] leading-relaxed">
-                    <pre className="whitespace-pre">{currentQ.code_snippet}</pre>
-                  </div>
+                <div className="flex flex-col flex-grow">
+                  <CodeBlock
+                    code={currentQ.code_snippet}
+                    filePath={currentQ.file_path}
+                    lineStart={currentQ.line_start}
+                    lineEnd={currentQ.line_end}
+                  />
                 </div>
               ) : (
                 <div className="bg-[#0d1515] border border-[#3b494b] rounded-xl p-8 text-center text-[#94A3B8] italic flex items-center justify-center flex-grow">

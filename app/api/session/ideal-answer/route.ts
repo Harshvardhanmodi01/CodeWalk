@@ -1,9 +1,18 @@
 import { NextResponse } from 'next/server';
 import Groq from 'groq-sdk';
+import { requireAuth } from '@/app/lib/auth-middleware';
+import { sanitizeString } from '@/app/lib/validation';
 
 export async function POST(req: Request) {
   try {
-    const { questionText, codeSnippet } = await req.json();
+    const authResult = await requireAuth(req);
+    if (authResult instanceof Response) {
+      return authResult;
+    }
+
+    const body = await req.json().catch(() => ({}));
+    const questionText = sanitizeString(body.questionText || '');
+    const codeSnippet = sanitizeString(body.codeSnippet || '');
 
     const groqKey = process.env.GROQ_API_KEY;
     if (!groqKey) {
@@ -42,6 +51,6 @@ ${codeSnippet || 'N/A'}`;
     return NextResponse.json(parsed);
   } catch (err: any) {
     console.error('Session ideal answer API error:', err);
-    return NextResponse.json({ error: err.message || 'Internal Server Error' }, { status: 500 });
+    return NextResponse.json({ error: 'Something went wrong. Please try again.' }, { status: 500 });
   }
 }

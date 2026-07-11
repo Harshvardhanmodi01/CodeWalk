@@ -153,12 +153,24 @@ export default function PublicPricingPage() {
                 <span>5 screening sessions limit / month</span>
               </li>
               <li className="flex items-center gap-3 opacity-35">
-                <span className="material-symbols-outlined text-lg font-bold">block</span>
-                <span>Priority GPU processing</span>
+                <span className="material-symbols-outlined text-lg font-bold">lock</span>
+                <span>Position-Based Bulk Hiring</span>
               </li>
               <li className="flex items-center gap-3 opacity-35">
-                <span className="material-symbols-outlined text-lg font-bold">block</span>
-                <span>PDF Scorecard Exporter</span>
+                <span className="material-symbols-outlined text-lg font-bold">lock</span>
+                <span>CSV &amp; Resume Bulk Import</span>
+              </li>
+              <li className="flex items-center gap-3 opacity-35">
+                <span className="material-symbols-outlined text-lg font-bold">lock</span>
+                <span>Smart Candidate Fit Scoring</span>
+              </li>
+              <li className="flex items-center gap-3 opacity-35">
+                <span className="material-symbols-outlined text-lg font-bold">lock</span>
+                <span>Candidate Comparison Tool</span>
+              </li>
+              <li className="flex items-center gap-3 opacity-35">
+                <span className="material-symbols-outlined text-lg font-bold">lock</span>
+                <span>Export Shortlist Reports</span>
               </li>
             </ul>
           </div>
@@ -196,15 +208,23 @@ export default function PublicPricingPage() {
                 </li>
                 <li className="flex items-center gap-3 font-semibold">
                   <span className="material-symbols-outlined text-[#06B6D4] text-lg font-bold">verified</span>
-                  <span>Priority assessment queues</span>
+                  <span>Position-Based Bulk Hiring</span>
                 </li>
                 <li className="flex items-center gap-3 font-semibold">
                   <span className="material-symbols-outlined text-[#06B6D4] text-lg font-bold">verified</span>
-                  <span>PDF scorecards &amp; JSON shares</span>
+                  <span>CSV &amp; Resume Bulk Import (up to 10/batch)</span>
                 </li>
-                <li className="flex items-center gap-3">
+                <li className="flex items-center gap-3 font-semibold">
                   <span className="material-symbols-outlined text-[#06B6D4] text-lg font-bold">verified</span>
-                  <span>Private branch analysis integrations</span>
+                  <span>Smart Candidate Fit Scoring</span>
+                </li>
+                <li className="flex items-center gap-3 font-semibold">
+                  <span className="material-symbols-outlined text-[#06B6D4] text-lg font-bold">verified</span>
+                  <span>Candidate Comparison Tool</span>
+                </li>
+                <li className="flex items-center gap-3 font-semibold">
+                  <span className="material-symbols-outlined text-[#06B6D4] text-lg font-bold">verified</span>
+                  <span>Export Shortlist Reports</span>
                 </li>
               </ul>
             </div>

@@ -20,6 +20,7 @@ interface HistoryItem {
     total_questions: number;
     completed_questions: number;
   } | null;
+  interview_mode?: string;
 }
 
 export default function HistoryPage() {
@@ -27,6 +28,7 @@ export default function HistoryPage() {
   const { user } = useGlobal();
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<'all' | 'hire' | 'maybe' | 'pass'>('all');
+  const [modeFilter, setModeFilter] = useState<'all' | 'technical' | 'behavioral' | 'logical' | 'fullstack' | 'custom'>('all');
   const [sessions, setSessions] = useState<HistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -41,6 +43,7 @@ export default function HistoryPage() {
           repo_url,
           status,
           created_at,
+          interview_mode,
           candidate:candidates (
             name,
             email
@@ -63,6 +66,7 @@ export default function HistoryPage() {
         repo_url: s.repo_url,
         status: s.status,
         created_at: s.created_at,
+        interview_mode: s.interview_mode,
         candidate: Array.isArray(s.candidate) ? s.candidate[0] : s.candidate,
         report: Array.isArray(s.report) ? s.report[0] : s.report
       })) as HistoryItem[];
@@ -110,7 +114,11 @@ export default function HistoryPage() {
       (filter === 'maybe' && rec === 'maybe') ||
       (filter === 'pass' && rec === 'pass');
 
-    return matchesSearch && matchesFilter;
+    const matchesMode = 
+      modeFilter === 'all' || 
+      (item.interview_mode || 'technical') === modeFilter;
+
+    return matchesSearch && matchesFilter && matchesMode;
   });
 
   const getRecommendationBadge = (rec: string | undefined, score: number | undefined) => {
@@ -225,6 +233,46 @@ export default function HistoryPage() {
                 Pass
               </button>
             </div>
+
+            {/* Mode Filters */}
+            <div className="flex items-center bg-[#0d1515] border border-[#3b494b] rounded p-1 text-xs">
+              <button 
+                onClick={() => setModeFilter('all')}
+                className={`px-3 py-1 rounded-sm font-bold transition-all ${modeFilter === 'all' ? 'bg-[#06B6D4]/10 text-[#06B6D4] border border-[#06B6D4]/20' : 'text-[#94A3B8] hover:bg-[#151d1e]'}`}
+              >
+                All Modes
+              </button>
+              <button 
+                onClick={() => setModeFilter('technical')}
+                className={`px-3 py-1 rounded-sm font-bold transition-all ${modeFilter === 'technical' ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20' : 'text-[#94A3B8] hover:bg-[#151d1e]'}`}
+              >
+                Technical
+              </button>
+              <button 
+                onClick={() => setModeFilter('behavioral')}
+                className={`px-3 py-1 rounded-sm font-bold transition-all ${modeFilter === 'behavioral' ? 'bg-purple-500/10 text-purple-400 border border-purple-500/20' : 'text-[#94A3B8] hover:bg-[#151d1e]'}`}
+              >
+                Behavioral
+              </button>
+              <button 
+                onClick={() => setModeFilter('logical')}
+                className={`px-3 py-1 rounded-sm font-bold transition-all ${modeFilter === 'logical' ? 'bg-orange-500/10 text-orange-400 border border-orange-500/20' : 'text-[#94A3B8] hover:bg-[#151d1e]'}`}
+              >
+                Logical
+              </button>
+              <button 
+                onClick={() => setModeFilter('fullstack')}
+                className={`px-3 py-1 rounded-sm font-bold transition-all ${modeFilter === 'fullstack' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'text-[#94A3B8] hover:bg-[#151d1e]'}`}
+              >
+                Full Stack
+              </button>
+              <button 
+                onClick={() => setModeFilter('custom')}
+                className={`px-3 py-1 rounded-sm font-bold transition-all ${modeFilter === 'custom' ? 'bg-gray-500/10 text-gray-400 border border-gray-500/20' : 'text-[#94A3B8] hover:bg-[#151d1e]'}`}
+              >
+                Custom
+              </button>
+            </div>
           </div>
         </div>
       </section>
@@ -251,8 +299,17 @@ export default function HistoryPage() {
                     <div className="flex items-center gap-3">
                       <span className="material-symbols-outlined text-[#06B6D4] text-lg font-bold">source</span>
                       <div>
-                        <div className="font-body-md text-white font-semibold group-hover:text-[#06B6D4] transition-colors truncate max-w-xs">
-                          {item.repo_url.replace('https://github.com/', '')}
+                        <div className="font-body-md text-white font-semibold group-hover:text-[#06B6D4] transition-colors truncate max-w-xs flex items-center gap-2">
+                          <span>{item.repo_url ? item.repo_url.replace('https://github.com/', '') : 'N/A (No Code)'}</span>
+                          <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold border uppercase tracking-wider ${
+                            item.interview_mode === 'behavioral' ? 'bg-purple-500/10 border-purple-500/30 text-purple-400' :
+                            item.interview_mode === 'logical' ? 'bg-orange-500/10 border-orange-500/30 text-orange-400' :
+                            item.interview_mode === 'fullstack' ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' :
+                            item.interview_mode === 'custom' ? 'bg-gray-500/10 border-gray-500/30 text-gray-400' :
+                            'bg-cyan-500/10 border-cyan-500/30 text-[#06B6D4]'
+                          }`}>
+                            {item.interview_mode || 'Technical'}
+                          </span>
                         </div>
                         <div className="text-[10px] text-[#94A3B8] font-mono mt-0.5">
                           branch: main

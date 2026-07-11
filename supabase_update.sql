@@ -87,14 +87,68 @@ CREATE POLICY "Avatar images are publicly accessible"
 DROP POLICY IF EXISTS "Users can upload their own avatar" ON storage.objects;
 CREATE POLICY "Users can upload their own avatar"
   ON storage.objects FOR INSERT TO authenticated
-  WITH CHECK (bucket_id = 'avatars');
+  WITH CHECK (bucket_id = 'avatars' AND auth.uid()::text = (storage.foldername(name))[1]);
 
 DROP POLICY IF EXISTS "Users can update their own avatar" ON storage.objects;
 CREATE POLICY "Users can update their own avatar"
   ON storage.objects FOR UPDATE TO authenticated
-  USING (bucket_id = 'avatars');
+  USING (bucket_id = 'avatars' AND auth.uid()::text = (storage.foldername(name))[1]);
 
 DROP POLICY IF EXISTS "Users can delete their own avatar" ON storage.objects;
 CREATE POLICY "Users can delete their own avatar"
   ON storage.objects FOR DELETE TO authenticated
-  USING (bucket_id = 'avatars');
+  USING (bucket_id = 'avatars' AND auth.uid()::text = (storage.foldername(name))[1]);
+
+-- 10. Add question_type and why_asked columns to public.questions table
+ALTER TABLE public.questions ADD COLUMN IF NOT EXISTS question_type TEXT DEFAULT 'code-based';
+ALTER TABLE public.questions ADD COLUMN IF NOT EXISTS why_asked TEXT;
+
+-- 11. Create public.candidates table
+CREATE TABLE IF NOT EXISTS public.candidates (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    recruiter_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    email TEXT NOT NULL,
+    github_url TEXT NOT NULL,
+    linkedin_url TEXT,
+    role_applied TEXT,
+    status TEXT DEFAULT 'pending',
+    tech_stack TEXT[] DEFAULT '{}',
+    years_experience TEXT,
+    current_title TEXT,
+    resume_url TEXT,
+    resume_extracted_data JSONB DEFAULT '{}'::jsonb,
+    notes TEXT,
+    overall_score INTEGER,
+    hire_recommendation TEXT,
+    imported_via TEXT, -- 'csv' or 'resume'
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
+);
+
+-- In case candidates table already existed from other default schemas:
+ALTER TABLE public.candidates ADD COLUMN IF NOT EXISTS recruiter_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE;
+ALTER TABLE public.candidates ADD COLUMN IF NOT EXISTS linkedin_url TEXT;
+ALTER TABLE public.candidates ADD COLUMN IF NOT EXISTS role_applied TEXT;
+ALTER TABLE public.candidates ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'pending';
+ALTER TABLE public.candidates ADD COLUMN IF NOT EXISTS tech_stack TEXT[] DEFAULT '{}';
+ALTER TABLE public.candidates ADD COLUMN IF NOT EXISTS years_experience TEXT;
+ALTER TABLE public.candidates ADD COLUMN IF NOT EXISTS current_title TEXT;
+ALTER TABLE public.candidates ADD COLUMN IF NOT EXISTS resume_url TEXT;
+ALTER TABLE public.candidates ADD COLUMN IF NOT EXISTS resume_extracted_data JSONB DEFAULT '{}'::jsonb;
+ALTER TABLE public.candidates ADD COLUMN IF NOT EXISTS notes TEXT;
+ALTER TABLE public.candidates ADD COLUMN IF NOT EXISTS overall_score INTEGER;
+ALTER TABLE public.candidates ADD COLUMN IF NOT EXISTS hire_recommendation TEXT;
+ALTER TABLE public.candidates ADD COLUMN IF NOT EXISTS imported_via TEXT;
+
+-- 12. Enable RLS on public.candidates table
+ALTER TABLE public.candidates ENABLE ROW LEVEL SECURITY;
+
+-- 13. RLS Policies on candidates table (recruiters can only see their own candidates)
+DROP POLICY IF EXISTS "Allow recruiters to manage their own candidates" ON public.candidates;
+CREATE POLICY "Allow recruiters to manage their own candidates" ON public.candidates
+  FOR ALL TO authenticated
+  USING (auth.uid() = recruiter_id)
+  WITH CHECK (auth.uid() = recruiter_id);
+
+

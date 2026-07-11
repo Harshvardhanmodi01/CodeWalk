@@ -1,8 +1,22 @@
 import { NextResponse } from 'next/server';
+import { requireAuth } from '@/app/lib/auth-middleware';
+import { sanitizeString, validatePositiveInt } from '@/app/lib/validation';
 
 export async function POST(req: Request) {
   try {
-    const { amount, currency = 'INR', receipt = 'receipt_1' } = await req.json();
+    const authResult = await requireAuth(req);
+    if (authResult instanceof Response) {
+      return authResult;
+    }
+
+    const body = await req.json().catch(() => ({}));
+    const { amount, currency = 'INR', receipt = 'receipt_1' } = body;
+
+    if (!amount || !validatePositiveInt(amount)) {
+      return NextResponse.json({ error: 'Valid positive integer amount is required.' }, { status: 400 });
+    }
+
+    const sanitizedReceipt = sanitizeString(receipt);
 
     const keyId = process.env.RAZORPAY_KEY_ID;
     const keySecret = process.env.RAZORPAY_KEY_SECRET;
@@ -25,7 +39,7 @@ export async function POST(req: Request) {
       body: JSON.stringify({
         amount: amount,
         currency: currency,
-        receipt: receipt
+        receipt: sanitizedReceipt
       })
     });
 
@@ -37,6 +51,6 @@ export async function POST(req: Request) {
     return NextResponse.json(data);
   } catch (err: any) {
     console.error('Razorpay order creation error:', err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ error: 'Something went wrong. Please try again.' }, { status: 500 });
   }
 }
