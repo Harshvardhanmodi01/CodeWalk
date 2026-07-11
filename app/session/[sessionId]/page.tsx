@@ -36,6 +36,7 @@ interface Candidate {
   name: string;
   email: string;
   github_url: string;
+  position_id?: string;
 }
 
 interface Session {
@@ -75,6 +76,9 @@ export default function LiveSessionPage() {
   // Core Data
   const [session, setSession] = useState<Session | null>(null);
   const [candidate, setCandidate] = useState<Candidate | null>(null);
+  const [position, setPosition] = useState<any>(null);
+  const [behavioralRightTab, setBehavioralRightTab] = useState<'evaluation' | 'jobDescription'>('evaluation');
+  const [logicalRightTab, setLogicalRightTab] = useState<'evaluation' | 'jobDescription'>('evaluation');
   const [questions, setQuestions] = useState<Question[]>([]);
   const [activeQIndex, setActiveQIndex] = useState(0);
 
@@ -693,6 +697,18 @@ export default function LiveSessionPage() {
 
         if (candErr) throw candErr;
         setCandidate(cand);
+
+        // Fetch Position details for Job Description tab
+        if (cand?.position_id) {
+          const { data: posData, error: posErr } = await supabase
+            .from('positions')
+            .select('*')
+            .eq('id', cand.position_id)
+            .single();
+          if (!posErr && posData) {
+            setPosition(posData);
+          }
+        }
 
         // 3. Fetch Questions
         const { data: qs, error: qsErr } = await supabase
@@ -2027,6 +2043,58 @@ export default function LiveSessionPage() {
     );
   };
 
+  const renderJobDescriptionPanel = () => {
+    if (!position) {
+      return (
+        <div className="flex-grow flex flex-col items-center justify-center p-8 text-center text-[#94A3B8] italic bg-[#0d1515] min-h-[300px]">
+          <span className="material-symbols-outlined text-4xl mb-2 text-[#3b494b]">work_off</span>
+          No Job Description linked to this candidate.
+        </div>
+      );
+    }
+
+    return (
+      <div className="flex-grow flex flex-col bg-[#151d1e]/40 p-4 rounded-xl space-y-4 text-xs overflow-y-auto custom-scrollbar min-h-[300px]">
+        <div>
+          <h4 className="text-[10px] font-bold text-[#94A3B8] uppercase tracking-wider">Position Title</h4>
+          <p className="text-white font-bold text-sm mt-1">{position.title}</p>
+        </div>
+        
+        {position.department && (
+          <div>
+            <h4 className="text-[10px] font-bold text-[#94A3B8] uppercase tracking-wider">Department</h4>
+            <p className="text-white mt-0.5">{position.department}</p>
+          </div>
+        )}
+
+        {position.experience_level && (
+          <div>
+            <h4 className="text-[10px] font-bold text-[#94A3B8] uppercase tracking-wider">Experience Level</h4>
+            <p className="text-white mt-0.5">{position.experience_level}</p>
+          </div>
+        )}
+
+        {position.required_skills && position.required_skills.length > 0 && (
+          <div>
+            <h4 className="text-[10px] font-bold text-[#94A3B8] uppercase tracking-wider">Required Skills</h4>
+            <div className="flex flex-wrap gap-1.5 mt-1">
+              {position.required_skills.map((skill: string, idx: number) => (
+                <span key={idx} className="px-2 py-0.5 bg-[#06B6D4]/10 border border-[#06B6D4]/20 rounded-full text-[10px] text-[#06B6D4] font-medium">
+                  {skill}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="border-t border-[#3b494b]/60 pt-3">
+          <h4 className="text-[10px] font-bold text-[#94A3B8] uppercase tracking-wider">Job Description Details</h4>
+          <p className="text-white leading-relaxed mt-1 whitespace-pre-wrap">{position.job_description}</p>
+        </div>
+      </div>
+    );
+  };
+
   // 2. HR Behavioral Layout
   const renderBehavioralLayout = () => {
     const isTabbed = session?.interview_mode === 'fullstack' || session?.interview_mode === 'custom';
@@ -2143,99 +2211,129 @@ export default function LiveSessionPage() {
         {/* RIGHT PANEL (40%): Recruiter scoring & tag metrics */}
         <div className="md:w-[40%] flex flex-col justify-between bg-[#151d1e]/80 border border-[#3b494b] rounded-xl p-6 overflow-y-auto custom-scrollbar h-full space-y-6">
           <div className="space-y-6">
-            <h3 className="text-xs font-bold uppercase text-purple-400 tracking-wider">Recruiter Evaluation Card</h3>
-            
-            {/* Sliders */}
-            <div className="space-y-5 bg-[#0d1515]/40 border border-[#3b494b] p-4 rounded-lg">
-              {/* Communication Clarity */}
-              <div className="space-y-1.5">
-                <div className="flex justify-between text-xs font-semibold text-[#94A3B8]">
-                  <span>Communication Clarity</span>
-                  <span className="text-purple-400 font-bold">{currentScoreData.communication}/10</span>
-                </div>
-                <input 
-                  type="range"
-                  min="1"
-                  max="10"
-                  value={currentScoreData.communication}
-                  onChange={(e) => handleBehavioralRatingChange(q.id, 'communication', parseInt(e.target.value))}
-                  className="w-full h-1 bg-[#151d1e] rounded appearance-none accent-purple-500 cursor-pointer"
-                />
-              </div>
-
-              {/* Confidence Level */}
-              <div className="space-y-1.5">
-                <div className="flex justify-between text-xs font-semibold text-[#94A3B8]">
-                  <span>Confidence Level</span>
-                  <span className="text-purple-400 font-bold">{currentScoreData.confidence}/10</span>
-                </div>
-                <input 
-                  type="range"
-                  min="1"
-                  max="10"
-                  value={currentScoreData.confidence}
-                  onChange={(e) => handleBehavioralRatingChange(q.id, 'confidence', parseInt(e.target.value))}
-                  className="w-full h-1 bg-[#151d1e] rounded appearance-none accent-purple-500 cursor-pointer"
-                />
-              </div>
-
-              {/* Answer Relevance */}
-              <div className="space-y-1.5">
-                <div className="flex justify-between text-xs font-semibold text-[#94A3B8]">
-                  <span>Answer Relevance (STAR alignment)</span>
-                  <span className="text-purple-400 font-bold">{currentScoreData.relevance}/10</span>
-                </div>
-                <input 
-                  type="range"
-                  min="1"
-                  max="10"
-                  value={currentScoreData.relevance}
-                  onChange={(e) => handleBehavioralRatingChange(q.id, 'relevance', parseInt(e.target.value))}
-                  className="w-full h-1 bg-[#151d1e] rounded appearance-none accent-purple-500 cursor-pointer"
-                />
-              </div>
+            {/* Tabs for Evaluation / Job Description */}
+            <div className="flex border-b border-[#3b494b]/60 pb-2 mb-4 gap-4 select-none">
+              <button
+                onClick={() => setBehavioralRightTab('evaluation')}
+                className={`text-xs font-bold pb-1 border-b-2 transition-all cursor-pointer ${
+                  behavioralRightTab === 'evaluation' 
+                    ? 'border-purple-500 text-purple-400' 
+                    : 'border-transparent text-[#94A3B8] hover:text-white'
+                }`}
+              >
+                Evaluation Card
+              </button>
+              <button
+                onClick={() => setBehavioralRightTab('jobDescription')}
+                className={`text-xs font-bold pb-1 border-b-2 transition-all cursor-pointer ${
+                  behavioralRightTab === 'jobDescription' 
+                    ? 'border-purple-500 text-purple-400' 
+                    : 'border-transparent text-[#94A3B8] hover:text-white'
+                }`}
+              >
+                Job Description
+              </button>
             </div>
 
-            {/* Question Notes */}
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-[#94A3B8] uppercase tracking-wider block">Question Notes &amp; Observations</label>
-              <textarea 
-                value={currentScoreData.notes || ''}
-                onChange={(e) => handleBehavioralRatingChange(q.id, 'notes', e.target.value)}
-                className="w-full bg-[#0d1515] border border-[#3b494b] rounded-lg p-3 text-xs text-white h-24 focus:outline-none focus:border-purple-500"
-                placeholder="Autosaved. Write candidate answers summary..."
-              />
-            </div>
+            {behavioralRightTab === 'evaluation' ? (
+              <>
+                {/* Sliders */}
+                <div className="space-y-5 bg-[#0d1515]/40 border border-[#3b494b] p-4 rounded-lg">
+                  {/* Communication Clarity */}
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between text-xs font-semibold text-[#94A3B8]">
+                      <span>Communication Clarity</span>
+                      <span className="text-purple-400 font-bold">{currentScoreData.communication}/10</span>
+                    </div>
+                    <input 
+                      type="range"
+                      min="1"
+                      max="10"
+                      value={currentScoreData.communication}
+                      onChange={(e) => handleBehavioralRatingChange(q.id, 'communication', parseInt(e.target.value))}
+                      className="w-full h-1 bg-[#151d1e] rounded appearance-none accent-purple-500 cursor-pointer"
+                    />
+                  </div>
 
-            {/* Trait tags selector */}
-            <div className="space-y-2.5 pt-4 border-t border-[#3b494b]/60">
-              <label className="text-[10px] font-bold text-[#94A3B8] uppercase tracking-wider block">Candidate Traits</label>
-              <div className="flex flex-wrap gap-2">
-                {availableTraits.map(tag => {
-                  const active = traitTags.includes(tag);
-                  return (
-                    <button
-                      key={tag}
-                      onClick={() => handleToggleTrait(tag)}
-                      className={`px-3 py-1 rounded-full text-[10px] font-bold transition-all cursor-pointer ${
-                        active 
-                          ? 'bg-purple-500 text-white shadow-lg shadow-purple-500/10' 
-                          : 'bg-[#0d1515]/80 border border-[#3b494b] text-[#94A3B8] hover:border-[#94A3B8]/60'
-                      }`}
-                    >
-                      {tag}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
+                  {/* Confidence Level */}
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between text-xs font-semibold text-[#94A3B8]">
+                      <span>Confidence Level</span>
+                      <span className="text-purple-400 font-bold">{currentScoreData.confidence}/10</span>
+                    </div>
+                    <input 
+                      type="range"
+                      min="1"
+                      max="10"
+                      value={currentScoreData.confidence}
+                      onChange={(e) => handleBehavioralRatingChange(q.id, 'confidence', parseInt(e.target.value))}
+                      className="w-full h-1 bg-[#151d1e] rounded appearance-none accent-purple-500 cursor-pointer"
+                    />
+                  </div>
+
+                  {/* Answer Relevance */}
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between text-xs font-semibold text-[#94A3B8]">
+                      <span>Answer Relevance (STAR alignment)</span>
+                      <span className="text-purple-400 font-bold">{currentScoreData.relevance}/10</span>
+                    </div>
+                    <input 
+                      type="range"
+                      min="1"
+                      max="10"
+                      value={currentScoreData.relevance}
+                      onChange={(e) => handleBehavioralRatingChange(q.id, 'relevance', parseInt(e.target.value))}
+                      className="w-full h-1 bg-[#151d1e] rounded appearance-none accent-purple-500 cursor-pointer"
+                    />
+                  </div>
+                </div>
+
+                {/* Question Notes */}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-[#94A3B8] uppercase tracking-wider block">Question Notes &amp; Observations</label>
+                  <textarea 
+                    value={currentScoreData.notes || ''}
+                    onChange={(e) => handleBehavioralRatingChange(q.id, 'notes', e.target.value)}
+                    className="w-full bg-[#0d1515] border border-[#3b494b] rounded-lg p-3 text-xs text-white h-24 focus:outline-none focus:border-purple-500"
+                    placeholder="Autosaved. Write candidate answers summary..."
+                  />
+                </div>
+
+                {/* Trait tags selector */}
+                <div className="space-y-2.5 pt-4 border-t border-[#3b494b]/60">
+                  <label className="text-[10px] font-bold text-[#94A3B8] uppercase tracking-wider block">Candidate Traits</label>
+                  <div className="flex flex-wrap gap-2">
+                    {availableTraits.map(tag => {
+                      const active = traitTags.includes(tag);
+                      return (
+                        <button
+                          key={tag}
+                          onClick={() => handleToggleTrait(tag)}
+                          className={`px-3 py-1 rounded-full text-[10px] font-bold transition-all cursor-pointer ${
+                            active 
+                              ? 'bg-purple-500 text-white shadow-lg shadow-purple-500/10' 
+                              : 'bg-[#0d1515]/80 border border-[#3b494b] text-[#94A3B8] hover:border-[#94A3B8]/60'
+                          }`}
+                        >
+                          {tag}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </>
+            ) : (
+              renderJobDescriptionPanel()
+            )}
           </div>
 
           {/* Running average score */}
-          <div className="bg-[#0d1515] border border-[#3b494b] p-4 rounded-xl flex justify-between items-center mt-6">
-            <span className="text-xs text-[#94A3B8] font-bold uppercase">Average Behavioral Score:</span>
-            <span className="text-lg font-bold font-mono text-purple-400">{runningAverage}</span>
-          </div>
+          {behavioralRightTab === 'evaluation' && (
+            <div className="bg-[#0d1515] border border-[#3b494b] p-4 rounded-xl flex justify-between items-center mt-6">
+              <span className="text-xs text-[#94A3B8] font-bold uppercase">Average Behavioral Score:</span>
+              <span className="text-lg font-bold font-mono text-purple-400">{runningAverage}</span>
+            </div>
+          )}
 
         </div>
 
@@ -2378,71 +2476,99 @@ export default function LiveSessionPage() {
         {/* RIGHT PANEL (30%): Score selection */}
         <div className="md:w-[30%] flex flex-col justify-between bg-[#151d1e]/80 border border-[#3b494b] rounded-xl p-6 overflow-y-auto custom-scrollbar h-full space-y-6">
           <div className="space-y-6">
-            <h3 className="text-xs font-bold uppercase text-orange-400 tracking-wider">Aptitude Evaluation</h3>
-            
-            {/* Quick score buttons */}
-            <div className="space-y-3 pt-2">
-              <label className="text-[10px] font-bold text-[#94A3B8] uppercase tracking-wider block">Question Outcome</label>
-              
-              <div className="grid grid-cols-2 gap-3">
-                <button
-                  onClick={() => handleLogicalResultChange(q.id, 'correct')}
-                  className={`py-3 rounded-lg text-xs font-bold border transition-all cursor-pointer flex flex-col items-center gap-1.5 ${
-                    currentScoreData.result === 'correct'
-                      ? 'bg-emerald-500/10 border-emerald-500 text-emerald-400 shadow-md'
-                      : 'bg-[#0d1515] border-[#3b494b] text-[#94A3B8] hover:border-[#475569]'
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-base">check_circle</span>
-                  <span>Correct</span>
-                </button>
-
-                <button
-                  onClick={() => handleLogicalResultChange(q.id, 'partially_correct')}
-                  className={`py-3 rounded-lg text-xs font-bold border transition-all cursor-pointer flex flex-col items-center gap-1.5 ${
-                    currentScoreData.result === 'partially_correct'
-                      ? 'bg-[#F59E0B]/10 border-[#F59E0B] text-[#F59E0B] shadow-md'
-                      : 'bg-[#0d1515] border-[#3b494b] text-[#94A3B8] hover:border-[#475569]'
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-base">hourglass_empty</span>
-                  <span>Partial</span>
-                </button>
-
-                <button
-                  onClick={() => handleLogicalResultChange(q.id, 'incorrect')}
-                  className={`py-3 rounded-lg text-xs font-bold border transition-all cursor-pointer flex flex-col items-center gap-1.5 ${
-                    currentScoreData.result === 'incorrect'
-                      ? 'bg-red-500/10 border-red-500 text-red-400 shadow-md'
-                      : 'bg-[#0d1515] border-[#3b494b] text-[#94A3B8] hover:border-[#475569]'
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-base">cancel</span>
-                  <span>Incorrect</span>
-                </button>
-
-                <button
-                  onClick={() => handleLogicalResultChange(q.id, 'skipped')}
-                  className={`py-3 rounded-lg text-xs font-bold border transition-all cursor-pointer flex flex-col items-center gap-1.5 ${
-                    currentScoreData.result === 'skipped'
-                      ? 'bg-gray-500/10 border-gray-500 text-gray-400 shadow-md'
-                      : 'bg-[#0d1515] border-[#3b494b] text-[#94A3B8] hover:border-[#475569]'
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-base">block</span>
-                  <span>Skipped</span>
-                </button>
-              </div>
+            {/* Tabs for Evaluation / Job Description */}
+            <div className="flex border-b border-[#3b494b]/60 pb-2 mb-4 gap-4 select-none">
+              <button
+                onClick={() => setLogicalRightTab('evaluation')}
+                className={`text-xs font-bold pb-1 border-b-2 transition-all cursor-pointer ${
+                  logicalRightTab === 'evaluation' 
+                    ? 'border-orange-500 text-orange-400' 
+                    : 'border-transparent text-[#94A3B8] hover:text-white'
+                }`}
+              >
+                Aptitude Evaluation
+              </button>
+              <button
+                onClick={() => setLogicalRightTab('jobDescription')}
+                className={`text-xs font-bold pb-1 border-b-2 transition-all cursor-pointer ${
+                  logicalRightTab === 'jobDescription' 
+                    ? 'border-orange-500 text-orange-400' 
+                    : 'border-transparent text-[#94A3B8] hover:text-white'
+                }`}
+              >
+                Job Description
+              </button>
             </div>
 
-            {/* Add Topic Questions Trigger Button */}
-            <button
-              onClick={() => setShowQuestionBankModal(true)}
-              className="w-full py-2.5 border border-dashed border-orange-500/40 text-orange-400 hover:bg-orange-500/5 hover:border-orange-500 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer uppercase tracking-wider mt-4"
-            >
-              <span className="material-symbols-outlined text-sm">library_books</span>
-              + Add Topic Questions
-            </button>
+            {logicalRightTab === 'evaluation' ? (
+              <>
+                {/* Quick score buttons */}
+                <div className="space-y-3 pt-2">
+                  <label className="text-[10px] font-bold text-[#94A3B8] uppercase tracking-wider block">Question Outcome</label>
+                  
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      onClick={() => handleLogicalResultChange(q.id, 'correct')}
+                      className={`py-3 rounded-lg text-xs font-bold border transition-all cursor-pointer flex flex-col items-center gap-1.5 ${
+                        currentScoreData.result === 'correct'
+                          ? 'bg-emerald-500/10 border-emerald-500 text-emerald-400 shadow-md'
+                          : 'bg-[#0d1515] border-[#3b494b] text-[#94A3B8] hover:border-[#475569]'
+                      }`}
+                    >
+                      <span className="material-symbols-outlined text-base">check_circle</span>
+                      <span>Correct</span>
+                    </button>
+
+                    <button
+                      onClick={() => handleLogicalResultChange(q.id, 'partially_correct')}
+                      className={`py-3 rounded-lg text-xs font-bold border transition-all cursor-pointer flex flex-col items-center gap-1.5 ${
+                        currentScoreData.result === 'partially_correct'
+                          ? 'bg-[#F59E0B]/10 border-[#F59E0B] text-[#F59E0B] shadow-md'
+                          : 'bg-[#0d1515] border-[#3b494b] text-[#94A3B8] hover:border-[#475569]'
+                      }`}
+                    >
+                      <span className="material-symbols-outlined text-base">hourglass_empty</span>
+                      <span>Partial</span>
+                    </button>
+
+                    <button
+                      onClick={() => handleLogicalResultChange(q.id, 'incorrect')}
+                      className={`py-3 rounded-lg text-xs font-bold border transition-all cursor-pointer flex flex-col items-center gap-1.5 ${
+                        currentScoreData.result === 'incorrect'
+                          ? 'bg-red-500/10 border-red-500 text-red-400 shadow-md'
+                          : 'bg-[#0d1515] border-[#3b494b] text-[#94A3B8] hover:border-[#475569]'
+                      }`}
+                    >
+                      <span className="material-symbols-outlined text-base">cancel</span>
+                      <span>Incorrect</span>
+                    </button>
+
+                    <button
+                      onClick={() => handleLogicalResultChange(q.id, 'skipped')}
+                      className={`py-3 rounded-lg text-xs font-bold border transition-all cursor-pointer flex flex-col items-center gap-1.5 ${
+                        currentScoreData.result === 'skipped'
+                          ? 'bg-gray-500/10 border-gray-500 text-gray-400 shadow-md'
+                          : 'bg-[#0d1515] border-[#3b494b] text-[#94A3B8] hover:border-[#475569]'
+                      }`}
+                    >
+                      <span className="material-symbols-outlined text-base">block</span>
+                      <span>Skipped</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Add Topic Questions Trigger Button */}
+                <button
+                  onClick={() => setShowQuestionBankModal(true)}
+                  className="w-full py-2.5 border border-dashed border-orange-500/40 text-orange-400 hover:bg-orange-500/5 hover:border-orange-500 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer uppercase tracking-wider mt-4"
+                >
+                  <span className="material-symbols-outlined text-sm">library_books</span>
+                  + Add Topic Questions
+                </button>
+              </>
+            ) : (
+              renderJobDescriptionPanel()
+            )}
           </div>
         </div>
 
