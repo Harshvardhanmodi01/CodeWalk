@@ -16,36 +16,43 @@ export default function DashboardLayout({
   const router = useRouter();
   const pathname = usePathname();
   const [mounted, setMounted] = useState(false);
-  const [authLoading, setAuthLoading] = useState(true);
+  // authChecked becomes true once we've confirmed the Supabase session status.
+  // This prevents a flash-redirect for users whose session is still being restored.
+  const [authChecked, setAuthChecked] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
+  // Close mobile sidebar on route change
   useEffect(() => {
     setIsMobileSidebarOpen(false);
   }, [pathname]);
 
-  // Check Supabase session on mount
   useEffect(() => {
+    setMounted(true);
+
+    // Directly check Supabase session on mount for a fast, reliable auth gate.
     const checkSession = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) {
-          window.location.replace('/login');
+          router.replace('/login');
         } else {
-          setAuthLoading(false);
+          setAuthChecked(true);
         }
       } catch (err) {
         console.error('Session check failed:', err);
-        window.location.replace('/login');
+        router.replace('/login');
       }
     };
-    checkSession();
-  }, []);
 
-  if (!mounted || authLoading || !user) {
+    checkSession();
+  }, [router]);
+
+  // If GlobalContext resolves user before the async session check, mark immediately.
+  useEffect(() => {
+    if (user) setAuthChecked(true);
+  }, [user]);
+
+  if (!mounted || !authChecked || !user) {
     return (
       <div className="min-h-screen bg-[#0d1515] flex items-center justify-center">
         <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-[#00dbe9]"></div>
@@ -65,8 +72,8 @@ export default function DashboardLayout({
             CodeWalk
           </span>
         </div>
-        
-        <button 
+
+        <button
           onClick={() => setIsMobileSidebarOpen(true)}
           className="p-1 text-[#b9cacb] hover:text-white transition-colors cursor-pointer"
         >
@@ -75,9 +82,9 @@ export default function DashboardLayout({
       </div>
 
       {/* Side Navigation Drawer */}
-      <Sidebar 
-        isOpen={isMobileSidebarOpen} 
-        onClose={() => setIsMobileSidebarOpen(false)} 
+      <Sidebar
+        isOpen={isMobileSidebarOpen}
+        onClose={() => setIsMobileSidebarOpen(false)}
       />
 
       {/* Main Workspace Frame */}
