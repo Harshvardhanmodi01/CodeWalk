@@ -2,13 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
-import { createClient } from '@supabase/supabase-js';
+import { supabase } from '@/app/lib/supabaseClient';
 import { useGlobal } from '@/app/context/GlobalContext';
-
-// Initialize client-side Supabase client for reading candidate / positions if needed
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 interface Candidate {
   id: string;

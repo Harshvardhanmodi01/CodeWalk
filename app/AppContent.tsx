@@ -259,7 +259,13 @@ export default function AppContent({ children }: { children: React.ReactNode }) 
     pathname?.startsWith('/auth/') ||
     pathname?.startsWith('/session') ||
     pathname?.startsWith('/candidate') ||
-    pathname?.startsWith('/onboarding');
+    pathname?.startsWith('/onboarding') ||
+    pathname?.startsWith('/positions') ||
+    pathname?.startsWith('/candidates') ||
+    pathname?.startsWith('/take-home') ||
+    pathname?.startsWith('/question-bank') ||
+    pathname?.startsWith('/resume-extractor') ||
+    pathname?.startsWith('/compare');
 
   if (isDashboardOrAuth) {
     return (
