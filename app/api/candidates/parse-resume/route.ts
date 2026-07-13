@@ -137,14 +137,62 @@ export async function POST(req: Request) {
       const githubMatch = rawText.match(githubRegex);
       const linkedinMatch = rawText.match(linkedinRegex);
 
+      // 1. Smart Skills Extraction
+      const popularSkills = [
+        'React', 'Next.js', 'Vue', 'Angular', 'TypeScript', 'JavaScript', 'Node.js', 'Express',
+        'Python', 'Django', 'Flask', 'Java', 'Spring', 'C++', 'C#', 'Golang', 'Ruby', 'PHP',
+        'SQL', 'PostgreSQL', 'MySQL', 'MongoDB', 'Redis', 'Docker', 'Kubernetes', 'AWS', 'GCP',
+        'Azure', 'Git', 'HTML', 'CSS', 'Tailwind', 'Sass', 'GraphQL', 'REST API', 'Linux'
+      ];
+      const extractedSkills: string[] = [];
+      const lowerText = rawText.toLowerCase();
+      popularSkills.forEach(skill => {
+        const escaped = skill.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+        const regex = new RegExp(`\\b${escaped}\\b`, 'i');
+        if (regex.test(lowerText)) {
+          extractedSkills.push(skill);
+        }
+      });
+
+      // 2. Smart Years of Experience Extraction
+      let extractedExp = '';
+      const expPatterns = [
+        /(\d+\.?\d*)\s*(?:\+)?\s*years?(?:\s+of)?\s+experience/i,
+        /experience\s*:\s*(\d+\.?\d*)\s*years?/i,
+        /(\d+\.?\d*)\s*yrs?\s*(?:\+)?\s*experience/i
+      ];
+      for (const pattern of expPatterns) {
+        const match = rawText.match(pattern);
+        if (match) {
+          extractedExp = `${match[1]} years`;
+          break;
+        }
+      }
+
+      // 3. Smart Title Extraction
+      let extractedTitle = '';
+      const commonTitles = [
+        'Software Engineer', 'Frontend Engineer', 'Backend Engineer', 'Full Stack Engineer',
+        'Frontend Developer', 'Backend Developer', 'Full Stack Developer', 'Software Developer',
+        'Web Developer', 'Mobile Developer', 'React Developer', 'Node Developer', 'DevOps Engineer',
+        'System Architect', 'Data Scientist', 'Machine Learning Engineer', 'UI/UX Designer'
+      ];
+      for (const title of commonTitles) {
+        const regex = new RegExp(`\\b${title.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')}\\b`, 'i');
+        if (regex.test(rawText)) {
+          extractedTitle = title;
+          break;
+        }
+      }
+
       return {
         name: capitalizedName || 'Candidate',
         email: emailMatch ? emailMatch[0] : '',
         github_url: githubMatch ? `https://github.com/${githubMatch[1]}` : '',
         linkedin_url: linkedinMatch ? `https://linkedin.com/in/${linkedinMatch[1]}` : '',
-        skills: [],
-        years_experience: '',
-        current_title: ''
+        skills: extractedSkills,
+        years_experience: extractedExp || '1 year',
+        current_title: extractedTitle || 'Software Engineer'
       };
     };
 

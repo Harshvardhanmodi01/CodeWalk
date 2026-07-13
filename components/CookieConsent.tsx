@@ -5,7 +5,7 @@ import Link from 'next/link';
 
 declare global {
   interface Window {
-    dataLayer: any[];
+    dataLayer?: any[];
     gtag: (...args: any[]) => void;
     'ga-loaded'?: boolean;
   }

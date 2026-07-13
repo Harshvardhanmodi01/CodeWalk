@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerSupabaseClient } from '@/app/lib/supabaseServer';
+import { createClient } from '@supabase/supabase-js';
 import { sanitizeString, validateEmail, validatePassword } from '@/app/lib/validation';
 import { logSecurityEvent, validateNonceAndTimestamp } from '@/app/lib/security';
 import { pickAllowed } from '@/app/lib/whitelist';
@@ -54,8 +54,16 @@ export async function POST(req: NextRequest) {
     fullName = sanitizeString(fullName, ip).slice(0, 100);
     company = sanitizeString(company, ip).slice(0, 200);
 
-    // 4. Initiate Supabase signUp
-    const supabase = await createServerSupabaseClient();
+    // 4. Initiate Supabase signUp using a plain (non-cookie-managing) client.
+    // IMPORTANT: We intentionally do NOT use createServerSupabaseClient() here.
+    // The SSR server client would write session cookies server-side, but the browser
+    // client also calls setSession() on the returned tokens — two writers on the same
+    // chunked cookie slots causes the @supabase/ssr "chunked cookie" warning.
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      { auth: { persistSession: false, autoRefreshToken: false } }
+    );
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
