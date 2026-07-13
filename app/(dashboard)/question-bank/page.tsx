@@ -28,10 +28,13 @@ interface Question {
 export default function QuestionBankDashboardPage() {
   const router = useRouter();
   const { user, subscription } = useGlobal();
-  const [activeTab, setActiveTab] = useState<'prebuilt' | 'mybank'>('prebuilt');
+  const [activeTab, setActiveTab] = useState<'prebuilt' | 'mybank' | 'teambank'>('prebuilt');
   const [loading, setLoading] = useState(true);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [savedQuestionIds, setSavedQuestionIds] = useState<Record<string, boolean>>({});
+  const [teamQuestionIds, setTeamQuestionIds] = useState<Record<string, boolean>>({});
+  const [teamQuestionsList, setTeamQuestionsList] = useState<Question[]>([]);
+  const [teamInvitations, setTeamInvitations] = useState<any[]>([]);
   const [activeSession, setActiveSession] = useState<any | null>(null);
 
   // Search and Filters
@@ -168,6 +171,77 @@ export default function QuestionBankDashboardPage() {
     }
   };
 
+  const fetchTeamQuestions = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('team_questions')
+        .select('*');
+      
+      if (error) throw error;
+      
+      const map: Record<string, boolean> = {};
+      const list: Question[] = [];
+      
+      (data || []).forEach(item => {
+        map[item.question_id] = true;
+        const found = questions.find(q => q.id === item.question_id);
+        if (found) list.push(found);
+      });
+      
+      setTeamQuestionIds(map);
+      setTeamQuestionsList(list);
+    } catch (err) {
+      console.warn('Supabase team_questions fetch failed, using localStorage fallback');
+      const stored = localStorage.getItem('cw_team_questions');
+      let teamIds: string[] = [];
+      if (stored) {
+        teamIds = JSON.parse(stored);
+      } else {
+        // Seed default team questions from prebuilt if empty
+        const jsQs = questions.filter(q => q.topic === 'JavaScript').slice(0, 2);
+        const sdQs = questions.filter(q => q.topic === 'System Design').slice(0, 1);
+        teamIds = [...jsQs, ...sdQs].map(q => q.id);
+        localStorage.setItem('cw_team_questions', JSON.stringify(teamIds));
+      }
+      
+      const map: Record<string, boolean> = {};
+      const list: Question[] = [];
+      teamIds.forEach(id => {
+        map[id] = true;
+        const found = questions.find(q => q.id === id);
+        if (found) list.push(found);
+      });
+      
+      setTeamQuestionIds(map);
+      setTeamQuestionsList(list);
+    }
+  };
+
+  const fetchTeamInvitations = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('team_invitations')
+        .select('*');
+      
+      if (error) throw error;
+      setTeamInvitations(data || []);
+    } catch (err) {
+      console.warn('Supabase team_invitations fetch failed, using localStorage fallback');
+      const stored = localStorage.getItem('cw_team_invitations');
+      if (stored) {
+        setTeamInvitations(JSON.parse(stored));
+      } else {
+        const mockInvites = [
+          { id: 'mock-1', email: 'hr-screener@codewalk.io', status: 'accepted', created_at: new Date().toISOString() },
+          { id: 'mock-2', email: 'tech-director@codewalk.io', status: 'pending', created_at: new Date().toISOString() },
+          { id: 'mock-3', email: 'nicolas@company.com', status: 'declined', created_at: new Date().toISOString() }
+        ];
+        localStorage.setItem('cw_team_invitations', JSON.stringify(mockInvites));
+        setTeamInvitations(mockInvites);
+      }
+    }
+  };
+
   const fetchActiveSession = async () => {
     if (!user) return;
     try {
@@ -193,6 +267,13 @@ export default function QuestionBankDashboardPage() {
     fetchSavedQuestions();
     fetchActiveSession();
   }, [user]);
+
+  useEffect(() => {
+    if (questions.length > 0) {
+      fetchTeamQuestions();
+      fetchTeamInvitations();
+    }
+  }, [questions]);
 
   // Handle Bookmarks
   const handleBookmarkToggle = async (qId: string) => {
@@ -241,6 +322,133 @@ export default function QuestionBankDashboardPage() {
     } catch (err: any) {
       console.error(err);
       toast.error('Bookmark update failed: ' + err.message);
+    }
+  };
+
+  // Handle Team Sharing Toggle
+  const handleShareToTeamToggle = async (qId: string) => {
+    const isShared = teamQuestionIds[qId];
+    try {
+      if (isShared) {
+        const { error } = await supabase
+          .from('team_questions')
+          .delete()
+          .eq('question_id', qId);
+        if (error) throw error;
+        
+        setTeamQuestionIds(prev => {
+          const next = { ...prev };
+          delete next[qId];
+          return next;
+        });
+        setTeamQuestionsList(prev => prev.filter(q => q.id !== qId));
+        toast.success('Removed from Team Bank');
+      } else {
+        const { error } = await supabase
+          .from('team_questions')
+          .insert({ question_id: qId, shared_by: user?.id });
+        if (error) throw error;
+        
+        setTeamQuestionIds(prev => ({ ...prev, [qId]: true }));
+        const found = questions.find(q => q.id === qId);
+        if (found) setTeamQuestionsList(prev => [...prev, found]);
+        toast.success('Question shared to Team Bank!');
+      }
+    } catch (err) {
+      console.warn('Database write failed, falling back to localStorage');
+      const stored = localStorage.getItem('cw_team_questions');
+      let teamIds: string[] = stored ? JSON.parse(stored) : [];
+      
+      if (isShared) {
+        teamIds = teamIds.filter(id => id !== qId);
+        setTeamQuestionIds(prev => {
+          const next = { ...prev };
+          delete next[qId];
+          return next;
+        });
+        setTeamQuestionsList(prev => prev.filter(q => q.id !== qId));
+        toast.success('Removed from Team Bank (locally)');
+      } else {
+        teamIds.push(qId);
+        setTeamQuestionIds(prev => ({ ...prev, [qId]: true }));
+        const found = questions.find(q => q.id === qId);
+        if (found) setTeamQuestionsList(prev => [...prev, found]);
+        toast.success('Question shared to Team Bank (locally)!');
+      }
+      localStorage.setItem('cw_team_questions', JSON.stringify(teamIds));
+    }
+  };
+
+  // Handle Team Member Invitation
+  const handleInviteMember = async (email: string) => {
+    if (!email.trim() || !email.includes('@')) {
+      toast.error('Please enter a valid email address');
+      return;
+    }
+
+    const toastId = toast.loading('Sending invitation email...');
+    
+    try {
+      const response = await fetch('/api/team/invite', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ email: email.trim() })
+      });
+
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Failed to send invitation');
+
+      // Update UI list
+      const newInviteItem = {
+        id: `invite-${Date.now()}`,
+        email: email.trim(),
+        status: 'pending' as const,
+        created_at: new Date().toISOString()
+      };
+
+      // Handle warnings / feedback
+      if (result.emailSent) {
+        toast.success(`Invitation sent to ${email}!`, { id: toastId });
+      } else if (result.emailWarning) {
+        // Render a clear, helpful warning for Sandbox limit/API key missing
+        toast.error(result.emailWarning, { 
+          id: toastId,
+          duration: 7500
+        });
+      } else {
+        toast.success(`Invitation recorded for ${email}.`, { id: toastId });
+      }
+
+      // Check database status. If not saved in DB, store locally in localStorage fallback
+      if (!result.databaseSaved) {
+        console.warn('Database save failed (table might not exist yet). Saving locally.');
+        const stored = localStorage.getItem('cw_team_invitations');
+        const invites = stored ? JSON.parse(stored) : [];
+        invites.push(newInviteItem);
+        localStorage.setItem('cw_team_invitations', JSON.stringify(invites));
+      }
+
+      // Add to current UI state regardless
+      setTeamInvitations(prev => [...prev, newInviteItem]);
+
+    } catch (err: any) {
+      console.error('Error sending invitation:', err);
+      toast.error(err.message || 'Invitation failed. Saving locally.', { id: toastId });
+
+      // Clean LocalStorage Fallback if entire request/network fails
+      const stored = localStorage.getItem('cw_team_invitations');
+      const invites = stored ? JSON.parse(stored) : [];
+      const fallbackInvite = {
+        id: `mock-${Date.now()}`,
+        email: email.trim(),
+        status: 'pending' as const,
+        created_at: new Date().toISOString()
+      };
+      invites.push(fallbackInvite);
+      localStorage.setItem('cw_team_invitations', JSON.stringify(invites));
+      setTeamInvitations(prev => [...prev, fallbackInvite]);
     }
   };
 
@@ -746,13 +954,65 @@ export default function QuestionBankDashboardPage() {
       .map(t => t.name);
   };
 
+  const getTeamTopicsList = () => {
+    let teamQs = questions.filter(q => teamQuestionIds[q.id]);
+    if (selectedCategory !== 'all') {
+      teamQs = teamQs.filter(q => q.category === selectedCategory);
+    }
+    if (selectedDifficulty !== 'all') {
+      teamQs = teamQs.filter(q => q.difficulty === selectedDifficulty);
+    }
+
+    const topicsMap: Record<string, {
+      name: string;
+      category: string;
+      questions: Question[];
+      easy: number;
+      medium: number;
+      hard: number;
+      usage: number;
+      lastUpdated: string;
+    }> = {};
+
+    teamQs.forEach(q => {
+      if (!topicsMap[q.topic]) {
+        topicsMap[q.topic] = {
+          name: q.topic,
+          category: q.category || 'technical',
+          questions: [],
+          easy: 0,
+          medium: 0,
+          hard: 0,
+          usage: 0,
+          lastUpdated: q.created_at
+        };
+      }
+      topicsMap[q.topic].questions.push(q);
+      topicsMap[q.topic].usage += (q.usage_count || 0);
+      if (new Date(q.created_at).getTime() > new Date(topicsMap[q.topic].lastUpdated).getTime()) {
+        topicsMap[q.topic].lastUpdated = q.created_at;
+      }
+      if (q.difficulty === 'easy') topicsMap[q.topic].easy++;
+      else if (q.difficulty === 'medium') topicsMap[q.topic].medium++;
+      else if (q.difficulty === 'hard') topicsMap[q.topic].hard++;
+    });
+
+    return Object.values(topicsMap);
+  };
+
   const top5Topics = getTop5Topics();
 
   // Search filter flags
   const isSearching = debouncedSearchQuery.trim().length >= 3;
 
   // 1. Topics filter
-  const topicsSource = activeTab === 'prebuilt' ? getPrebuiltTopicsList() : getSavedTopicsList();
+  const topicsSource = 
+    activeTab === 'prebuilt' 
+      ? getPrebuiltTopicsList() 
+      : activeTab === 'mybank' 
+      ? getSavedTopicsList() 
+      : getTeamTopicsList();
+
   const filteredTopicsList = topicsSource.filter(t => {
     const matchesSearch = t.name.toLowerCase().includes(debouncedSearchQuery.toLowerCase());
     const matchesCategory = selectedCategory === 'all' || t.category === selectedCategory;
@@ -760,7 +1020,12 @@ export default function QuestionBankDashboardPage() {
   });
 
   // 2. Questions filter
-  const questionsSource = activeTab === 'prebuilt' ? questions.filter(q => q.created_by === null) : savedQuestionsList;
+  const questionsSource = 
+    activeTab === 'prebuilt' 
+      ? questions.filter(q => q.created_by === null) 
+      : activeTab === 'mybank' 
+      ? savedQuestionsList 
+      : teamQuestionsList;
   const filteredQuestionsList = isSearching
     ? questionsSource.filter(q => {
         const matchesCategory = selectedCategory === 'all' || q.category === selectedCategory;
@@ -903,13 +1168,23 @@ export default function QuestionBankDashboardPage() {
           )}
         </button>
 
-        {isEnterprise && (
-          <button className="pb-3 border-b-2 border-transparent px-1 text-[#94A3B8] cursor-pointer flex items-center gap-2 opacity-60">
-            <span className="material-symbols-outlined text-base">groups</span>
-            Team Bank
-            <span className="text-[9px] bg-[#151d1e] border border-[#3b494b] text-[#94A3B8] px-1.5 py-0.5 rounded font-bold ml-1 uppercase">Soon</span>
-          </button>
-        )}
+        <button 
+          onClick={() => {
+            setActiveTab('teambank');
+            setSearchQuery('');
+            setSelectedCategory('all');
+            setSelectedDifficulty('all');
+          }}
+          className={`pb-3 border-b-2 px-1 transition-all cursor-pointer flex items-center gap-2 ${
+            activeTab === 'teambank' ? 'border-[#06B6D4] text-[#06B6D4]' : 'border-transparent text-[#94A3B8] hover:text-white'
+          }`}
+        >
+          <span className="material-symbols-outlined text-base">groups</span>
+          Team Bank
+          <span className="text-[10px] bg-[#151d1e] text-[#94A3B8] border border-[#3b494b] px-1.5 py-0.5 rounded-full font-mono ml-1.5">
+            {teamQuestionsList.length}
+          </span>
+        </button>
       </div>
 
       {/* Filters Area */}
@@ -921,7 +1196,13 @@ export default function QuestionBankDashboardPage() {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder={activeTab === 'prebuilt' ? "Search topics, questions, tags..." : "Search saved questions..."}
+            placeholder={
+              activeTab === 'prebuilt' 
+                ? "Search topics, questions, tags..." 
+                : activeTab === 'mybank' 
+                ? "Search saved questions..." 
+                : "Search team questions..."
+            }
             className="w-full bg-[#0d1515] border border-[#3b494b] rounded-lg pl-9 pr-4 py-2 text-xs text-white focus:outline-none focus:border-[#06B6D4]"
           />
         </div>
@@ -1140,6 +1421,15 @@ export default function QuestionBankDashboardPage() {
                               <span className={`material-symbols-outlined text-base ${isSaved ? 'fill-current text-[#06B6D4]' : ''}`}>bookmark</span>
                             </button>
 
+                            {/* Share to Team Bank */}
+                            <button
+                              onClick={() => handleShareToTeamToggle(q.id)}
+                              className="text-[#94A3B8] hover:text-white p-1.5 rounded hover:bg-[#0d1515] transition-all cursor-pointer"
+                              title={teamQuestionIds[q.id] ? "Remove from Team Bank" : "Share with Team"}
+                            >
+                              <span className={`material-symbols-outlined text-base ${teamQuestionIds[q.id] ? 'text-indigo-400 fill-current' : ''}`}>groups</span>
+                            </button>
+
                             {/* Add to Interview button */}
                             <div className="relative group">
                               <button
@@ -1178,150 +1468,239 @@ export default function QuestionBankDashboardPage() {
 
             </div>
           ) : (
-            /* DEFAULT TOPIC GRID LAYOUT (Prebuilt or Saved) */
-            <div>
-              {filteredTopicsList.length === 0 ? (
-                <div className="bg-[#151d1e]/30 border border-[#3b494b]/40 rounded-xl p-12 text-center text-[#94A3B8] italic">
-                  <span className="material-symbols-outlined text-4xl mb-2 text-[#3b494b]">bookmark_border</span>
-                  <p className="text-xs">No topics found in this library category.</p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
-                  {filteredTopicsList.map(topic => {
-                    const isLocked = isTopicLocked(topic.name);
-                    const total = topic.questions.length;
-                    const easyPct = (topic.easy / total) * 100;
-                    const medPct = (topic.medium / total) * 100;
-                    const hardPct = (topic.hard / total) * 100;
-                    const isPopular = top5Topics.includes(topic.name);
+            /* DEFAULT TOPIC GRID LAYOUT (Prebuilt, Saved, or Team) */
+            <div className={activeTab === 'teambank' ? "grid grid-cols-1 lg:grid-cols-3 gap-6" : ""}>
+              
+              {/* Left Column: Topics Grid */}
+              <div className={activeTab === 'teambank' ? "lg:col-span-2 space-y-4" : ""}>
+                {activeTab === 'teambank' && (
+                  <h3 className="text-xs font-extrabold uppercase text-[#06B6D4] tracking-widest mb-1">
+                    Team Shared Topics
+                  </h3>
+                )}
+                {filteredTopicsList.length === 0 ? (
+                  <div className="bg-[#151d1e]/30 border border-[#3b494b]/40 rounded-xl p-12 text-center text-[#94A3B8] italic">
+                    <span className="material-symbols-outlined text-4xl mb-2 text-[#3b494b]">
+                      {activeTab === 'mybank' ? 'bookmark_border' : activeTab === 'teambank' ? 'groups' : 'folder_open'}
+                    </span>
+                    <p className="text-xs">
+                      {activeTab === 'mybank' 
+                        ? 'No topics found in your saved list.' 
+                        : activeTab === 'teambank' 
+                        ? 'No shared team topics yet. Browse the Pre-built Library and click "Share with Team" to add questions here!'
+                        : 'No topics found in this library category.'}
+                    </p>
+                  </div>
+                ) : (
+                  <div className={`grid gap-5 ${activeTab === 'teambank' ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4'}`}>
+                    {filteredTopicsList.map(topic => {
+                      const isLocked = isTopicLocked(topic.name);
+                      const total = topic.questions.length;
+                      const easyPct = (topic.easy / total) * 100;
+                      const medPct = (topic.medium / total) * 100;
+                      const hardPct = (topic.hard / total) * 100;
+                      const isPopular = top5Topics.includes(topic.name);
 
-                    return (
-                      <div
-                        key={topic.name}
-                        onClick={isLocked ? () => handleTopicView(topic.name) : undefined}
-                        className={`bg-[#151d1e] border border-[#3b494b] rounded-xl p-5 flex flex-col justify-between transition-all duration-300 relative overflow-hidden group border-l-4 border-l-[#06B6D4] ${
-                          isLocked
-                            ? 'opacity-50 cursor-pointer hover:opacity-70 hover:border-amber-500/50'
-                            : 'hover:border-[#06B6D4]/50'
-                        }`}
-                      >
-                        {/* Pro badge for locked topics */}
-                        {isLocked && (
-                          <div className="absolute top-2.5 right-2.5 z-20 px-2 py-0.5 bg-gradient-to-r from-amber-500 to-orange-400 text-[#0d1515] text-[8px] font-extrabold uppercase rounded tracking-wider shadow-sm">
-                            PRO
+                      return (
+                        <div
+                          key={topic.name}
+                          onClick={isLocked ? () => handleTopicView(topic.name) : undefined}
+                          className={`bg-[#151d1e] border border-[#3b494b] rounded-xl p-5 flex flex-col justify-between transition-all duration-300 relative overflow-hidden group border-l-4 border-l-[#06B6D4] ${
+                            isLocked
+                              ? 'opacity-50 cursor-pointer hover:opacity-70 hover:border-amber-500/50'
+                              : 'hover:border-[#06B6D4]/50'
+                          }`}
+                        >
+                          {/* Pro badge for locked topics */}
+                          {isLocked && (
+                            <div className="absolute top-2.5 right-2.5 z-20 px-2 py-0.5 bg-gradient-to-r from-amber-500 to-orange-400 text-[#0d1515] text-[8px] font-extrabold uppercase rounded tracking-wider shadow-sm">
+                              PRO
+                            </div>
+                          )}
+
+                          {/* Lock icon overlay */}
+                          {isLocked && (
+                            <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none">
+                              <span className="material-symbols-outlined text-amber-400 text-4xl opacity-80">lock</span>
+                            </div>
+                          )}
+
+                          <div className="space-y-3">
+                            <div className="flex justify-between items-center">
+                              <span className="text-3xl">{getTopicIcon(topic.name)}</span>
+                              <div className="flex items-center gap-1.5">
+                                {isPopular && (
+                                  <span className="px-1.5 py-0.5 bg-amber-500/10 border border-amber-500/30 text-[8px] font-bold text-amber-500 uppercase rounded">Popular</span>
+                                )}
+                                <span className="text-[9px] bg-[#0d1515] border border-[#3b494b] px-2.5 py-0.5 rounded-full font-bold text-[#b9cacb]">
+                                  {total} questions
+                                </span>
+                              </div>
+                            </div>
+                            <div>
+                              <h3 className="font-bold text-sm text-white group-hover:text-[#06B6D4] transition-colors">{topic.name}</h3>
+                              <div className="flex items-center justify-between text-[8px] text-[#94A3B8] mt-1 transition-all">
+                                <span className="capitalize">{topic.category}</span>
+                                <span>Updated {new Date(topic.lastUpdated).toLocaleDateString(undefined, {month: 'short', year:'numeric'})}</span>
+                              </div>
+                            </div>
                           </div>
-                        )}
 
-                        {/* Lock icon overlay */}
-                        {isLocked && (
-                          <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none">
-                            <span className="material-symbols-outlined text-amber-400 text-4xl opacity-80">lock</span>
+                          {/* Hover preview slide-up tooltip */}
+                          <div className="absolute inset-x-0 top-0 bottom-[72px] bg-[#151d1e]/95 border-b border-[#3b494b]/60 p-4 translate-y-full group-hover:translate-y-0 transition-transform duration-300 z-10 text-[10px] leading-relaxed flex flex-col justify-between select-none pointer-events-none">
+                            <div className="space-y-1.5">
+                              <div className="flex justify-between items-center text-[7px] uppercase tracking-wider font-bold">
+                                <span className="text-[#06B6D4]">Most Used Question:</span>
+                                <span className={`px-1 rounded border ${
+                                  getMostUsedQuestionDifficulty(topic.name) === 'hard' ? 'bg-red-500/10 border-red-500/20 text-red-400' :
+                                  getMostUsedQuestionDifficulty(topic.name) === 'medium' ? 'bg-amber-500/10 border-amber-500/20 text-amber-400' :
+                                  'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+                                }`}>{getMostUsedQuestionDifficulty(topic.name)}</span>
+                              </div>
+                              <p className="text-white italic">"{getMostUsedQuestionText80(topic.name)}"</p>
+                            </div>
+                            <span className="text-[7px] text-[#94A3B8] font-bold block text-center border-t border-[#3b494b]/40 pt-1">Click Browse to see all questions</span>
                           </div>
-                        )}
 
-                        <div className="space-y-3">
-                          <div className="flex justify-between items-center">
-                            <span className="text-3xl">{getTopicIcon(topic.name)}</span>
-                            <div className="flex items-center gap-1.5">
-                              {isPopular && (
-                                <span className="px-1.5 py-0.5 bg-amber-500/10 border border-amber-500/30 text-[8px] font-bold text-amber-500 uppercase rounded">Popular</span>
+                          <div className="space-y-4 mt-6 pt-4 border-t border-[#3b494b]/30">
+                            <div className="space-y-1">
+                              <div className="w-full h-1.5 bg-[#0d1515] rounded-full overflow-hidden flex">
+                                <div className="h-full bg-emerald-500" style={{ width: `${easyPct}%` }}></div>
+                                <div className="h-full bg-[#F59E0B]" style={{ width: `${medPct}%` }}></div>
+                                <div className="h-full bg-red-500" style={{ width: `${hardPct}%` }}></div>
+                              </div>
+                            </div>
+
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => handleTopicView(topic.name)}
+                                className={`flex-1 py-2 text-[10px] font-bold uppercase rounded-lg transition-all flex items-center justify-center gap-1 cursor-pointer ${
+                                  isLocked
+                                    ? 'bg-amber-500/10 border border-amber-500/30 text-amber-400 hover:bg-amber-500/20'
+                                    : 'bg-[#0d1515] border border-[#3b494b] text-[#b9cacb] hover:bg-[#06B6D4] hover:text-[#0d1515] hover:border-transparent'
+                                }`}
+                              >
+                                {isLocked ? (
+                                  <><span className="material-symbols-outlined text-xs">lock</span> Upgrade</>  
+                                ) : 'Browse'}
+                              </button>
+
+                              {/* Bulk Add dropdown — hidden for locked topics on free plan */}
+                              {!isLocked && (
+                                <div className="relative">
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setBulkSelectTopic(bulkSelectTopic === topic.name ? null : topic.name);
+                                    }}
+                                    onMouseEnter={() => !activeSession && setActiveBulkTooltipTopic(topic.name)}
+                                    onMouseLeave={() => setActiveBulkTooltipTopic(null)}
+                                    className={`px-2.5 py-2 rounded-lg font-bold text-xs border transition-colors flex items-center justify-center cursor-pointer ${
+                                      activeSession
+                                        ? 'bg-[#0d1515] border-[#3b494b] text-[#b9cacb] hover:bg-[#06B6D4] hover:text-[#0d1515] hover:border-transparent'
+                                        : 'bg-[#151d1e]/20 border-[#3b494b]/40 text-[#94A3B8]'
+                                    }`}
+                                  >
+                                    <span className="material-symbols-outlined text-xs">add</span>
+                                  </button>
+
+                                  {!activeSession && activeBulkTooltipTopic === topic.name && (
+                                    <span className="absolute bottom-full mb-2 right-0 bg-[#0d1515] border border-[#3b494b] text-white text-[9px] px-2 py-1 rounded shadow-xl whitespace-nowrap z-50 pointer-events-none transition-all animate-in fade-in zoom-in-95 duration-100">
+                                      Start an interview first
+                                    </span>
+                                  )}
+
+                                  {activeSession && bulkSelectTopic === topic.name && (
+                                    <div className="absolute right-0 top-full mt-1.5 w-44 bg-[#192122] border border-[#3b494b] rounded-lg shadow-xl z-50 py-1.5 text-[10px] font-bold animate-in fade-in duration-100">
+                                      <button onClick={() => addBulkQuestionsToSession(topic.name, 'random')} className="w-full text-left px-3 py-1.5 hover:bg-[#06B6D4]/10 hover:text-white transition-colors cursor-pointer block">Add 5 Random Questions</button>
+                                      <button onClick={() => addBulkQuestionsToSession(topic.name, 'easy')} className="w-full text-left px-3 py-1.5 hover:bg-[#06B6D4]/10 hover:text-white transition-colors cursor-pointer block">Add 5 Easy Questions</button>
+                                      <button onClick={() => addBulkQuestionsToSession(topic.name, 'medium')} className="w-full text-left px-3 py-1.5 hover:bg-[#06B6D4]/10 hover:text-white transition-colors cursor-pointer block">Add 5 Medium Questions</button>
+                                      <button onClick={() => addBulkQuestionsToSession(topic.name, 'hard')} className="w-full text-left px-3 py-1.5 hover:bg-[#06B6D4]/10 hover:text-white transition-colors cursor-pointer block">Add 5 Hard Questions</button>
+                                      <button onClick={() => addBulkQuestionsToSession(topic.name, 'all')} className="w-full text-left px-3 py-1.5 border-t border-[#3b494b]/60 pt-1.5 hover:bg-[#06B6D4]/10 hover:text-white transition-colors cursor-pointer block">Add All Questions</button>
+                                    </div>
+                                  )}
+                                </div>
                               )}
-                              <span className="text-[9px] bg-[#0d1515] border border-[#3b494b] px-2.5 py-0.5 rounded-full font-bold text-[#b9cacb]">
-                                {total} questions
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Right Column: Manage Team Members & Invites */}
+              {activeTab === 'teambank' && (
+                <div className="space-y-4">
+                  <h3 className="text-xs font-extrabold uppercase text-[#06B6D4] tracking-widest mb-1">
+                    Manage Team Access
+                  </h3>
+                  <div className="bg-[#151d1e] border border-[#3b494b] rounded-xl p-5 space-y-5 shadow-lg">
+                    <div className="space-y-1">
+                      <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                        <span className="material-symbols-outlined text-indigo-400 text-sm">person_add</span>
+                        Invite Team Member
+                      </h4>
+                      <p className="text-[10px] text-[#94A3B8] leading-relaxed">
+                        Invited users can select, share, and add questions to the Team Bank.
+                      </p>
+                    </div>
+                    
+                    <form 
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        const formData = new FormData(e.currentTarget);
+                        const email = formData.get('email') as string;
+                        handleInviteMember(email);
+                        e.currentTarget.reset();
+                      }}
+                      className="flex gap-2"
+                    >
+                      <input 
+                        type="email"
+                        name="email"
+                        required
+                        placeholder="colleague@company.com"
+                        className="flex-grow bg-[#0d1515] border border-[#3b494b] rounded-lg px-3 py-1.5 text-xs text-white placeholder:text-[#3b494b] focus:outline-none focus:border-[#06B6D4]"
+                      />
+                      <button 
+                        type="submit"
+                        className="px-4 py-1.5 bg-indigo-500 hover:bg-indigo-600 text-white font-bold text-xs rounded-lg transition-all active:scale-95 cursor-pointer"
+                      >
+                        Invite
+                      </button>
+                    </form>
+
+                    <div className="border-t border-[#3b494b]/60 pt-4 space-y-3">
+                      <h5 className="text-[10px] font-bold text-[#94A3B8] uppercase tracking-wider">
+                        Team Members &amp; Status
+                      </h5>
+                      <div className="space-y-2 max-h-[250px] overflow-y-auto custom-scrollbar">
+                        {teamInvitations.length === 0 ? (
+                          <p className="text-[10px] italic text-[#94A3B8]">No invitations sent yet.</p>
+                        ) : (
+                          teamInvitations.map((invite, index) => (
+                            <div key={invite.id || index} className="flex justify-between items-center bg-[#0d1515]/60 border border-[#3b494b]/30 p-2.5 rounded-lg text-xs">
+                              <span className="text-[#dce4e5] font-mono font-medium truncate max-w-[150px]" title={invite.email}>
+                                {invite.email}
+                              </span>
+                              <span className={`text-[8px] font-extrabold px-2 py-0.5 rounded font-mono uppercase ${
+                                invite.status === 'accepted' ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400' :
+                                invite.status === 'declined' ? 'bg-red-500/10 border border-red-500/20 text-red-400' :
+                                'bg-amber-500/10 border border-amber-500/20 text-amber-400 animate-pulse'
+                              }`}>
+                                {invite.status}
                               </span>
                             </div>
-                          </div>
-                          <div>
-                            <h3 className="font-bold text-sm text-white group-hover:text-[#06B6D4] transition-colors">{topic.name}</h3>
-                            <div className="flex items-center justify-between text-[8px] text-[#94A3B8] mt-1 transition-all">
-                              <span className="capitalize">{topic.category}</span>
-                              <span>Updated {new Date(topic.lastUpdated).toLocaleDateString(undefined, {month: 'short', year:'numeric'})}</span>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Hover preview slide-up tooltip */}
-                        <div className="absolute inset-x-0 top-0 bottom-[72px] bg-[#151d1e]/95 border-b border-[#3b494b]/60 p-4 translate-y-full group-hover:translate-y-0 transition-transform duration-300 z-10 text-[10px] leading-relaxed flex flex-col justify-between select-none pointer-events-none">
-                          <div className="space-y-1.5">
-                            <div className="flex justify-between items-center text-[7px] uppercase tracking-wider font-bold">
-                              <span className="text-[#06B6D4]">Most Used Question:</span>
-                              <span className={`px-1 rounded border ${
-                                getMostUsedQuestionDifficulty(topic.name) === 'hard' ? 'bg-red-500/10 border-red-500/20 text-red-400' :
-                                getMostUsedQuestionDifficulty(topic.name) === 'medium' ? 'bg-amber-500/10 border-amber-500/20 text-amber-400' :
-                                'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
-                              }`}>{getMostUsedQuestionDifficulty(topic.name)}</span>
-                            </div>
-                            <p className="text-white italic">"{getMostUsedQuestionText80(topic.name)}"</p>
-                          </div>
-                          <span className="text-[7px] text-[#94A3B8] font-bold block text-center border-t border-[#3b494b]/40 pt-1">Click Browse to see all questions</span>
-                        </div>
-
-                        <div className="space-y-4 mt-6 pt-4 border-t border-[#3b494b]/30">
-                          <div className="space-y-1">
-                            <div className="w-full h-1.5 bg-[#0d1515] rounded-full overflow-hidden flex">
-                              <div className="h-full bg-emerald-500" style={{ width: `${easyPct}%` }}></div>
-                              <div className="h-full bg-[#F59E0B]" style={{ width: `${medPct}%` }}></div>
-                              <div className="h-full bg-red-500" style={{ width: `${hardPct}%` }}></div>
-                            </div>
-                          </div>
-
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => handleTopicView(topic.name)}
-                              className={`flex-1 py-2 text-[10px] font-bold uppercase rounded-lg transition-all flex items-center justify-center gap-1 cursor-pointer ${
-                                isLocked
-                                  ? 'bg-amber-500/10 border border-amber-500/30 text-amber-400 hover:bg-amber-500/20'
-                                  : 'bg-[#0d1515] border border-[#3b494b] text-[#b9cacb] hover:bg-[#06B6D4] hover:text-[#0d1515] hover:border-transparent'
-                              }`}
-                            >
-                              {isLocked ? (
-                                <><span className="material-symbols-outlined text-xs">lock</span> Upgrade</>  
-                              ) : 'Browse'}
-                            </button>
-
-                            {/* Bulk Add dropdown — hidden for locked topics on free plan */}
-                            {!isLocked && (
-                              <div className="relative">
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setBulkSelectTopic(bulkSelectTopic === topic.name ? null : topic.name);
-                                  }}
-                                  onMouseEnter={() => !activeSession && setActiveBulkTooltipTopic(topic.name)}
-                                  onMouseLeave={() => setActiveBulkTooltipTopic(null)}
-                                  className={`px-2.5 py-2 rounded-lg font-bold text-xs border transition-colors flex items-center justify-center cursor-pointer ${
-                                    activeSession
-                                      ? 'bg-[#0d1515] border-[#3b494b] text-[#b9cacb] hover:bg-[#06B6D4] hover:text-[#0d1515] hover:border-transparent'
-                                      : 'bg-[#151d1e]/20 border-[#3b494b]/40 text-[#94A3B8]'
-                                  }`}
-                                >
-                                  <span className="material-symbols-outlined text-xs">add</span>
-                                </button>
-
-                                {!activeSession && activeBulkTooltipTopic === topic.name && (
-                                  <span className="absolute bottom-full mb-2 right-0 bg-[#0d1515] border border-[#3b494b] text-white text-[9px] px-2 py-1 rounded shadow-xl whitespace-nowrap z-50 pointer-events-none transition-all animate-in fade-in zoom-in-95 duration-100">
-                                    Start an interview first
-                                  </span>
-                                )}
-
-                                {activeSession && bulkSelectTopic === topic.name && (
-                                  <div className="absolute right-0 top-full mt-1.5 w-44 bg-[#192122] border border-[#3b494b] rounded-lg shadow-xl z-50 py-1.5 text-[10px] font-bold animate-in fade-in duration-100">
-                                    <button onClick={() => addBulkQuestionsToSession(topic.name, 'random')} className="w-full text-left px-3 py-1.5 hover:bg-[#06B6D4]/10 hover:text-white transition-colors cursor-pointer block">Add 5 Random Questions</button>
-                                    <button onClick={() => addBulkQuestionsToSession(topic.name, 'easy')} className="w-full text-left px-3 py-1.5 hover:bg-[#06B6D4]/10 hover:text-white transition-colors cursor-pointer block">Add 5 Easy Questions</button>
-                                    <button onClick={() => addBulkQuestionsToSession(topic.name, 'medium')} className="w-full text-left px-3 py-1.5 hover:bg-[#06B6D4]/10 hover:text-white transition-colors cursor-pointer block">Add 5 Medium Questions</button>
-                                    <button onClick={() => addBulkQuestionsToSession(topic.name, 'hard')} className="w-full text-left px-3 py-1.5 hover:bg-[#06B6D4]/10 hover:text-white transition-colors cursor-pointer block">Add 5 Hard Questions</button>
-                                    <button onClick={() => addBulkQuestionsToSession(topic.name, 'all')} className="w-full text-left px-3 py-1.5 border-t border-[#3b494b]/60 pt-1.5 hover:bg-[#06B6D4]/10 hover:text-white transition-colors cursor-pointer block">Add All Questions</button>
-                                  </div>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        </div>
+                          ))
+                        )}
                       </div>
-                    );
-                  })}
+                    </div>
+                  </div>
                 </div>
               )}
+
             </div>
           )}
 
@@ -1331,6 +1710,8 @@ export default function QuestionBankDashboardPage() {
       {activeTopic && (() => {
         const baseList = activeTab === 'mybank'
           ? questions.filter(q => q.topic === activeTopic && savedQuestionIds[q.id])
+          : activeTab === 'teambank'
+          ? questions.filter(q => q.topic === activeTopic && teamQuestionIds[q.id])
           : questions.filter(q => q.topic === activeTopic && q.created_by === null);
 
         const filteredBase = baseList
@@ -1392,6 +1773,15 @@ export default function QuestionBankDashboardPage() {
                             title={isSaved ? "Remove from bank" : "Bookmark question"}
                           >
                             <span className={`material-symbols-outlined text-sm font-bold ${isSaved ? 'fill-current text-[#06B6D4]' : ''}`}>bookmark</span>
+                          </button>
+
+                          {/* Share to Team Bank */}
+                          <button
+                            onClick={() => handleShareToTeamToggle(q.id)}
+                            className="text-[#94A3B8] hover:text-white p-1 hover:bg-[#0d1515] rounded transition-all cursor-pointer"
+                            title={teamQuestionIds[q.id] ? "Remove from Team Bank" : "Share with Team"}
+                          >
+                            <span className={`material-symbols-outlined text-sm font-bold ${teamQuestionIds[q.id] ? 'text-indigo-400 fill-current' : ''}`}>groups</span>
                           </button>
 
                           {/* Add to Interview in slide-over */}

@@ -62,6 +62,10 @@ export default function ResumeExtractorPage() {
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Failed to parse resume.');
 
+        if (data.warning) {
+          toast.error(data.warning, { duration: 6000 });
+        }
+
         parsedResults.push({
           fileName: file.name,
           name: data.parsed.name || '',

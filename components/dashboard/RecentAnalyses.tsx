@@ -117,7 +117,7 @@ export default function RecentAnalyses() {
         {analyses.map((item) => (
           <Link
             key={item.jobId}
-            href={item.status === 'SCANNING' ? '/dashboard/loading' : `/results/${item.jobId}`}
+            href={item.status === 'SCANNING' ? `/dashboard/loading?jobId=${item.jobId}` : `/results/${item.jobId}`}
             className="group block p-4 bg-surface-container border border-outline-variant hover:border-primary-fixed/40 transition-colors rounded-xl shadow-sm"
           >
             <div className="flex justify-between items-start gap-4 mb-2">

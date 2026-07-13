@@ -59,43 +59,68 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'File size exceeds maximum limit of 5MB' }, { status: 400 });
     }
 
-    // 2. Validate file extension: Only .pdf allowed
+    // 2. Validate file extension: Only .pdf and .docx allowed
     const fileExt = path.extname(file.name).toLowerCase();
-    if (fileExt !== '.pdf') {
+    if (fileExt !== '.pdf' && fileExt !== '.docx') {
       await logSecurityEvent('UPLOAD_REJECTED_INVALID_EXTENSION', ip, authResult.id, {
         fileName: file.name,
         extension: fileExt,
       }, 'warning');
-      return NextResponse.json({ error: 'Only PDF resumes are allowed' }, { status: 400 });
+      return NextResponse.json({ error: 'Only PDF and DOCX resumes are allowed' }, { status: 400 });
     }
 
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
-    // 3. Verify PDF Magic Bytes (first 4 bytes: 25 50 44 46, which is %PDF)
+    // 3. Verify Magic Bytes
+    // PDF magic bytes: 25 50 44 46 (%PDF)
+    // DOCX (ZIP) magic bytes: 50 4b 03 04 (PK..)
     const hex = buffer.toString('hex', 0, 4).toLowerCase();
-    if (hex !== '25504446') {
+    if (fileExt === '.pdf' && hex !== '25504446') {
       await logSecurityEvent('UPLOAD_REJECTED_MAGIC_BYTES_MISMATCH', ip, authResult.id, {
         fileName: file.name,
         hexSignature: hex,
       }, 'warning');
-      return NextResponse.json({ error: 'Invalid file type' }, { status: 400 });
+      return NextResponse.json({ error: 'Invalid PDF file type' }, { status: 400 });
+    } else if (fileExt === '.docx' && hex !== '504b0304') {
+      await logSecurityEvent('UPLOAD_REJECTED_MAGIC_BYTES_MISMATCH', ip, authResult.id, {
+        fileName: file.name,
+        hexSignature: hex,
+      }, 'warning');
+      return NextResponse.json({ error: 'Invalid DOCX file type' }, { status: 400 });
     }
 
     const sanitizedName = sanitizeFilename(file.name);
     let text = '';
 
-    // PDF text extraction (always safe / not executing code)
-    try {
-      const pdfData = await pdf(buffer);
-      text = pdfData.text || '';
-    } catch (pdfErr: any) {
-      console.error('pdf-parse failed, attempting simple string extraction fallback:', pdfErr);
-      const strings = buffer.toString('utf-8').match(/[\w\.\-]+@[\w\.\-]+\.[\w]{2,4}/gi);
-      if (strings && strings.length > 0) {
-        text = `Email found in fallback: ${strings.join(', ')}`;
-      } else {
-        text = '';
+    if (fileExt === '.pdf') {
+      // PDF text extraction
+      try {
+        const pdfData = await pdf(buffer);
+        text = pdfData.text || '';
+      } catch (pdfErr: any) {
+        console.error('pdf-parse failed, attempting simple string extraction fallback:', pdfErr);
+        const strings = buffer.toString('utf-8').match(/[\w\.\-]+@[\w\.\-]+\.[\w]{2,4}/gi);
+        if (strings && strings.length > 0) {
+          text = `Email found in fallback: ${strings.join(', ')}`;
+        } else {
+          text = '';
+        }
+      }
+    } else if (fileExt === '.docx') {
+      // DOCX text extraction using mammoth
+      try {
+        const mammoth = require('mammoth');
+        const docxResult = await mammoth.extractRawText({ buffer });
+        text = docxResult.value || '';
+      } catch (docxErr: any) {
+        console.error('mammoth docx extraction failed, attempting simple string extraction fallback:', docxErr);
+        const strings = buffer.toString('utf-8').match(/[\w\.\-]+@[\w\.\-]+\.[\w]{2,4}/gi);
+        if (strings && strings.length > 0) {
+          text = `Email found in fallback: ${strings.join(', ')}`;
+        } else {
+          text = '';
+        }
       }
     }
 
@@ -132,10 +157,14 @@ export async function POST(req: Request) {
     const groqKey = process.env.GROQ_API_KEY;
     if (!groqKey) {
       // Fallback if API key missing
-      return NextResponse.json({ parsed: parseWithRegex(text, file.name) });
+      return NextResponse.json({ 
+        parsed: parseWithRegex(text, file.name),
+        warning: 'AI parsing is currently unavailable (Groq API Key is missing on the server). Executed fallback text pattern matching.'
+      });
     }
 
     let parsed: any = null;
+    let parsingWarning = '';
 
     try {
       const groq = new Groq({ apiKey: groqKey });
@@ -166,7 +195,7 @@ Return ONLY valid JSON. No markdown code blocks, no text surrounding the JSON. I
 
         const resultText = completion.choices?.[0]?.message?.content || '{}';
         parsed = JSON.parse(resultText);
-      } catch (err1) {
+      } catch (err1: any) {
         console.warn('Groq llama-3.3-70b-versatile failed, trying llama-3.1-8b-instant:', err1);
         
         // Try 2: llama-3.1-8b-instant (Fast fallback model)
@@ -183,8 +212,9 @@ Return ONLY valid JSON. No markdown code blocks, no text surrounding the JSON. I
         const resultText = completion.choices?.[0]?.message?.content || '{}';
         parsed = JSON.parse(resultText);
       }
-    } catch (groqErr) {
+    } catch (groqErr: any) {
       console.warn('All Groq parsing attempts failed, executing regex fallback:', groqErr);
+      parsingWarning = `AI parsing was unavailable (${groqErr.message || groqErr}). Executed fallback text pattern matching instead.`;
     }
 
     if (parsed) {
@@ -198,9 +228,9 @@ Return ONLY valid JSON. No markdown code blocks, no text surrounding the JSON. I
         years_experience: parsed.years_experience || '',
         current_title: parsed.current_title || parsed.role_applied || ''
       };
-      return NextResponse.json({ parsed: finalParsed });
+      return NextResponse.json({ parsed: finalParsed, warning: parsingWarning });
     } else {
-      return NextResponse.json({ parsed: parseWithRegex(text, sanitizedName) });
+      return NextResponse.json({ parsed: parseWithRegex(text, sanitizedName), warning: parsingWarning });
     }
   } catch (err: any) {
     console.error('Resume parsing API error:', err);
