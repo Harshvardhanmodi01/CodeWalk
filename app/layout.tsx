@@ -5,7 +5,6 @@ import AppContent from "@/app/AppContent";
 import { Toaster } from "react-hot-toast";
 import CookieConsent from "@/components/CookieConsent";
 import { GoogleAnalytics } from '@next/third-parties/google';
-import { headers } from "next/headers";
 
 // Use generic system fonts mock to allow offline building without Google Fonts network requests
 const geistSans = { variable: "font-sans" };
@@ -16,24 +15,26 @@ export const metadata: Metadata = {
   description: "Index, comprehend, and walk through your codebases dynamically with AI. Perfect for interview prep, developer onboarding, and active recall code learning.",
 };
 
-export default async function RootLayout({
+export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const headersList = await headers();
-  const nonce = headersList.get('x-nonce') || undefined;
+  // NOTE: Do NOT call headers() here. It is a Next.js Dynamic API that opts the
+  // entire root layout (and therefore every page in the app) out of static rendering.
+  // On Vercel, this forces every page navigation to go through a cold serverless
+  // function call, causing the "buffering" delay users see when clicking links.
+  // The x-nonce header was never set by middleware anyway (no middleware.ts exists),
+  // so the nonce was always undefined — making the call purely wasted overhead.
 
   return (
     <html
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased dark`}
       suppressHydrationWarning
-      nonce={nonce}
     >
       <head>
         <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:FILL,wght@0..1,100..700&display=swap" rel="stylesheet" />
-        {nonce && <meta name="csp-nonce" content={nonce} />}
       </head>
       <body className="min-h-full flex flex-col bg-background text-on-surface">
         <GlobalProvider>
