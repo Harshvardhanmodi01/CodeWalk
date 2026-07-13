@@ -26,10 +26,12 @@ export async function createServerSupabaseClient() {
         setAll(cookiesToSet) {
           try {
             cookiesToSet.forEach(({ name, value, options }) => {
+              // Do not override sameSite — Supabase OAuth callbacks are cross-origin
+              // (from *.supabase.co) and require at minimum 'lax' to work correctly.
+              // Forcing 'strict' silently drops the session cookie on the redirect.
               cookieStore.set(name, value, {
                 ...options,
                 secure: true,
-                sameSite: 'strict'
               });
             });
           } catch {

@@ -388,6 +388,8 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
     }
 
     if (result.session) {
+      // The login API route uses a plain (non-cookie-managing) Supabase client,
+      // so the browser client is the sole cookie writer here — no double-write race.
       const { error: sessionError } = await supabase.auth.setSession({
         access_token: result.session.access_token,
         refresh_token: result.session.refresh_token,
@@ -431,6 +433,8 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
     }
 
     if (result.session) {
+      // Same reasoning as signIn — the register API uses a plain client,
+      // so this is the only cookie write.
       const { error: sessionError } = await supabase.auth.setSession({
         access_token: result.session.access_token,
         refresh_token: result.session.refresh_token,

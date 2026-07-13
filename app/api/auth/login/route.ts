@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerSupabaseClient } from '@/app/lib/supabaseServer';
+import { createClient } from '@supabase/supabase-js';
 import { sanitizeString, validateEmail } from '@/app/lib/validation';
 import {
   checkLoginLockout,
@@ -84,8 +84,17 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 4. Authenticate user using server-side Supabase client (updates cookies)
-    const supabase = await createServerSupabaseClient();
+    // 4. Authenticate using a plain (non-cookie-managing) Supabase client.
+    // IMPORTANT: We intentionally do NOT use createServerSupabaseClient() here.
+    // The server SSR client would write the session as chunked cookies on the server
+    // response, but the browser client also calls setSession() which writes the same
+    // tokens again — causing the @supabase/ssr "chunked cookie decoded to invalid JSON"
+    // warning. Using a plain client here means the browser is the sole cookie writer.
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      { auth: { persistSession: false, autoRefreshToken: false } }
+    );
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password

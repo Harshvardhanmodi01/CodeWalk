@@ -45,6 +45,19 @@ export default function DashboardLayout({
     };
 
     checkSession();
+
+    // Safety: if authChecked is still false after 5 seconds, redirect to login
+    // to prevent the spinner from being stuck forever.
+    const fallbackTimer = setTimeout(() => {
+      setAuthChecked((prev) => {
+        if (!prev) {
+          router.replace('/login');
+        }
+        return prev;
+      });
+    }, 5000);
+
+    return () => clearTimeout(fallbackTimer);
   }, [router]);
 
   // If GlobalContext resolves user before the async session check, mark immediately.
@@ -52,7 +65,11 @@ export default function DashboardLayout({
     if (user) setAuthChecked(true);
   }, [user]);
 
-  if (!mounted || !authChecked || !user) {
+  // Only block rendering until we've confirmed a session exists.
+  // DO NOT additionally gate on `!user` — GlobalContext populates user
+  // asynchronously after the session is confirmed, which would cause an
+  // infinite spinner right after login.
+  if (!mounted || !authChecked) {
     return (
       <div className="min-h-screen bg-[#0d1515] flex items-center justify-center">
         <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-[#00dbe9]"></div>

@@ -4,7 +4,7 @@ import { GlobalProvider } from "@/app/context/GlobalContext";
 import AppContent from "@/app/AppContent";
 import { Toaster } from "react-hot-toast";
 import CookieConsent from "@/components/CookieConsent";
-
+import { GoogleAnalytics } from '@next/third-parties/google';
 import { headers } from "next/headers";
 
 // Use generic system fonts mock to allow offline building without Google Fonts network requests
@@ -32,13 +32,13 @@ export default async function RootLayout({
       nonce={nonce}
     >
       <head>
-        <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:FILL,wght@0..1,100..700&display=swap" rel="stylesheet"/>
+        <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:FILL,wght@0..1,100..700&display=swap" rel="stylesheet" />
         {nonce && <meta name="csp-nonce" content={nonce} />}
       </head>
       <body className="min-h-full flex flex-col bg-background text-on-surface">
         <GlobalProvider>
           <AppContent>{children}</AppContent>
-          <Toaster 
+          <Toaster
             position="top-right"
             toastOptions={{
               style: {
@@ -50,6 +50,7 @@ export default async function RootLayout({
           />
           <CookieConsent />
         </GlobalProvider>
+        <GoogleAnalytics gaId={process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID!} />
       </body>
     </html>
   );

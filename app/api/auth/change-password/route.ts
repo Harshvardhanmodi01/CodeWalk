@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { requireAuth } from '@/app/lib/auth-middleware';
 import { supabaseAdmin } from '@/app/lib/supabaseAdmin';
-import { createServerSupabaseClient } from '@/app/lib/supabaseServer';
+import { createClient } from '@supabase/supabase-js';
 import { validatePassword } from '@/app/lib/validation';
 import { logSecurityEvent } from '@/app/lib/security';
 
@@ -22,9 +22,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Current password and new password are required' }, { status: 400 });
     }
 
-    // 2. Re-authenticate user to verify current password
-    // We sign in with email and current password using the user's client
-    const userSupabase = await createServerSupabaseClient();
+    // 2. Re-authenticate user to verify current password.
+    // Use a plain (non-cookie-managing) client — we only need to verify credentials,
+    // not write any session cookies from the server side.
+    const userSupabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      { auth: { persistSession: false, autoRefreshToken: false } }
+    );
     const { error: signInError } = await userSupabase.auth.signInWithPassword({
       email: authResult.email || '',
       password: currentPassword
