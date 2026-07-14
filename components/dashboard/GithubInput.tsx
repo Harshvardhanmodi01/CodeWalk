@@ -58,7 +58,7 @@ function GithubInputInner() {
   };
 
   // ── Submit handler ────────────────────────────────────────────────────────
-  const handleGenerate = async (e: React.FormEvent) => {
+  const handleGenerate = (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
@@ -72,96 +72,16 @@ function GithubInputInner() {
     localStorage.setItem('cw_temp_repo',             finalRepo);
     localStorage.setItem('cw_temp_candidate',        finalCandidate);
 
-    setIsLoading(true);
+    const queryParams = new URLSearchParams({
+      repoUrl: finalRepo,
+      candidateName: finalCandidate,
+      branch: branch.trim() || 'main',
+      visibility,
+      githubToken: visibility === 'private' ? githubToken.trim() : '',
+      model
+    });
 
-    try {
-      const res = await fetch('/api/analyze', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({
-          repoUrl: finalRepo,
-          branch:  branch.trim() || 'main',
-          token:   visibility === 'private' ? githubToken.trim() : undefined,
-          model:   model
-        }),
-      });
-
-      const data = await res.json() as {
-        success: boolean;
-        jobId?: string;
-        error?: string;
-        files?: unknown[];
-        readmeQuestions?: string;
-        genericQuestions?: string;
-        repo?: string;
-      };
-
-      if (!res.ok || !data.success) {
-        throw new Error(data.error ?? 'Analysis request failed');
-      }
-
-      // The analyze API is synchronous — it returns the full result, not a jobId.
-      // We generate a client-side jobId, store the result, then register it
-      // with /api/job-status so the polling endpoint returns "completed".
-      const jobId = `job_${Date.now()}`;
-
-      // Persist the full result so the results page can load it from localStorage
-      const newAnalysis = {
-        jobId,
-        repo:           finalRepo,
-        candidateName:  finalCandidate,
-        status:         'READY',
-        createdAt:      new Date().toLocaleDateString('en-US', {
-          month: 'short', day: 'numeric', year: 'numeric',
-        }),
-        questionsCount: 6,
-        score:          85,
-        model:          model, // Store selected model
-        // Store the raw API response for the results page
-        apiResult:      data,
-      };
-
-      const stored  = localStorage.getItem('cw_analyses');
-      const history = stored ? (JSON.parse(stored) as object[]) : [];
-      localStorage.setItem('cw_analyses', JSON.stringify([newAnalysis, ...history]));
-
-      // Save to Supabase
-      try {
-        await saveAssessment(newAnalysis);
-      } catch (dbErr) {
-        console.error('Supabase assessments table insert failed:', dbErr);
-      }
-
-      // Update quota counters
-      const qa = localStorage.getItem('cw_quota_analyses');
-      localStorage.setItem(
-        'cw_quota_analyses',
-        String(Math.min(5, (qa ? parseInt(qa) : 0) + 1))
-      );
-      const qt = localStorage.getItem('cw_quota_tokens');
-      localStorage.setItem(
-        'cw_quota_tokens',
-        String(Math.min(100_000, (qt ? parseInt(qt) : 0) + 15_600))
-      );
-      window.dispatchEvent(new Event('quotaUpdated'));
-
-      // Register this job as "completed" with the polling endpoint
-      await fetch('/api/job-status', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ jobId, status: 'completed' }),
-      });
-
-      // Navigate to loading screen — it will poll and immediately see "completed"
-      router.push(`/dashboard/loading?jobId=${jobId}`);
-    } catch (err) {
-      setIsLoading(false);
-      setError(
-        err instanceof Error
-          ? err.message
-          : 'Something went wrong. Please try again.'
-      );
-    }
+    router.push(`/dashboard/loading?${queryParams.toString()}`);
   };
 
   // ── Render ────────────────────────────────────────────────────────────────

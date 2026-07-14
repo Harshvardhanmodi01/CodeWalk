@@ -13,7 +13,7 @@ interface SidebarProps {
 export default function Sidebar({ isOpen, onClose }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
-  const { user, signOut, subscription, theme, toggleTheme } = useGlobal();
+  const { user, signOut, subscription } = useGlobal();
   
   const getAvatarUrl = () => {
     if (user?.avatarUrl) return user.avatarUrl;
@@ -221,30 +221,6 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
 
         {/* Sidebar Footer / Logout */}
         <div className="p-4 border-t border-[#3b494b]/40 bg-[#080c0d] space-y-1.5">
-          {/* Dark / Light mode toggle */}
-          <button
-            onClick={toggleTheme}
-            className="w-full flex items-center justify-between px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-wider text-[#b9cacb] hover:bg-[#192122]/40 hover:text-white transition-all duration-200 cursor-pointer group"
-            title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
-          >
-            <div className="flex items-center gap-3">
-              <span className="material-symbols-outlined text-lg transition-transform duration-300 group-hover:scale-110">
-                {theme === 'dark' ? 'light_mode' : 'dark_mode'}
-              </span>
-              <span>{theme === 'dark' ? 'Light Mode' : 'Dark Mode'}</span>
-            </div>
-            {/* Pill toggle indicator */}
-            <div className={`relative w-9 h-5 rounded-full transition-colors duration-300 flex-shrink-0 ${
-              theme === 'dark' ? 'bg-[#3b494b]' : 'bg-[#06B6D4]'
-            }`}>
-              <span className={`absolute top-0.5 w-4 h-4 rounded-full shadow transition-all duration-300 ${
-                theme === 'dark'
-                  ? 'left-0.5 bg-[#b9cacb]'
-                  : 'left-[calc(100%-18px)] bg-white'
-              }`} />
-            </div>
-          </button>
-
           <button 
             onClick={handleLogout}
             className="w-full flex items-center gap-3.5 text-[#b9cacb] px-4 py-3 hover:bg-red-500/10 hover:text-red-400 transition-all duration-250 ease-in-out text-xs font-bold rounded-xl text-left uppercase tracking-wider cursor-pointer group"
