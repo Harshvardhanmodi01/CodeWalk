@@ -1,5 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.fetchGitHub = fetchGitHub;
 exports.extractRepoInfo = extractRepoInfo;
 exports.fetchRepoContents = fetchRepoContents;
 exports.fetchFileContent = fetchFileContent;
@@ -53,6 +54,32 @@ async function fetchWithRetry(url, init, attempt = 0) {
         }
         throw err;
     }
+}
+/**
+ * Helper to fetch from GitHub API with automatic 401 (invalid token) retry fallback.
+ */
+async function fetchGitHub(url, token, init) {
+    const actualToken = token || process.env.GITHUB_TOKEN;
+    if (actualToken) {
+        const headers = {
+            ...buildHeaders(actualToken),
+            ...(init?.headers || {}),
+        };
+        const response = await fetchWithRetry(url, { ...init, headers });
+        if (response.ok) {
+            return response;
+        }
+        console.warn(`GitHub API returned status ${response.status} for token. Retrying without Authorization header for: ${url}`);
+    }
+    // Fallback: fetch without token
+    const headersWithoutAuth = {
+        Accept: 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28',
+        'User-Agent': 'CodeWalk-App',
+        ...(init?.headers || {}),
+    };
+    delete headersWithoutAuth.Authorization;
+    return fetchWithRetry(url, { ...init, headers: headersWithoutAuth });
 }
 /**
  * Extract owner and repo name from a GitHub URL.
@@ -110,9 +137,7 @@ async function fetchRepoContents(owner, repo, path = '', branch, token) {
         if (branch && !finalUrl.includes('ref=')) {
             finalUrl += (finalUrl.includes('?') ? '&' : '?') + `ref=${encodeURIComponent(branch)}`;
         }
-        const response = await fetchWithRetry(finalUrl, {
-            headers: buildHeaders(token),
-        });
+        const response = await fetchGitHub(finalUrl, token);
         if (response.status === 404) {
             throw new Error(`Repository not found: ${owner}/${repo}`);
         }
@@ -146,9 +171,7 @@ async function fetchFileContent(url, token) {
         throw new Error('Download URL is required');
     }
     try {
-        const response = await fetchWithRetry(url, {
-            headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-        });
+        const response = await fetchGitHub(url, token);
         if (!response.ok) {
             throw new Error(`Failed to fetch file: ${response.status}`);
         }
@@ -181,7 +204,7 @@ async function getReadme(owner, repo, branch, token) {
         if (branch) {
             url += `?ref=${encodeURIComponent(branch)}`;
         }
-        const response = await fetchWithRetry(url, { headers: buildHeaders(token) });
+        const response = await fetchGitHub(url, token);
         if (response.status === 404)
             return null;
         if (!response.ok)
