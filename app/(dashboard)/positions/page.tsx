@@ -105,7 +105,7 @@ export default function PositionsPage() {
 
       // For each position, fetch its candidate count
       const updatedPositions = await Promise.all(
-        (posData || []).map(async (pos) => {
+        (posData || []).map(async (pos: any) => {
           const { count, error: countErr } = await supabase
             .from('candidates')
             .select('*', { count: 'exact', head: true })

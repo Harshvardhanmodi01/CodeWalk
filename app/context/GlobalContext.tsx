@@ -128,7 +128,7 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
 
     // Listen for Auth changes
     const { data: { subscription: authSubscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
+      async (event: any, session: any) => {
         if (session) {
           await loadUserData(session.user.id, session.user.email || '');
         } else {

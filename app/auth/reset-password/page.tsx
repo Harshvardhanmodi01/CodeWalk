@@ -47,7 +47,7 @@ export default function ResetPasswordPage() {
       }
 
       // 3. Listen to auth state changes in case the session is established asynchronously
-      const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, sessionState) => {
+      const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event: any, sessionState: any) => {
         if (!active) return;
         if (event === 'PASSWORD_RECOVERY' || (event === 'SIGNED_IN' && sessionState)) {
           setTokenValid(true);

@@ -162,7 +162,7 @@ export default function QuestionBankDashboardPage() {
       
       if (error) throw error;
       const map: Record<string, boolean> = {};
-      (data || []).forEach(item => {
+      (data || []).forEach((item: any) => {
         map[item.question_id] = true;
       });
       setSavedQuestionIds(map);
@@ -182,7 +182,7 @@ export default function QuestionBankDashboardPage() {
       const map: Record<string, boolean> = {};
       const list: Question[] = [];
       
-      (data || []).forEach(item => {
+      (data || []).forEach((item: any) => {
         map[item.question_id] = true;
         const found = questions.find(q => q.id === item.question_id);
         if (found) list.push(found);

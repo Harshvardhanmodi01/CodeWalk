@@ -209,8 +209,8 @@ export default function PositionDetailPage() {
       setCandidates(data || []);
       // Preset export selection to hired or top-scoring candidates
       const preSelectedExport = (data || [])
-        .filter(c => c.status === 'hired' || (c.overall_score && c.overall_score >= 80))
-        .map(c => c.id);
+        .filter((c: any) => c.status === 'hired' || (c.overall_score && c.overall_score >= 80))
+        .map((c: any) => c.id);
       setExportSelection(preSelectedExport);
     } catch (err: any) {
       toast.error(err.message || 'Failed to load candidates.');

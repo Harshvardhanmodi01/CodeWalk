@@ -123,7 +123,7 @@ export default function ProfilePage() {
       // Check for newly connected GitHub identity via OAuth redirection
       try {
         const { data: { user: authUser } } = await supabase.auth.getUser();
-        const githubIdentity = authUser?.identities?.find(id => id.provider === 'github');
+        const githubIdentity = authUser?.identities?.find((id: any) => id.provider === 'github');
         if (authUser && githubIdentity && user && !user.githubConnected) {
           const githubUsername = authUser.user_metadata?.user_name || authUser.user_metadata?.preferred_username || '';
           const githubAvatar = authUser.user_metadata?.avatar_url || '';

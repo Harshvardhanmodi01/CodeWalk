@@ -102,7 +102,7 @@ export default function ReportPage() {
         
         if (ansData) {
           const scoresMap: Record<string, number> = {};
-          ansData.forEach(a => {
+          ansData.forEach((a: any) => {
             scoresMap[a.question_id] = a.ai_score;
           });
           setScores(scoresMap);
@@ -164,8 +164,8 @@ export default function ReportPage() {
 
       if (ansErr) throw ansErr;
 
-      const consolidatedAnswers = (qs || []).map(q => {
-        const matchingAns = (answers || []).find(a => a.question_id === q.id);
+      const consolidatedAnswers = (qs || []).map((q: any) => {
+        const matchingAns = (answers || []).find((a: any) => a.question_id === q.id);
         return {
           id: q.id,
           question_text: q.question_text,
@@ -195,7 +195,7 @@ export default function ReportPage() {
       setReport(data);
 
       // 4. Save JSON stringified report back to code_story_summary column
-      const completedCount = consolidatedAnswers.filter(a => a.answer_text.trim().length > 0).length;
+      const completedCount = consolidatedAnswers.filter((a: any) => a.answer_text.trim().length > 0).length;
       await supabase
         .from('session_reports')
         .upsert({

@@ -163,7 +163,7 @@ export default function LiveSessionPage() {
       
       if (error) throw error;
       const map: Record<string, boolean> = {};
-      (data || []).forEach(item => {
+      (data || []).forEach((item: any) => {
         map[item.question_id] = true;
       });
       setSavedQuestionIds(map);
@@ -506,7 +506,7 @@ export default function LiveSessionPage() {
 
         // Save bookmarks if selected
         if (qbSaveToBankToggle && user && savedRecords && savedRecords.length > 0) {
-          const bookmarks = savedRecords.map(r => ({
+          const bookmarks = savedRecords.map((r: any) => ({
             recruiter_id: user.id,
             question_id: r.id
           }));
@@ -731,7 +731,7 @@ export default function LiveSessionPage() {
         if (ans && ans.length > 0) {
           const notesMap: Record<string, string> = {};
           const scoresMap: Record<string, number> = {};
-          ans.forEach(a => {
+          ans.forEach((a: any) => {
             notesMap[a.question_id] = a.answer_text;
             scoresMap[a.question_id] = a.ai_score;
           });
@@ -1651,7 +1651,7 @@ export default function LiveSessionPage() {
         }
 
         if (allAns && allAns.length > 0) {
-          const totalScore = allAns.reduce((acc, curr) => acc + (curr.ai_score || 0), 0);
+          const totalScore = allAns.reduce((acc: number, curr: any) => acc + (curr.ai_score || 0), 0);
           const avg = totalScore / allAns.length;
           
           await supabase

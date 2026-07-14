@@ -112,7 +112,7 @@ function NewSessionFlowContent() {
       if (!error && data) {
         setTakeHomeProjectsList(data);
         // Pre-select if there is a submitted repository
-        const submitted = data.find(p => p.submission_repo_url && (p.status === 'submitted' || p.status === 'evaluated'));
+        const submitted = data.find((p: any) => p.submission_repo_url && (p.status === 'submitted' || p.status === 'evaluated'));
         if (submitted) {
           setSelectedTakeHomeProject(submitted.id);
           setRepoUrl(submitted.submission_repo_url);
