@@ -4,9 +4,10 @@
   "private": true,
   "scripts": {
     "build:worker": "tsc -p tsconfig.worker.json",
+    "build:railway": "npm run build:worker",
     "start:worker": "node dist/worker.js",
     "dev": "next dev",
-    "build": "next build",
+    "build": "next build && npm run build:worker",
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",

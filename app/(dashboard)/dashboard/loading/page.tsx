@@ -80,6 +80,91 @@ function LoadingInner() {
           });
 
           const data = await response.json();
+
+          // ── PATH A: QUEUED (authenticated → Railway worker) ──────────────
+          // API returned immediately with { queued: true, jobId }
+          if (data.queued && data.jobId) {
+            const queuedJobId: string = data.jobId;
+            setActiveStep(2); // "Walking AST" while we wait
+
+            let pollAttempts = 0;
+            const MAX_POLL = 180; // 6 min at 2s intervals
+
+            await new Promise<void>((resolve, reject) => {
+              const pollInterval = setInterval(async () => {
+                pollAttempts++;
+
+                if (pollAttempts > MAX_POLL) {
+                  clearInterval(pollInterval);
+                  reject(new Error(
+                    'Analysis is taking longer than expected. ' +
+                    'The worker is still running — check back in a minute.'
+                  ));
+                  return;
+                }
+
+                try {
+                  const jobRes = await fetch(`/api/job/${queuedJobId}`);
+                  if (!jobRes.ok) return; // transient error — keep polling
+
+                  const jobData = await jobRes.json();
+
+                  // Advance progress steps as worker makes progress
+                  if (jobData.status === 'processing') setActiveStep(3);
+
+                  if (jobData.status === 'completed' && jobData.result) {
+                    clearInterval(pollInterval);
+                    setActiveStep(4);
+                    await new Promise((r) => setTimeout(r, 600));
+
+                    setRedirected(true);
+                    const newAnalysis = {
+                      jobId: queuedJobId,
+                      repo: repoUrlParam,
+                      candidateName: candidateNameParam || 'Candidate',
+                      status: 'READY',
+                      createdAt: new Date().toLocaleDateString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                        year: 'numeric'
+                      }),
+                      questionsCount: 6,
+                      score: 85,
+                      model: modelParam || 'llama-3.3-70b-versatile',
+                      apiResult: jobData.result,
+                    };
+
+                    // Persist to localStorage
+                    const stored = localStorage.getItem('cw_analyses');
+                    const history = stored ? JSON.parse(stored) : [];
+                    localStorage.setItem('cw_analyses', JSON.stringify([newAnalysis, ...history]));
+
+                    // Save to Supabase (best-effort)
+                    try { await saveAssessment(newAnalysis); } catch (_) {}
+
+                    // Update quota counters
+                    const qa = localStorage.getItem('cw_quota_analyses');
+                    localStorage.setItem('cw_quota_analyses', String(Math.min(5, (qa ? parseInt(qa) : 0) + 1)));
+                    const qt = localStorage.getItem('cw_quota_tokens');
+                    localStorage.setItem('cw_quota_tokens', String(Math.min(100000, (qt ? parseInt(qt) : 0) + 15600)));
+                    window.dispatchEvent(new Event('quotaUpdated'));
+
+                    resolve();
+                    router.push(`/results/${queuedJobId}`);
+                  } else if (jobData.status === 'failed') {
+                    clearInterval(pollInterval);
+                    reject(new Error(jobData.error || 'Analysis failed in worker. Please try again.'));
+                  }
+                } catch {
+                  // Network hiccup — keep polling
+                }
+              }, 2000);
+            });
+
+            return; // Done — queued path handled
+          }
+
+          // ── PATH B: DIRECT (guest / inline result) ────────────────────────
           if (!response.ok || !data.success) {
             throw new Error(data.error || 'Repository analysis failed');
           }
@@ -100,7 +185,6 @@ function LoadingInner() {
           setRedirected(true);
           const jobId = `job_${Date.now()}`;
 
-          // Create assessment object
           const newAnalysis = {
             jobId,
             repo: repoUrlParam,

@@ -1,6 +1,12 @@
 import * as dotenv from 'dotenv';
 import path from 'path';
-dotenv.config({ path: path.resolve(process.cwd(), '.env.local') });
+
+// Load env vars for local development.
+// On Railway, env vars are injected directly into process.env (no file needed).
+// dotenv silently ignores missing files, so these calls are safe in production.
+dotenv.config({ path: path.resolve(process.cwd(), '.env.local') });       // local dev
+dotenv.config({ path: path.resolve(process.cwd(), '.env.production') });  // fallback
+dotenv.config();                                                            // .env fallback
 
 import { Worker } from 'bullmq';
 import { createClient } from '@supabase/supabase-js';

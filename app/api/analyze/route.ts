@@ -299,6 +299,7 @@ import { smartTruncate, getFilePriority, extractLineNumber } from '@/app/lib/uti
 import { generateQuestionsRaw, generateFinalQuestions } from '@/app/lib/gemini';
 import { createServerSupabaseClient } from '@/app/lib/supabaseServer';
 import { supabaseAdmin } from '@/app/lib/supabaseAdmin';
+import { enqueueAnalysis } from '@/app/lib/queue';
 import Groq from 'groq-sdk';
 
 export const runtime = 'nodejs';
@@ -713,153 +714,53 @@ Generate exactly 5 questions following the instructions.`;
       });
     }
 
-    // ==================== ORIGINAL ROUTE PIPELINE ====================
+    // ==================== QUEUE-BASED PIPELINE (Railway Worker) ====================
+    // For authenticated users we enqueue the job and return immediately.
+    // The Railway worker picks it up, runs analyzeRepo(), and writes the result to
+    // the jobs table in Supabase. The client polls /api/job/:id until completed.
 
-    // Fetch repo contents and README in parallel
-    let allFiles, readme: string | null;
-    try {
-      [allFiles, readme] = await Promise.all([
-        collectCodeFiles(owner, repo, branch, token),
-        getReadme(owner, repo, branch, token),
-      ]);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'GitHub fetch failed';
-      const status = msg.includes('not found') ? 404 : 502;
-      return NextResponse.json(
-        { success: false, error: msg },
-        { status }
-      );
-    }
+    const jobId = crypto.randomUUID();
 
-    console.log(`[analyze] Found ${allFiles.length} code files`);
-
-    if (allFiles.length === 0) {
-      return NextResponse.json(
-        { success: false, error: 'No supported code files found in repository' },
-        { status: 422 }
-      );
-    }
-
-    // Sort by priority then by path length (prefer shallow files)
-    const sorted = allFiles
-      .map((f) => ({ ...f, priority: getFilePriority(f.path) }))
-      .sort((a, b) => {
-        if (a.priority !== b.priority) return a.priority - b.priority;
-        return a.path.length - b.path.length;
+    // 1. Create a pending job record so the client can poll its status
+    const { error: jobInsertError } = await supabaseAdmin
+      .from('jobs')
+      .insert({
+        id: jobId,
+        status: 'pending',
+        repo_url: finalRepoUrl,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
       });
 
-    const topFiles = sorted.slice(0, 3);
-    console.log('[analyze] Selected files:', topFiles.map((f) => f.path));
-
-    const fileResults: FileResult[] = [];
-    let totalQuestions = 0;
-
-    // Process SEQUENTIALLY
-    for (const file of topFiles) {
-      try {
-        if (!file.download_url) {
-          warnings.push(`No download URL for ${file.path}`);
-          continue;
-        }
-
-        const content = await fetchFileContent(file.download_url, token);
-        if (!content || content.trim().length === 0) {
-          warnings.push(`Empty file: ${file.path}`);
-          continue;
-        }
-
-        const { truncatedCode, originalLines, keptLines, strategy } = smartTruncate(content);
-        console.log(`[analyze] ${file.path}: ${originalLines}→${keptLines} (${strategy})`);
-
-        const questions = await generateQuestionsRaw(
-          truncatedCode,
-          file.path,
-          readme || undefined,
-          repo,
-          model
-        );
-
-        // Extract referenced line numbers and build snapshots
-        const seenLines = new Set<number>();
-        const codeSnapshots: CodeSnapshot[] = [];
-        const questionLines = questions.split('\n');
-        for (const qline of questionLines) {
-          if (!/^\[C/.test(qline.trim())) continue;
-          const ln = extractLineNumber(qline);
-          if (ln && !seenLines.has(ln)) {
-            seenLines.add(ln);
-            const snippet = buildSnippet(content, ln);
-            if (snippet) codeSnapshots.push({ lineNumber: ln, snippet });
-          }
-        }
-
-        // Count questions
-        const qCount = (questions.match(/^\[(C\d?|P\d?)/gm) || []).length;
-        totalQuestions += qCount;
-
-        fileResults.push({
-          fileName: file.path,
-          questions,
-          codeSnapshots,
-        });
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Unknown error';
-        console.error(`[analyze] Failed ${file.path}:`, msg);
-        warnings.push(`Failed to process ${file.path}: ${msg}`);
-      }
-    }
-
-    if (fileResults.length === 0) {
+    if (jobInsertError) {
+      console.error('[analyze] Failed to insert job record:', jobInsertError);
       return NextResponse.json(
-        {
-          success: false,
-          error: 'Failed to generate questions for any file',
-          warnings,
-        },
-        { status: 502 }
+        { success: false, error: 'Failed to initialise analysis job. Please try again.' },
+        { status: 500 }
       );
     }
 
-    // Final slide: README + Generic
-    let readmeQuestions = '';
-    let genericQuestions = '';
-    if (readme && readme.trim().length > 0) {
-      try {
-        const finalRaw = await generateFinalQuestions(
-          readme,
-          repo,
-          model,
-          true
-        );
-        // Split into [D] vs [G] sections
-        const dMatch = finalRaw.match(/\[D\][\s\S]*?(?=\[G1\]|$)/);
-        const gMatch = finalRaw.match(/\[G1\][\s\S]*$/);
-        readmeQuestions = dMatch ? dMatch[0].trim() : '';
-        genericQuestions = gMatch ? gMatch[0].trim() : '';
-        const finalCount = (finalRaw.match(/^\[(D|G\d?)/gm) || []).length;
-        totalQuestions += finalCount;
-      } catch (err) {
-        warnings.push(`Final slide generation failed: ${err instanceof Error ? err.message : 'unknown'}`);
-      }
+    // 2. Push to the BullMQ queue — Railway worker will process this
+    try {
+      await enqueueAnalysis({ repoUrl: finalRepoUrl, jobId, sessionId: null });
+    } catch (queueErr: any) {
+      console.error('[analyze] Failed to enqueue job:', queueErr);
+      // Roll back the pending job record so we don't leave orphans
+      try { await supabaseAdmin.from('jobs').delete().eq('id', jobId); } catch (_) {}
+      return NextResponse.json(
+        { success: false, error: 'Failed to queue analysis job. Is REDIS_URL configured?' },
+        { status: 500 }
+      );
     }
 
-    const totalMs = Date.now() - t0;
-    console.log(`[analyze] Done in ${totalMs}ms`);
+    console.log(`[analyze] Job ${jobId} enqueued for ${finalRepoUrl}`);
 
+    // 3. Return immediately — client polls /api/job/:id for status
     return NextResponse.json({
       success: true,
-      repo: `${owner}/${repo}`,
-      files: fileResults,
-      readmeQuestions,
-      genericQuestions,
-      readme: readme || '',
-      warnings,
-      summary: {
-        successfulFiles: fileResults.length,
-        totalFiles: topFiles.length,
-        totalQuestions,
-      },
-      timing: { totalMs },
+      queued: true,
+      jobId,
+      status: 'pending',
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Unknown server error';
