@@ -110,6 +110,42 @@ export default function RecruiterDashboard() {
       }
     }
   }, []);
+  useEffect(() => {
+    const runDiagnostics = async () => {
+      console.log('[DIAGNOSTIC] starting...');
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        console.log('[DIAGNOSTIC] getSession resolved:', !!session);
+        if (session) {
+          const token = session.access_token;
+          
+          // Test 1: Supabase JS Client Query
+          console.log('[DIAGNOSTIC] Test 1: Querying profiles table via Supabase SDK...');
+          supabase.from('profiles').select('*').eq('id', session.user.id).maybeSingle()
+            .then((res: any) => console.log('[DIAGNOSTIC] Test 1 (SDK) resolved:', res))
+            .catch((err: any) => console.error('[DIAGNOSTIC] Test 1 (SDK) rejected:', err));
+
+          // Test 2: Native Fetch Request
+          console.log('[DIAGNOSTIC] Test 2: Querying profiles table via Native Fetch...');
+          const url = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/profiles?select=*&id=eq.${session.user.id}`;
+          fetch(url, {
+            headers: {
+              'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
+              'Authorization': `Bearer ${token}`
+            }
+          })
+            .then(async (res: any) => {
+              const body = await res.json().catch(() => null);
+              console.log('[DIAGNOSTIC] Test 2 (Fetch) resolved:', res.status, body);
+            })
+            .catch((err: any) => console.error('[DIAGNOSTIC] Test 2 (Fetch) rejected:', err));
+        }
+      } catch (err) {
+        console.error('[DIAGNOSTIC] runDiagnostics caught error:', err);
+      }
+    };
+    runDiagnostics();
+  }, []);
 
   // Auth guard: once the Supabase session check resolves, redirect to login if no user.
   // This prevents the infinite black-screen spinner seen in production.
