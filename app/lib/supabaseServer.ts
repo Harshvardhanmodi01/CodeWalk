@@ -42,7 +42,8 @@ export async function createServerSupabaseClient() {
     }
   );
 
-  // Enforce limit(1000) on all select queries globally via prototype modification (Fix 6)
+  // Disabled fragile global prototype patching that causes production queries to hang
+  /*
   try {
     const selectInstance = client.from('_dummy_table').select();
     let proto = Object.getPrototypeOf(selectInstance);
@@ -93,6 +94,7 @@ export async function createServerSupabaseClient() {
   } catch (err) {
     console.error('Failed to wrap Supabase server prototype:', err);
   }
+  */
 
   return client;
 }

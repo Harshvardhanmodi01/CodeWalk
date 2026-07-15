@@ -25,7 +25,8 @@ function getClient() {
   }
   if (!_client) {
     _client = createBrowserClient(supabaseUrl, supabaseAnonKey);
-    applyQueryLimitPatch(_client);
+    // Disable fragile global prototype patching that causes production queries to hang
+    // applyQueryLimitPatch(_client);
   }
   return _client;
 }

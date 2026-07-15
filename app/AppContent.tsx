@@ -43,15 +43,21 @@ export default function AppContent({ children }: { children: React.ReactNode }) 
       let response = await originalFetch(input, init);
       
       if (response.status === 401) {
-        console.warn('API returned 401, attempting token refresh...');
-        const { data, error } = await supabase.auth.refreshSession();
-        if (data?.session) {
-          // Retry original request once
-          response = await originalFetch(input, init);
-        } else {
-          // Refresh failed, clear session and redirect to login
-          console.error('Session refresh failed, redirecting to login...');
-          window.location.replace('/login');
+        const urlString = typeof input === 'string' ? input : (input instanceof URL ? input.toString() : (input as Request).url || '');
+        const isAppApiCall = urlString.includes('/api/') && !urlString.includes('/api/auth/');
+        const isSupabaseCall = urlString.includes('supabase.co');
+
+        if (isAppApiCall && !isSupabaseCall && !window.location.pathname.startsWith('/candidate')) {
+          console.warn('API returned 401, attempting token refresh...');
+          const { data, error } = await supabase.auth.refreshSession();
+          if (data?.session) {
+            // Retry original request once
+            response = await originalFetch(input, init);
+          } else {
+            // Refresh failed, clear session and redirect to login
+            console.error('Session refresh failed, redirecting to login...');
+            window.location.replace('/login');
+          }
         }
       }
       return response;
