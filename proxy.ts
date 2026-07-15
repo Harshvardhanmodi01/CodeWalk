@@ -72,12 +72,10 @@ export async function proxy(req: NextRequest) {
     }
   }
 
-  // Generate CSP nonce for HTML requests
-  const nonce = Buffer.from(crypto.randomUUID()).toString('base64');
   const isDev = process.env.NODE_ENV === 'development';
   const scriptSrc = isDev 
-    ? `'self' 'nonce-${nonce}' 'unsafe-eval' blob:` 
-    : `'self' 'nonce-${nonce}' blob:`;
+    ? `'self' 'unsafe-inline' 'unsafe-eval' blob:` 
+    : `'self' 'unsafe-inline' blob:`;
 
   const cspHeader = `
     default-src 'self';
@@ -92,7 +90,6 @@ export async function proxy(req: NextRequest) {
   `.replace(/\s{2,}/g, ' ').trim();
 
   const requestHeaders = new Headers(req.headers);
-  requestHeaders.set('x-nonce', nonce);
   requestHeaders.set('Content-Security-Policy', cspHeader);
 
   // 2. Existing Session & Route Protection
