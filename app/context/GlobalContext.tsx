@@ -122,13 +122,18 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
 
     // Initialize Supabase Auth Session
     const initAuth = async () => {
+      console.log('[DEBUG] initAuth starting...');
       try {
-        const { data: { session } } = await supabase.auth.getSession();
+        const { data: { session }, error } = await supabase.auth.getSession();
+        console.log('[DEBUG] initAuth getSession resolved. Session present:', !!session, 'Error:', error);
         if (session) {
+          console.log('[DEBUG] initAuth user ID:', session.user.id);
           await loadUserData(session.user.id, session.user.email || '');
         }
+      } catch (e) {
+        console.error('[DEBUG] initAuth caught error:', e);
       } finally {
-        // Auth check complete — pages can now act on user === null
+        console.log('[DEBUG] initAuth finally setting authLoading false');
         setAuthLoading(false);
       }
     };
@@ -138,11 +143,14 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
     // Listen for Auth changes
     const { data: { subscription: authSubscription } } = supabase.auth.onAuthStateChange(
       async (event: any, session: any) => {
+        console.log('[DEBUG] onAuthStateChange event:', event, 'Session present:', !!session);
         setAuthLoading(true);
         try {
           if (session) {
+            console.log('[DEBUG] onAuthStateChange loading user data for ID:', session.user.id);
             await loadUserData(session.user.id, session.user.email || '');
           } else {
+            console.log('[DEBUG] onAuthStateChange session is null, resetting user state');
             // Reset states on logout
             setUser(null);
             setTwoFactorChallenged(false);
@@ -158,7 +166,10 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
             setSubscription('Free');
             setTokenStats({ limit: 50000, used: 0, history: [] });
           }
+        } catch (e) {
+          console.error('[DEBUG] onAuthStateChange caught error:', e);
         } finally {
+          console.log('[DEBUG] onAuthStateChange finally setting authLoading false');
           setAuthLoading(false);
         }
       }
@@ -179,6 +190,7 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
 
   // Helper to load user profile and token logs from Supabase
   const loadUserData = async (userId: string, email: string) => {
+    console.log('[DEBUG] loadUserData starting for ID:', userId, 'Email:', email);
     try {
       // 1. Fetch profile and recruiter in parallel to minimize network latency
       let [profileRes, recruiterRes] = await Promise.all([
@@ -186,8 +198,10 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
         supabase.from('recruiters').select('*').eq('id', userId).maybeSingle()
       ]);
 
+      console.log('[DEBUG] loadUserData fetched. Profile error:', profileRes.error, 'Recruiter error:', recruiterRes.error);
       let profile = profileRes.data;
       let recruiter = recruiterRes.data;
+      console.log('[DEBUG] loadUserData records. Profile exists:', !!profile, 'Recruiter exists:', !!recruiter);
 
       // Handle missing profile or recruiter records
       const creationPromises: Promise<any>[] = [];
@@ -198,9 +212,12 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
         let registeredCompany = '';
         try {
           const { data: authUser } = await supabase.auth.getUser();
+          console.log('[DEBUG] loadUserData fetched authUser. Metadata name:', authUser?.user?.user_metadata?.name);
           if (authUser?.user?.user_metadata?.name) registeredName = authUser.user.user_metadata.name;
           if (authUser?.user?.user_metadata?.companyName) registeredCompany = authUser.user.user_metadata.companyName;
-        } catch (e) {}
+        } catch (e) {
+          console.error('[DEBUG] loadUserData authUser fetch failed:', e);
+        }
 
         creationPromises.push(
           fetch('/api/auth/create-profile', {
@@ -352,6 +369,7 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
       });
 
     } catch (e) {
+      console.error('[DEBUG] loadUserData caught error:', e);
       console.error('Failed to load Supabase user data:', e);
     }
   };
