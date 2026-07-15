@@ -696,7 +696,7 @@ export default function RecruiterDashboard() {
                         </span>
                       </div>
                       <p className="text-[10px] text-[#94A3B8] truncate">{i.candidate?.email}</p>
-                      <p className="text-[10px] text-[#94A3B8] font-mono truncate">{i.repo_url.replace('https://github.com/', '')}</p>
+                      <p className="text-[10px] text-[#94A3B8] font-mono truncate">{i.repo_url ? i.repo_url.replace('https://github.com/', '') : 'N/A'}</p>
                       <p className="text-[10px] text-[#94A3B8]">Duration: {i.timer_duration_minutes} min</p>
                     </div>
 
