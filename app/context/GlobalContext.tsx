@@ -138,25 +138,28 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
     // Listen for Auth changes
     const { data: { subscription: authSubscription } } = supabase.auth.onAuthStateChange(
       async (event: any, session: any) => {
-        // First event from onAuthStateChange also resolves auth loading
-        setAuthLoading(false);
-        if (session) {
-          await loadUserData(session.user.id, session.user.email || '');
-        } else {
-          // Reset states on logout
-          setUser(null);
-          setTwoFactorChallenged(false);
-          setCompany({
-            name: '',
-            size: '10-50 employees',
-            domain: 'acme.com',
-            industry: 'Technology',
-            githubConnected: true,
-            gitlabConnected: false,
-            bitbucketConnected: false,
-          });
-          setSubscription('Free');
-          setTokenStats({ limit: 50000, used: 0, history: [] });
+        setAuthLoading(true);
+        try {
+          if (session) {
+            await loadUserData(session.user.id, session.user.email || '');
+          } else {
+            // Reset states on logout
+            setUser(null);
+            setTwoFactorChallenged(false);
+            setCompany({
+              name: '',
+              size: '10-50 employees',
+              domain: 'acme.com',
+              industry: 'Technology',
+              githubConnected: true,
+              gitlabConnected: false,
+              bitbucketConnected: false,
+            });
+            setSubscription('Free');
+            setTokenStats({ limit: 50000, used: 0, history: [] });
+          }
+        } finally {
+          setAuthLoading(false);
         }
       }
     );
