@@ -5,77 +5,54 @@ import Sidebar from '@/components/dashboard/Sidebar';
 import FloatingBatchProgress from '@/components/dashboard/FloatingBatchProgress';
 import { useGlobal } from '@/app/context/GlobalContext';
 import { useRouter, usePathname } from 'next/navigation';
-import { supabase } from '@/app/lib/supabaseClient';
 
 export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const { user } = useGlobal();
+  const { user, authLoading } = useGlobal();
   const router = useRouter();
   const pathname = usePathname();
   const [mounted, setMounted] = useState(false);
-  // authChecked becomes true once we've confirmed the Supabase session status.
-  // This prevents a flash-redirect for users whose session is still being restored.
-  const [authChecked, setAuthChecked] = useState(false);
+  // Safety fallback: if authLoading is still true after 3s, redirect to login.
+  // This prevents an infinite spinner if GlobalContext silently fails.
+  const [timedOut, setTimedOut] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+    const timer = setTimeout(() => setTimedOut(true), 3000);
+    return () => clearTimeout(timer);
+  }, []);
 
   // Close mobile sidebar on route change
   useEffect(() => {
     setIsMobileSidebarOpen(false);
   }, [pathname]);
 
+  // Auth gate: once auth is resolved (or timed out), redirect if no user.
   useEffect(() => {
-    setMounted(true);
+    if (!mounted) return;
+    if (!authLoading && !user) {
+      router.replace('/login');
+    }
+    if (timedOut && !user) {
+      router.replace('/login');
+    }
+  }, [authLoading, user, timedOut, mounted, router]);
 
-    // Directly check Supabase session on mount for a fast, reliable auth gate.
-    const checkSession = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session) {
-          router.replace('/login');
-        } else {
-          setAuthChecked(true);
-        }
-      } catch (err) {
-        console.error('Session check failed:', err);
-        router.replace('/login');
-      }
-    };
-
-    checkSession();
-
-    // Safety: if authChecked is still false after 5 seconds, redirect to login
-    // to prevent the spinner from being stuck forever.
-    const fallbackTimer = setTimeout(() => {
-      setAuthChecked((prev) => {
-        if (!prev) {
-          router.replace('/login');
-        }
-        return prev;
-      });
-    }, 5000);
-
-    return () => clearTimeout(fallbackTimer);
-  }, [router]);
-
-  // If GlobalContext resolves user before the async session check, mark immediately.
-  useEffect(() => {
-    if (user) setAuthChecked(true);
-  }, [user]);
-
-  // Only block rendering until we've confirmed a session exists.
-  // DO NOT additionally gate on `!user` — GlobalContext populates user
-  // asynchronously after the session is confirmed, which would cause an
-  // infinite spinner right after login.
-  if (!mounted || !authChecked) {
+  // Show spinner while auth is still being determined
+  if (!mounted || (authLoading && !user && !timedOut)) {
     return (
       <div className="min-h-screen bg-[#0d1515] flex items-center justify-center">
         <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-[#00dbe9]"></div>
       </div>
     );
   }
+
+  // If auth resolved with no user, render nothing (redirect effect will fire)
+  if (!user) return null;
 
   return (
     <div className="min-h-screen bg-background text-on-surface flex overflow-hidden">

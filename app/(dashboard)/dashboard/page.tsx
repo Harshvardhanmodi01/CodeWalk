@@ -66,7 +66,7 @@ interface Position {
 
 export default function RecruiterDashboard() {
   const router = useRouter();
-  const { user, signOut } = useGlobal();
+  const { user, authLoading, signOut } = useGlobal();
 
   // Data States
   const [sessions, setSessions] = useState<SessionData[]>([]);
@@ -110,6 +110,14 @@ export default function RecruiterDashboard() {
       }
     }
   }, []);
+
+  // Auth guard: once the Supabase session check resolves, redirect to login if no user.
+  // This prevents the infinite black-screen spinner seen in production.
+  useEffect(() => {
+    if (!authLoading && !user) {
+      router.replace('/login');
+    }
+  }, [authLoading, user, router]);
 
   useEffect(() => {
     if (!user) return;

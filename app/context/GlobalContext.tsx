@@ -49,6 +49,7 @@ export interface TokenStats {
 
 interface GlobalContextType {
   user: User | null;
+  authLoading: boolean;
   company: Company;
   subscription: 'Free' | 'Pro' | 'Enterprise';
   tokenStats: TokenStats;
@@ -81,6 +82,9 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
 
   // User state
   const [user, setUser] = useState<User | null>(null);
+  // True while the initial Supabase session check is in flight.
+  // Pages should wait for this to be false before deciding to redirect.
+  const [authLoading, setAuthLoading] = useState(true);
 
   // Company state
   const [company, setCompany] = useState<Company>({
@@ -118,9 +122,14 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
 
     // Initialize Supabase Auth Session
     const initAuth = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        await loadUserData(session.user.id, session.user.email || '');
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          await loadUserData(session.user.id, session.user.email || '');
+        }
+      } finally {
+        // Auth check complete — pages can now act on user === null
+        setAuthLoading(false);
       }
     };
 
@@ -129,6 +138,8 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
     // Listen for Auth changes
     const { data: { subscription: authSubscription } } = supabase.auth.onAuthStateChange(
       async (event: any, session: any) => {
+        // First event from onAuthStateChange also resolves auth loading
+        setAuthLoading(false);
         if (session) {
           await loadUserData(session.user.id, session.user.email || '');
         } else {
@@ -569,6 +580,7 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
     <GlobalContext.Provider
       value={{
         user,
+        authLoading,
         company,
         subscription,
         tokenStats,
