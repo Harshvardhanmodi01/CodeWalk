@@ -37,7 +37,8 @@ export default function AppContent({ children }: { children: React.ReactNode }) 
   useEffect(() => {
     setMounted(true);
 
-    // Global fetch interceptor (Fix 6)
+    // Disabled global fetch interceptor that causes issues with third-party libraries and hangs
+    /*
     const originalFetch = window.fetch;
     window.fetch = async function (input, init) {
       let response = await originalFetch(input, init);
@@ -62,6 +63,7 @@ export default function AppContent({ children }: { children: React.ReactNode }) 
       }
       return response;
     };
+    */
 
     const handleGlobalPaste = (e: ClipboardEvent) => {
       const target = e.target as HTMLInputElement | HTMLTextAreaElement;
@@ -96,7 +98,7 @@ export default function AppContent({ children }: { children: React.ReactNode }) 
     document.addEventListener('paste', handleGlobalPaste);
     return () => {
       document.removeEventListener('paste', handleGlobalPaste);
-      window.fetch = originalFetch;
+      // window.fetch = originalFetch;
     };
   }, []);
 
