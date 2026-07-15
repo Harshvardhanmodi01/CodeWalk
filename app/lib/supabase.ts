@@ -21,10 +21,19 @@ function getClient() {
   if (typeof window === 'undefined') {
     // SSR guard: return a fresh client for any accidental server-side import.
     // This client cannot write cookies but will not pollute the singleton.
-    return createBrowserClient(supabaseUrl, supabaseAnonKey);
+    return createBrowserClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        lock: async (_name, _acquireTimeout, fn) => fn(),
+      }
+    });
   }
   if (!_client) {
-    _client = createBrowserClient(supabaseUrl, supabaseAnonKey);
+    _client = createBrowserClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        // Bypass the lock mechanism to prevent permanent hangs
+        lock: async (_name, _acquireTimeout, fn) => fn(),
+      }
+    });
     // Disable fragile global prototype patching that causes production queries to hang
     // applyQueryLimitPatch(_client);
   }
