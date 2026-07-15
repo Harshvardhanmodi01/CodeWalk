@@ -267,6 +267,14 @@ export default function AppContent({ children }: { children: React.ReactNode }) 
     pathname?.startsWith('/resume-extractor') ||
     pathname?.startsWith('/compare');
 
+  if (!mounted) {
+    return (
+      <div className="min-h-screen bg-[#0d1515] text-[#F1F5F9]" style={{ backgroundColor: '#0d1515' }}>
+        {children}
+      </div>
+    );
+  }
+
   if (isDashboardOrAuth) {
     return (
       <>
