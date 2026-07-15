@@ -121,57 +121,61 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
     } catch {}
 
     // Initialize Supabase Auth Session
-    const initAuth = async () => {
+    const initAuth = () => {
       console.log('[DEBUG] initAuth starting...');
-      try {
-        const { data: { session }, error } = await supabase.auth.getSession();
-        console.log('[DEBUG] initAuth getSession resolved. Session present:', !!session, 'Error:', error);
-        if (session) {
-          console.log('[DEBUG] initAuth user ID:', session.user.id);
-          await loadUserData(session.user.id, session.user.email || '');
+      setTimeout(async () => {
+        try {
+          const { data: { session }, error } = await supabase.auth.getSession();
+          console.log('[DEBUG] initAuth getSession resolved. Session present:', !!session, 'Error:', error);
+          if (session) {
+            console.log('[DEBUG] initAuth user ID:', session.user.id);
+            await loadUserData(session.user.id, session.user.email || '');
+          }
+        } catch (e) {
+          console.error('[DEBUG] initAuth caught error:', e);
+        } finally {
+          console.log('[DEBUG] initAuth finally setting authLoading false');
+          setAuthLoading(false);
         }
-      } catch (e) {
-        console.error('[DEBUG] initAuth caught error:', e);
-      } finally {
-        console.log('[DEBUG] initAuth finally setting authLoading false');
-        setAuthLoading(false);
-      }
+      }, 0);
     };
 
     initAuth();
 
     // Listen for Auth changes
     const { data: { subscription: authSubscription } } = supabase.auth.onAuthStateChange(
-      async (event: any, session: any) => {
+      (event: any, session: any) => {
         console.log('[DEBUG] onAuthStateChange event:', event, 'Session present:', !!session);
         setAuthLoading(true);
-        try {
-          if (session) {
-            console.log('[DEBUG] onAuthStateChange loading user data for ID:', session.user.id);
-            await loadUserData(session.user.id, session.user.email || '');
-          } else {
-            console.log('[DEBUG] onAuthStateChange session is null, resetting user state');
-            // Reset states on logout
-            setUser(null);
-            setTwoFactorChallenged(false);
-            setCompany({
-              name: '',
-              size: '10-50 employees',
-              domain: 'acme.com',
-              industry: 'Technology',
-              githubConnected: true,
-              gitlabConnected: false,
-              bitbucketConnected: false,
-            });
-            setSubscription('Free');
-            setTokenStats({ limit: 50000, used: 0, history: [] });
+        setTimeout(async () => {
+          try {
+            if (session) {
+              console.log('[DEBUG] onAuthStateChange loading user data for ID:', session.user.id);
+              await loadUserData(session.user.id, session.user.email || '');
+            } else {
+              console.log('[DEBUG] onAuthStateChange session is null, resetting user state');
+              // Reset states on logout
+              setUser(null);
+              setTwoFactorChallenged(false);
+              setCompany({
+                name: '',
+                size: '10-50 employees',
+                domain: 'acme.com',
+                industry: 'Technology',
+                githubConnected: true,
+                gitlabConnected: false,
+                bitbucketConnected: false,
+              });
+              setSubscription('Free');
+              setTokenStats({ limit: 50000, used: 0, history: [] });
+            }
+          } catch (e) {
+            console.error('[DEBUG] onAuthStateChange caught error:', e);
+          } finally {
+            console.log('[DEBUG] onAuthStateChange finally setting authLoading false');
+            setAuthLoading(false);
           }
-        } catch (e) {
-          console.error('[DEBUG] onAuthStateChange caught error:', e);
-        } finally {
-          console.log('[DEBUG] onAuthStateChange finally setting authLoading false');
-          setAuthLoading(false);
-        }
+        }, 0);
       }
     );
 
