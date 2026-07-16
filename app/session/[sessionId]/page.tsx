@@ -144,6 +144,14 @@ export default function LiveSessionPage() {
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [upgradeMessage, setUpgradeMessage] = useState('');
 
+  // Proctoring States & Refs
+  const [proctoringEvents, setProctoringEvents] = useState<any[]>([]);
+  const [proctoringSummary, setProctoringSummary] = useState<any>(null);
+  const [activeRightTab, setActiveRightTab] = useState<'evaluation' | 'jobDescription' | 'proctoring'>('evaluation');
+  const [sendingWarning, setSendingWarning] = useState(false);
+  const [warningInput, setWarningInput] = useState('');
+  const toastedEventIdsRef = useRef<Set<string>>(new Set());
+
   // Debouncing search
   useEffect(() => {
     const handler = setTimeout(() => {
@@ -824,6 +832,48 @@ export default function LiveSessionPage() {
             return prev;
           });
         }
+
+        // 3. Fetch Proctoring Summary
+        const { data: summary } = await supabase
+          .from('proctoring_summary')
+          .select('*')
+          .eq('session_id', sessionId)
+          .maybeSingle();
+
+        if (summary) {
+          setProctoringSummary(summary);
+        }
+
+        // 4. Fetch Proctoring Events
+        const { data: evts } = await supabase
+          .from('proctoring_events')
+          .select('*')
+          .eq('session_id', sessionId)
+          .order('timestamp', { ascending: false })
+          .limit(10);
+
+        if (evts) {
+          setProctoringEvents(evts);
+
+          // Trigger toasts for new high/critical events
+          if (toastedEventIdsRef.current.size > 0) {
+            evts.forEach((evt: any) => {
+              if (!toastedEventIdsRef.current.has(evt.id)) {
+                toastedEventIdsRef.current.add(evt.id);
+
+                if (evt.severity === 'critical') {
+                  toast.error(`🚨 ALERT: ${evt.event_type.replace(/_/g, ' ').toUpperCase()}! ${evt.details?.reason || evt.details?.message || ''}`, { duration: 6000 });
+                } else if (evt.severity === 'high') {
+                  toast.error(`⚠️ WARNING: ${evt.event_type.replace(/_/g, ' ').toUpperCase()}! ${evt.details?.reason || evt.details?.message || ''}`, { duration: 5000 });
+                }
+              }
+            });
+          } else {
+            // Populate initial set to avoid retroactive toasts on mount
+            evts.forEach((evt: any) => toastedEventIdsRef.current.add(evt.id));
+          }
+        }
+
       } catch (err) {
         console.warn('Failed to sync live session data:', err);
       }
@@ -1966,6 +2016,282 @@ export default function LiveSessionPage() {
     );
   };
 
+  // ==========================================
+  // PROCTORING RECORDER CONTROLS & MONITOR
+  // ==========================================
+  const handleFlagCandidate = async () => {
+    if (!session || !candidate) return;
+    if (!confirm('Are you sure you want to flag this candidate? This will record a high-severity flag in the proctoring report.')) return;
+    try {
+      const { error } = await supabase.from('proctoring_events').insert({
+        session_id: sessionId,
+        candidate_id: candidate.id,
+        event_type: 'candidate_flagged',
+        severity: 'high',
+        details: { note: 'Recruiter manually flagged candidate' }
+      });
+      if (error) throw error;
+      toast.success('Candidate successfully flagged.');
+    } catch (e) {
+      toast.error('Failed to flag candidate.');
+    }
+  };
+
+  const handleSendWarning = async () => {
+    if (!sessionId || !warningInput.trim()) return;
+    try {
+      const { error } = await supabase
+        .from('sessions')
+        .update({ recruiter_warning: warningInput.trim() })
+        .eq('id', sessionId);
+
+      if (error) throw error;
+      toast.success('Warning message broadcasted to candidate screen.');
+      setSendingWarning(false);
+      setWarningInput('');
+    } catch (e) {
+      toast.error('Failed to broadcast warning.');
+    }
+  };
+
+  const handleTerminateInterview = async () => {
+    if (!confirm('CRITICAL ACTION: Are you sure you want to immediately Fail and Terminate this interview? The candidate will be blocked, and responses will freeze.')) return;
+    try {
+      await supabase.from('proctoring_events').insert({
+        session_id: sessionId,
+        candidate_id: candidate?.id,
+        event_type: 'screen_sharing_stopped',
+        severity: 'critical',
+        details: { note: 'Recruiter terminated interview due to integrity breach' }
+      });
+      
+      await supabase.from('sessions').update({ 
+        status: 'completed', 
+        ended_at: new Date().toISOString(),
+        remaining_seconds: 0 
+      }).eq('id', sessionId);
+      
+      toast.success('Interview terminated.');
+      router.push(`/session/${sessionId}/report`);
+    } catch (e) {
+      toast.error('Failed to terminate session.');
+    }
+  };
+
+  const renderRightColumnTabsHeader = (themeColor: 'cyan' | 'purple' | 'orange' | 'gray') => {
+    const hasActiveAlert = proctoringSummary && proctoringSummary.risk_level !== 'low';
+    
+    let activeBorderText = 'border-[#06B6D4] text-[#06B6D4]';
+    if (themeColor === 'purple') activeBorderText = 'border-purple-500 text-purple-400';
+    else if (themeColor === 'orange') activeBorderText = 'border-orange-500 text-orange-400';
+    else if (themeColor === 'gray') activeBorderText = 'border-gray-500 text-gray-400';
+
+    return (
+      <div className="flex border-b border-[#3b494b]/60 pb-2 mb-4 gap-4 select-none items-center">
+        <button
+          onClick={() => setActiveRightTab('evaluation')}
+          className={`text-xs font-bold pb-1 border-b-2 transition-all cursor-pointer ${
+            activeRightTab === 'evaluation' 
+              ? activeBorderText 
+              : 'border-transparent text-[#94A3B8] hover:text-white'
+          }`}
+        >
+          Evaluation Card
+        </button>
+        <button
+          onClick={() => setActiveRightTab('proctoring')}
+          className={`text-xs font-bold pb-1 border-b-2 transition-all cursor-pointer flex items-center gap-1.5 ${
+            activeRightTab === 'proctoring' 
+              ? activeBorderText 
+              : 'border-transparent text-[#94A3B8] hover:text-white'
+          }`}
+        >
+          Proctoring Monitor
+          {hasActiveAlert && (
+            <span className="h-1.5 w-1.5 rounded-full bg-rose-500 animate-ping"></span>
+          )}
+        </button>
+        <button
+          onClick={() => setActiveRightTab('jobDescription')}
+          className={`text-xs font-bold pb-1 border-b-2 transition-all cursor-pointer ${
+            activeRightTab === 'jobDescription' 
+              ? activeBorderText 
+              : 'border-transparent text-[#94A3B8] hover:text-white'
+          }`}
+        >
+          Job Description
+        </button>
+      </div>
+    );
+  };
+
+  const renderProctoringMonitorPanel = () => {
+    const summary = proctoringSummary;
+    const score = summary?.overall_integrity_score ?? 100;
+    const riskLevel = summary?.risk_level ?? 'low';
+
+    const webcamState = summary?.live_status?.webcam ?? 'inactive';
+    const screenShareState = summary?.live_status?.screenShare ?? 'inactive';
+    const tabFocusState = summary?.live_status?.tabFocus ?? 'focused';
+    const faceVisibleState = summary?.live_status?.faceVisible ?? false;
+
+    let scoreColor = 'stroke-emerald-500 text-emerald-400';
+    let riskBadge = 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400';
+    if (score < 50 || riskLevel === 'critical') {
+      scoreColor = 'stroke-rose-500 text-rose-500';
+      riskBadge = 'bg-rose-500/10 border-rose-500/30 text-rose-400';
+    } else if (score < 80) {
+      scoreColor = 'stroke-amber-500 text-amber-500';
+      riskBadge = 'bg-amber-500/10 border-amber-500/30 text-amber-400';
+    }
+
+    return (
+      <div className="space-y-6 animate-in fade-in duration-300">
+        
+        {/* Integrity Score & Risk Level */}
+        <div className="bg-[#151d1e] border border-[#3b494b] rounded-xl p-5 shadow-xl flex items-center justify-between gap-6">
+          <div className="space-y-2">
+            <span className="text-[10px] uppercase font-bold text-[#94A3B8] tracking-widest block">Integrity Score</span>
+            <div className="flex items-center gap-2">
+              <span className={`text-[10px] font-bold px-2.5 py-0.5 border rounded-full uppercase ${riskBadge}`}>
+                {riskLevel === 'critical' ? 'Critical Risk' : `${riskLevel} Risk`}
+              </span>
+            </div>
+            <p className="text-[10px] text-[#94A3B8] leading-normal max-w-[180px]">
+              Calculated live based on candidate actions. 80-100 is low risk, 50-79 medium risk, below 50 high risk.
+            </p>
+          </div>
+
+          <div className="relative h-20 w-20 flex items-center justify-center">
+            <svg className="absolute w-full h-full transform -rotate-90">
+              <circle cx="40" cy="40" r="34" strokeWidth="6" stroke="#0d1515" fill="transparent" />
+              <circle 
+                cx="40" 
+                cy="40" 
+                r="34" 
+                strokeWidth="6" 
+                className={`${scoreColor.split(' ')[0]}`}
+                fill="transparent" 
+                strokeDasharray={`${2 * Math.PI * 34}`}
+                strokeDashoffset={`${2 * Math.PI * 34 * (1 - score / 100)}`}
+                strokeLinecap="round"
+              />
+            </svg>
+            <div className="text-center">
+              <span className={`text-md font-black ${scoreColor.split(' ')[1]}`}>{score}</span>
+              <span className="text-[9px] text-[#94A3B8] block -mt-1">/100</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Live Status Indicators */}
+        <div className="bg-[#151d1e] border border-[#3b494b] rounded-xl p-5 shadow-xl space-y-4">
+          <span className="text-[10px] uppercase font-bold text-[#06B6D4] tracking-widest block">Candidate Live Status</span>
+          <div className="grid grid-cols-2 gap-3 text-xs">
+            <div className="bg-[#0d1515]/40 border border-[#3b494b]/60 rounded-lg p-3 flex flex-col gap-1">
+              <span className="text-[10px] text-[#94A3B8] font-mono">Webcam</span>
+              <span className="font-bold flex items-center gap-1.5">
+                {webcamState === 'active' ? '🟢 Active' : '🔴 Inactive'}
+              </span>
+            </div>
+
+            <div className="bg-[#0d1515]/40 border border-[#3b494b]/60 rounded-lg p-3 flex flex-col gap-1">
+              <span className="text-[10px] text-[#94A3B8] font-mono">Screen Share</span>
+              <span className="font-bold flex items-center gap-1.5">
+                {screenShareState === 'active' ? '🟢 Active' : '🔴 Stopped'}
+              </span>
+            </div>
+
+            <div className="bg-[#0d1515]/40 border border-[#3b494b]/60 rounded-lg p-3 flex flex-col gap-1">
+              <span className="text-[10px] text-[#94A3B8] font-mono">Tab Focus</span>
+              <span className="font-bold flex items-center gap-1.5">
+                {tabFocusState === 'focused' ? '🟢 Focused' : '🟡 Away'}
+              </span>
+            </div>
+
+            <div className="bg-[#0d1515]/40 border border-[#3b494b]/60 rounded-lg p-3 flex flex-col gap-1">
+              <span className="text-[10px] text-[#94A3B8] font-mono">Face Visible</span>
+              <span className="font-bold flex items-center gap-1.5">
+                {faceVisibleState ? '🟢 Yes' : '🔴 No'}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Live Event Feed */}
+        <div className="bg-[#151d1e] border border-[#3b494b] rounded-xl p-5 shadow-xl space-y-4 flex-1 flex flex-col min-h-[160px]">
+          <span className="text-[10px] uppercase font-bold text-[#06B6D4] tracking-widest block">Live Proctoring Timeline</span>
+          <div className="space-y-3 flex-grow overflow-y-auto max-h-48 custom-scrollbar pr-1">
+            {proctoringEvents.length === 0 ? (
+              <p className="text-xs text-[#94A3B8] italic text-center py-4">No proctoring events recorded yet.</p>
+            ) : (
+              proctoringEvents.map((evt, idx) => {
+                let icon = 'info';
+                let color = 'text-[#06B6D4] bg-[#06B6D4]/10';
+                if (evt.severity === 'critical') {
+                  icon = 'dangerous';
+                  color = 'text-rose-400 bg-rose-500/10';
+                } else if (evt.severity === 'high') {
+                  icon = 'warning';
+                  color = 'text-orange-400 bg-orange-500/10';
+                } else if (evt.severity === 'medium') {
+                  icon = 'notification_important';
+                  color = 'text-amber-400 bg-amber-500/10';
+                }
+
+                const time = new Date(evt.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+                return (
+                  <div key={evt.id || idx} className="flex gap-2.5 items-start text-xs border-b border-[#3b494b]/30 pb-2 last:border-0 last:pb-0">
+                    <span className={`material-symbols-outlined text-sm font-bold p-1 rounded ${color}`}>{icon}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-bold text-white leading-normal truncate uppercase text-[10px]">
+                        {evt.event_type.replace(/_/g, ' ')}
+                      </p>
+                      <p className="text-[10px] text-[#94A3B8] leading-normal font-sans">
+                        {evt.details?.reason || evt.details?.message || `Incident logged (${evt.severity} severity)`}
+                        {evt.duration_seconds > 0 ? ` (${evt.duration_seconds}s)` : ''}
+                      </p>
+                    </div>
+                    <span className="text-[9px] text-[#94A3B8] font-mono whitespace-nowrap mt-0.5">{time}</span>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+
+        {/* Recruiter Proctoring Controls */}
+        <div className="bg-[#151d1e] border border-[#3b494b] rounded-xl p-5 shadow-xl space-y-4">
+          <span className="text-[10px] uppercase font-bold text-[#06B6D4] tracking-widest block">Proctoring Controls</span>
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              onClick={handleFlagCandidate}
+              className="py-2 bg-amber-500 hover:bg-amber-400 text-[#0d1515] text-[10px] font-bold rounded-lg transition-colors flex items-center justify-center gap-1.5 cursor-pointer uppercase tracking-wider"
+            >
+              <span className="material-symbols-outlined text-xs font-bold">flag</span>
+              Flag Candidate
+            </button>
+            <button
+              onClick={() => setSendingWarning(true)}
+              className="py-2 border border-[#3b494b] text-[#CBD5E1] hover:bg-[#151d1e] hover:text-white text-[10px] font-bold rounded-lg transition-colors flex items-center justify-center gap-1.5 cursor-pointer uppercase tracking-wider"
+            >
+              <span className="material-symbols-outlined text-xs">sms_failed</span>
+              Send Warning
+            </button>
+          </div>
+          <button
+            onClick={handleTerminateInterview}
+            className="w-full py-2 bg-rose-600 hover:bg-rose-500 text-white text-[10px] font-bold rounded-lg transition-colors flex items-center justify-center gap-1.5 cursor-pointer uppercase tracking-wider"
+          >
+            <span className="material-symbols-outlined text-xs font-bold">cancel</span>
+            End &amp; Fail Interview
+          </button>
+        </div>
+      </div>
+    );
+  };
+
   // ----------------------------------------------------
   // SUB-LAYOUTS FOR INDIVIDUAL INTERVIEW MODES
   // ----------------------------------------------------
@@ -2049,93 +2375,101 @@ export default function LiveSessionPage() {
 
         {/* RIGHT EVALUATION PANEL (40%) */}
         <div className="w-[40%] flex flex-col bg-[#151d1e]/40 overflow-y-auto custom-scrollbar p-6 justify-between h-full">
-          <div className="space-y-6">
-            <div 
-              onWheel={handleQuestionCardWheel}
-              className="bg-[#151d1e] border border-[#3b494b] rounded-xl p-5 shadow-xl space-y-4 hover:border-[#06B6D4]/40 transition-all duration-300 relative group cursor-ns-resize"
-              title="Scroll vertical here to switch questions"
-            >
-              <div className="flex justify-between items-center">
-                <span className="text-[10px] uppercase font-bold text-[#06B6D4] tracking-widest">
-                  Question {localIdx + 1} of {localLength}
-                </span>
-                <div className="flex gap-2">
-                  {q.file_path === 'Question Bank' && (
-                    <span className="px-2 py-0.5 bg-amber-500/10 border border-amber-500/30 rounded-full text-[9px] font-bold text-amber-500 uppercase">Question Bank</span>
+          <div>
+            {renderRightColumnTabsHeader('cyan')}
+            
+            {activeRightTab === 'evaluation' && (
+              <div className="space-y-6 animate-in fade-in duration-300">
+                <div 
+                  onWheel={handleQuestionCardWheel}
+                  className="bg-[#151d1e] border border-[#3b494b] rounded-xl p-5 shadow-xl space-y-4 hover:border-[#06B6D4]/40 transition-all duration-300 relative group cursor-ns-resize"
+                  title="Scroll vertical here to switch questions"
+                >
+                  <div className="flex justify-between items-center">
+                    <span className="text-[10px] uppercase font-bold text-[#06B6D4] tracking-widest">
+                      Question {localIdx + 1} of {localLength}
+                    </span>
+                    <div className="flex gap-2">
+                      {q.file_path === 'Question Bank' && (
+                        <span className="px-2 py-0.5 bg-amber-500/10 border border-amber-500/30 rounded-full text-[9px] font-bold text-amber-500 uppercase">Question Bank</span>
+                      )}
+                      <span className="px-2 py-0.5 bg-[#3b494b] rounded-full text-[9px] font-bold text-[#94A3B8] uppercase">{q.difficulty}</span>
+                      <span className="px-2 py-0.5 bg-[#06B6D4]/10 border border-[#06B6D4]/20 rounded-full text-[9px] font-bold text-[#06B6D4] uppercase">{q.category}</span>
+                    </div>
+                  </div>
+                  <h3 className="text-sm font-bold leading-relaxed text-[#F1F5F9]">{q.question_text}</h3>
+                  {q.file_path && q.file_path !== 'Custom Question' && q.file_path !== 'Question Bank' && (
+                    <div className="text-[10px] text-[#94A3B8] font-mono flex items-center gap-1.5 bg-[#0d1515]/50 px-3 py-1 rounded-lg border border-[#3b494b]">
+                      <span className="material-symbols-outlined text-xs">folder_open</span>
+                      <span className="truncate">{q.file_path} (Lines {q.line_start}-{q.line_end})</span>
+                    </div>
                   )}
-                  <span className="px-2 py-0.5 bg-[#3b494b] rounded-full text-[9px] font-bold text-[#94A3B8] uppercase">{q.difficulty}</span>
-                  <span className="px-2 py-0.5 bg-[#06B6D4]/10 border border-[#06B6D4]/20 rounded-full text-[9px] font-bold text-[#06B6D4] uppercase">{q.category}</span>
                 </div>
-              </div>
-              <h3 className="text-sm font-bold leading-relaxed text-[#F1F5F9]">{q.question_text}</h3>
-              {q.file_path && q.file_path !== 'Custom Question' && q.file_path !== 'Question Bank' && (
-                <div className="text-[10px] text-[#94A3B8] font-mono flex items-center gap-1.5 bg-[#0d1515]/50 px-3 py-1 rounded-lg border border-[#3b494b]">
-                  <span className="material-symbols-outlined text-xs">folder_open</span>
-                  <span className="truncate">{q.file_path} (Lines {q.line_start}-{q.line_end})</span>
+
+                {renderExpectedAnswerCollapsible(q, 'text-[#06B6D4]', 'border-[#06B6D4]/30 hover:bg-[#06B6D4]/10', 'bg-[#06B6D4]/10')}
+
+                <div className="space-y-4 bg-[#151d1e]/80 border border-[#3b494b] rounded-xl p-5 shadow-xl">
+                  <div className="flex justify-between items-center">
+                    <label className="text-xs font-bold text-[#94A3B8] uppercase tracking-wider block">Recruiter Log &amp; Scoring</label>
+                    {savingAnswer[q.id] && <span className="text-[10px] text-emerald-400 font-semibold animate-pulse">Saving...</span>}
+                  </div>
+                  <textarea
+                    value={notes[q.id] || ''}
+                    onChange={(e) => handleNotesChange(e.target.value)}
+                    className="w-full bg-[#0d1515] border border-[#3b494b] rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-[#06B6D4] h-24 resize-none"
+                    placeholder="Type response notes here. Saved automatically."
+                  />
+                  <div className="space-y-2 pt-2 border-t border-[#3b494b]">
+                    <div className="flex justify-between text-[10px] font-bold text-[#94A3B8]">
+                      <span>Performance Rating</span>
+                      <span className="text-[#06B6D4] text-xs font-bold">{scores[q.id] || 5}/10</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="1"
+                      max="10"
+                      step="1"
+                      value={scores[q.id] || 5}
+                      onChange={(e) => handleScoreChange(parseInt(e.target.value))}
+                      className="w-full h-1 bg-[#0d1515] rounded-lg appearance-none cursor-pointer accent-[#06B6D4]"
+                    />
+                  </div>
                 </div>
-              )}
-            </div>
 
-            {/* Expected Answer collapsible */}
-            {renderExpectedAnswerCollapsible(q, 'text-[#06B6D4]', 'border-[#06B6D4]/30 hover:bg-[#06B6D4]/10', 'bg-[#06B6D4]/10')}
-
-            {/* Notes and scoring */}
-            <div className="space-y-4 bg-[#151d1e]/80 border border-[#3b494b] rounded-xl p-5 shadow-xl">
-              <div className="flex justify-between items-center">
-                <label className="text-xs font-bold text-[#94A3B8] uppercase tracking-wider block">Recruiter Log &amp; Scoring</label>
-                {savingAnswer[q.id] && <span className="text-[10px] text-emerald-400 font-semibold animate-pulse">Saving...</span>}
+                <button
+                  onClick={() => setShowQuestionBankModal(true)}
+                  className="w-full py-2.5 border border-dashed border-[#06B6D4]/40 text-[#06B6D4] hover:bg-[#06B6D4]/5 hover:border-[#06B6D4] text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer uppercase tracking-wider"
+                >
+                  <span className="material-symbols-outlined text-sm">library_books</span>
+                  + Add Topic Questions
+                </button>
               </div>
-              <textarea
-                value={notes[q.id] || ''}
-                onChange={(e) => handleNotesChange(e.target.value)}
-                className="w-full bg-[#0d1515] border border-[#3b494b] rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-[#06B6D4] h-24 resize-none"
-                placeholder="Type response notes here. Saved automatically."
-              />
-              <div className="space-y-2 pt-2 border-t border-[#3b494b]">
-                <div className="flex justify-between text-[10px] font-bold text-[#94A3B8]">
-                  <span>Performance Rating</span>
-                  <span className="text-[#06B6D4] text-xs font-bold">{scores[q.id] || 5}/10</span>
-                </div>
-                <input
-                  type="range"
-                  min="1"
-                  max="10"
-                  step="1"
-                  value={scores[q.id] || 5}
-                  onChange={(e) => handleScoreChange(parseInt(e.target.value))}
-                  className="w-full h-1 bg-[#0d1515] rounded-lg appearance-none cursor-pointer accent-[#06B6D4]"
-                />
-              </div>
-            </div>
+            )}
 
-            {/* Add Topic Questions Trigger Button */}
-            <button
-              onClick={() => setShowQuestionBankModal(true)}
-              className="w-full py-2.5 border border-dashed border-[#06B6D4]/40 text-[#06B6D4] hover:bg-[#06B6D4]/5 hover:border-[#06B6D4] text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer uppercase tracking-wider"
-            >
-              <span className="material-symbols-outlined text-sm">library_books</span>
-              + Add Topic Questions
-            </button>
+            {activeRightTab === 'proctoring' && renderProctoringMonitorPanel()}
+
+            {activeRightTab === 'jobDescription' && renderJobDescriptionPanel()}
           </div>
 
-          {/* Navigation */}
-          <div className="flex justify-between items-center border-t border-[#3b494b] pt-4 mt-6">
-            <button
-              onClick={() => setLocalIdx(prev => Math.max(0, prev - 1))}
-              disabled={localIdx === 0}
-              className="px-3.5 py-1 text-xs border border-[#3b494b] rounded-lg disabled:opacity-40"
-            >
-              Previous
-            </button>
-            <span className="text-xs text-[#94A3B8] font-mono">{localIdx + 1} / {localLength}</span>
-            <button
-              onClick={() => setLocalIdx(prev => Math.min(localLength - 1, prev + 1))}
-              disabled={localIdx === localLength - 1}
-              className="px-3.5 py-1 text-xs border border-[#3b494b] rounded-lg disabled:opacity-40"
-            >
-              Next
-            </button>
-          </div>
+          {activeRightTab === 'evaluation' && (
+            <div className="flex justify-between items-center border-t border-[#3b494b] pt-4 mt-6">
+              <button
+                onClick={() => setLocalIdx(prev => Math.max(0, prev - 1))}
+                disabled={localIdx === 0}
+                className="px-3.5 py-1 text-xs border border-[#3b494b] rounded-lg disabled:opacity-40"
+              >
+                Previous
+              </button>
+              <span className="text-xs text-[#94A3B8] font-mono">{localIdx + 1} / {localLength}</span>
+              <button
+                onClick={() => setLocalIdx(prev => Math.min(localLength - 1, prev + 1))}
+                disabled={localIdx === localLength - 1}
+                className="px-3.5 py-1 text-xs border border-[#3b494b] rounded-lg disabled:opacity-40"
+              >
+                Next
+              </button>
+            </div>
+          )}
         </div>
       </div>
     );
@@ -2308,33 +2642,11 @@ export default function LiveSessionPage() {
 
         {/* RIGHT PANEL (40%): Recruiter scoring & tag metrics */}
         <div className="md:w-[40%] flex flex-col justify-between bg-[#151d1e]/80 border border-[#3b494b] rounded-xl p-6 overflow-y-auto custom-scrollbar h-full space-y-6">
-          <div className="space-y-6">
-            {/* Tabs for Evaluation / Job Description */}
-            <div className="flex border-b border-[#3b494b]/60 pb-2 mb-4 gap-4 select-none">
-              <button
-                onClick={() => setBehavioralRightTab('evaluation')}
-                className={`text-xs font-bold pb-1 border-b-2 transition-all cursor-pointer ${
-                  behavioralRightTab === 'evaluation' 
-                    ? 'border-purple-500 text-purple-400' 
-                    : 'border-transparent text-[#94A3B8] hover:text-white'
-                }`}
-              >
-                Evaluation Card
-              </button>
-              <button
-                onClick={() => setBehavioralRightTab('jobDescription')}
-                className={`text-xs font-bold pb-1 border-b-2 transition-all cursor-pointer ${
-                  behavioralRightTab === 'jobDescription' 
-                    ? 'border-purple-500 text-purple-400' 
-                    : 'border-transparent text-[#94A3B8] hover:text-white'
-                }`}
-              >
-                Job Description
-              </button>
-            </div>
+          <div>
+            {renderRightColumnTabsHeader('purple')}
 
-            {behavioralRightTab === 'evaluation' ? (
-              <>
+            {activeRightTab === 'evaluation' && (
+              <div className="space-y-6 animate-in fade-in duration-300">
                 {/* Sliders */}
                 <div className="space-y-5 bg-[#0d1515]/40 border border-[#3b494b] p-4 rounded-lg">
                   {/* Communication Clarity */}
@@ -2419,22 +2731,22 @@ export default function LiveSessionPage() {
                     })}
                   </div>
                 </div>
-              </>
-            ) : (
-              renderJobDescriptionPanel()
+              </div>
             )}
+
+            {activeRightTab === 'proctoring' && renderProctoringMonitorPanel()}
+
+            {activeRightTab === 'jobDescription' && renderJobDescriptionPanel()}
           </div>
 
           {/* Running average score */}
-          {behavioralRightTab === 'evaluation' && (
+          {activeRightTab === 'evaluation' && (
             <div className="bg-[#0d1515] border border-[#3b494b] p-4 rounded-xl flex justify-between items-center mt-6">
               <span className="text-xs text-[#94A3B8] font-bold uppercase">Average Behavioral Score:</span>
               <span className="text-lg font-bold font-mono text-purple-400">{runningAverage}</span>
             </div>
           )}
-
         </div>
-
       </div>
     );
   };
@@ -2573,33 +2885,11 @@ export default function LiveSessionPage() {
 
         {/* RIGHT PANEL (30%): Score selection */}
         <div className="md:w-[30%] flex flex-col justify-between bg-[#151d1e]/80 border border-[#3b494b] rounded-xl p-6 overflow-y-auto custom-scrollbar h-full space-y-6">
-          <div className="space-y-6">
-            {/* Tabs for Evaluation / Job Description */}
-            <div className="flex border-b border-[#3b494b]/60 pb-2 mb-4 gap-4 select-none">
-              <button
-                onClick={() => setLogicalRightTab('evaluation')}
-                className={`text-xs font-bold pb-1 border-b-2 transition-all cursor-pointer ${
-                  logicalRightTab === 'evaluation' 
-                    ? 'border-orange-500 text-orange-400' 
-                    : 'border-transparent text-[#94A3B8] hover:text-white'
-                }`}
-              >
-                Aptitude Evaluation
-              </button>
-              <button
-                onClick={() => setLogicalRightTab('jobDescription')}
-                className={`text-xs font-bold pb-1 border-b-2 transition-all cursor-pointer ${
-                  logicalRightTab === 'jobDescription' 
-                    ? 'border-orange-500 text-orange-400' 
-                    : 'border-transparent text-[#94A3B8] hover:text-white'
-                }`}
-              >
-                Job Description
-              </button>
-            </div>
+          <div>
+            {renderRightColumnTabsHeader('orange')}
 
-            {logicalRightTab === 'evaluation' ? (
-              <>
+            {activeRightTab === 'evaluation' && (
+              <div className="space-y-6 animate-in fade-in duration-300">
                 {/* Quick score buttons */}
                 <div className="space-y-3 pt-2">
                   <label className="text-[10px] font-bold text-[#94A3B8] uppercase tracking-wider block">Question Outcome</label>
@@ -2663,10 +2953,12 @@ export default function LiveSessionPage() {
                   <span className="material-symbols-outlined text-sm">library_books</span>
                   + Add Topic Questions
                 </button>
-              </>
-            ) : (
-              renderJobDescriptionPanel()
+              </div>
             )}
+
+            {activeRightTab === 'proctoring' && renderProctoringMonitorPanel()}
+
+            {activeRightTab === 'jobDescription' && renderJobDescriptionPanel()}
           </div>
         </div>
 
@@ -2739,33 +3031,45 @@ export default function LiveSessionPage() {
         </div>
 
         <div className="md:w-[40%] flex flex-col bg-[#151d1e]/80 border border-[#3b494b] rounded-xl p-6 overflow-y-auto custom-scrollbar h-full space-y-4">
-          <h3 className="text-xs font-bold uppercase text-gray-400 tracking-wider">Recruiter Evaluation</h3>
-          <textarea 
-            value={notes[q.id] || ''}
-            onChange={(e) => {
-              setNotes(prev => ({ ...prev, [q.id]: e.target.value }));
-              saveAnswerState(q.id, e.target.value, scores[q.id] || 5);
-            }}
-            className="w-full bg-[#0d1515] border border-[#3b494b] rounded-lg p-3 text-xs text-white h-32 focus:outline-none focus:border-gray-500"
-            placeholder="Type notes and assessment remarks here..."
-          />
-          <div className="space-y-2 pt-2 border-t border-[#3b494b]/60">
-            <div className="flex justify-between text-[10px] font-bold text-[#94A3B8]">
-              <span>Score Rating</span>
-              <span className="text-gray-400 text-xs font-bold">{scores[q.id] || 5}/10</span>
-            </div>
-            <input
-              type="range"
-              min="1"
-              max="10"
-              value={scores[q.id] || 5}
-              onChange={(e) => {
-                const scoreVal = parseInt(e.target.value);
-                setScores(prev => ({ ...prev, [q.id]: scoreVal }));
-                saveAnswerState(q.id, notes[q.id] || '', scoreVal);
-              }}
-              className="w-full h-1 bg-[#151d1e] rounded appearance-none accent-gray-500 cursor-pointer"
-            />
+          <div>
+            {renderRightColumnTabsHeader('gray')}
+
+            {activeRightTab === 'evaluation' && (
+              <div className="space-y-4 pt-2 animate-in fade-in duration-300">
+                <h3 className="text-xs font-bold uppercase text-gray-400 tracking-wider">Recruiter Evaluation</h3>
+                <textarea 
+                  value={notes[q.id] || ''}
+                  onChange={(e) => {
+                    setNotes(prev => ({ ...prev, [q.id]: e.target.value }));
+                    saveAnswerState(q.id, e.target.value, scores[q.id] || 5);
+                  }}
+                  className="w-full bg-[#0d1515] border border-[#3b494b] rounded-lg p-3 text-xs text-white h-32 focus:outline-none focus:border-gray-500"
+                  placeholder="Type notes and assessment remarks here..."
+                />
+                <div className="space-y-2 pt-2 border-t border-[#3b494b]/60">
+                  <div className="flex justify-between text-[10px] font-bold text-[#94A3B8]">
+                    <span>Score Rating</span>
+                    <span className="text-gray-400 text-xs font-bold">{scores[q.id] || 5}/10</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="1"
+                    max="10"
+                    value={scores[q.id] || 5}
+                    onChange={(e) => {
+                      const scoreVal = parseInt(e.target.value);
+                      setScores(prev => ({ ...prev, [q.id]: scoreVal }));
+                      saveAnswerState(q.id, notes[q.id] || '', scoreVal);
+                    }}
+                    className="w-full h-1 bg-[#151d1e] rounded appearance-none accent-gray-500 cursor-pointer"
+                  />
+                </div>
+              </div>
+            )}
+
+            {activeRightTab === 'proctoring' && renderProctoringMonitorPanel()}
+
+            {activeRightTab === 'jobDescription' && renderJobDescriptionPanel()}
           </div>
         </div>
       </div>
@@ -3717,6 +4021,35 @@ export default function LiveSessionPage() {
                 className="flex-1 py-2 bg-gradient-to-r from-amber-500 to-orange-400 text-[#0d1515] font-bold text-xs rounded-lg hover:from-amber-400 hover:to-orange-300 transition-all cursor-pointer"
               >
                 Upgrade to Pro
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* WARNING BROADCAST MODAL */}
+      {sendingWarning && (
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
+          <div className="bg-[#12191a] border border-[#3b494b] max-w-md w-full rounded-xl p-6 space-y-4 shadow-2xl">
+            <h3 className="text-sm font-bold text-white uppercase tracking-wider">Send Warning to Candidate</h3>
+            <textarea
+              value={warningInput}
+              onChange={(e) => setWarningInput(e.target.value)}
+              className="w-full bg-[#0d1515] border border-[#3b494b] rounded-lg p-3 text-xs text-white h-24 focus:outline-none focus:border-[#06B6D4] resize-none"
+              placeholder="Type warning message (e.g. Please stay in webcam frame)..."
+            />
+            <div className="flex justify-end gap-3 text-xs">
+              <button
+                onClick={() => { setSendingWarning(false); setWarningInput(''); }}
+                className="px-4 py-2 border border-[#3b494b] rounded-lg text-[#94A3B8] hover:text-white transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSendWarning}
+                className="px-4 py-2 bg-[#06B6D4] text-[#0d1515] rounded-lg font-bold hover:bg-cyan-400 transition-colors cursor-pointer"
+              >
+                Broadcast Warning
               </button>
             </div>
           </div>

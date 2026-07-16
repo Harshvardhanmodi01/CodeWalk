@@ -70,12 +70,61 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { sessionId, status } = body;
+    const { sessionId, status, action } = body;
 
     if (!sessionId || !validateUUID(sessionId)) {
       return NextResponse.json({ error: 'Valid sessionId parameter is required.' }, { status: 400 });
     }
 
+    // Handle Start Action (Setup Wizard Complete)
+    if (action === 'start') {
+      const { data: session, error: getErr } = await supabaseAdmin
+        .from('sessions')
+        .select('timer_duration_minutes')
+        .eq('id', sessionId)
+        .single();
+
+      if (getErr || !session) {
+        return NextResponse.json({ error: 'Session not found.' }, { status: 404 });
+      }
+
+      // Reset started_at to now, set status to active, remaining_seconds to full duration
+      const { error: updateErr } = await supabaseAdmin
+        .from('sessions')
+        .update({
+          status: 'active',
+          started_at: new Date().toISOString(),
+          remaining_seconds: session.timer_duration_minutes * 60,
+          is_paused: false
+        })
+        .eq('id', sessionId);
+
+      if (updateErr) {
+        console.error('Failed to start session timer:', updateErr);
+        return NextResponse.json({ error: 'Failed to start interview session.' }, { status: 500 });
+      }
+
+      return NextResponse.json({ success: true });
+    }
+
+    // Handle Clear Warning Action
+    if (action === 'clear_warning') {
+      const { error: updateErr } = await supabaseAdmin
+        .from('sessions')
+        .update({
+          recruiter_warning: null
+        })
+        .eq('id', sessionId);
+
+      if (updateErr) {
+        console.error('Failed to clear recruiter warning:', updateErr);
+        return NextResponse.json({ error: 'Failed to clear warning.' }, { status: 500 });
+      }
+
+      return NextResponse.json({ success: true });
+    }
+
+    // Existing completed flow
     if (status !== 'completed') {
       return NextResponse.json({ error: 'Invalid status update request.' }, { status: 400 });
     }

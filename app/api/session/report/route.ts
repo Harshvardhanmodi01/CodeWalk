@@ -3,6 +3,7 @@ import Groq from 'groq-sdk';
 import { requireAuth } from '@/app/lib/auth-middleware';
 import { validateUUID } from '@/app/lib/validation';
 import { verifySessionOwnership, ForbiddenError } from '@/app/lib/ownership-check';
+import { supabaseAdmin } from '@/app/lib/supabaseAdmin';
 
 export async function POST(req: Request) {
   const forwarded = req.headers.get('x-forwarded-for');
@@ -102,6 +103,21 @@ ${JSON.stringify(logicalScores, null, 2)}` : ''}
 
     const resultText = completion.choices?.[0]?.message?.content || '{}';
     const parsed = JSON.parse(resultText);
+
+    // Apply proctoring weighted score calculation:
+    // overall_score = 0.85 * (Groq performance score) + 0.15 * (proctoring integrity score)
+    if (parsed && typeof parsed.overall_score === 'number' && sessionId) {
+      const { data: summary } = await supabaseAdmin
+        .from('proctoring_summary')
+        .select('overall_integrity_score')
+        .eq('session_id', sessionId)
+        .maybeSingle();
+
+      const integrityScore = summary ? summary.overall_integrity_score : 100;
+      const responseScore = parsed.overall_score;
+      const finalScore = Math.round(0.85 * responseScore + 0.15 * integrityScore);
+      parsed.overall_score = Math.max(0, Math.min(100, finalScore));
+    }
 
     return NextResponse.json(parsed);
   } catch (err: any) {

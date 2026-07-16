@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { supabase } from '@/app/lib/supabaseClient';
 import { useGlobal } from '@/app/context/GlobalContext';
 import RadarChart from '@/components/dashboard/RadarChart';
+import { toast } from 'react-hot-toast';
 
 interface QuestionAnalysis {
   question: string;
@@ -56,6 +57,15 @@ export default function ReportPage() {
   const [questions, setQuestions] = useState<any[]>([]);
   const [scores, setScores] = useState<Record<string, number>>({});
   const [candidateAnswers, setCandidateAnswers] = useState<any[]>([]);
+
+  // Proctoring States
+  const [proctoringSummary, setProctoringSummary] = useState<any | null>(null);
+  const [proctoringEvents, setProctoringEvents] = useState<any[]>([]);
+  const [snapshots, setSnapshots] = useState<string[]>([]);
+  const [recordings, setRecordings] = useState<string[]>([]);
+  const [recruiterNotes, setRecruiterNotes] = useState('');
+  const [proctoringDecision, setProctoringDecision] = useState<'clean' | 'flagged' | 'pending'>('pending');
+  const [savingDecision, setSavingDecision] = useState(false);
 
   useEffect(() => {
     if (!user) {
@@ -142,6 +152,107 @@ export default function ReportPage() {
 
     loadReportDetails();
   }, [sessionId]);
+
+  useEffect(() => {
+    if (!sessionId) return;
+
+    const fetchProctoringDetails = async () => {
+      try {
+        // Fetch Proctoring Summary
+        const { data: summary } = await supabase
+          .from('proctoring_summary')
+          .select('*')
+          .eq('session_id', sessionId)
+          .maybeSingle();
+
+        if (summary) {
+          setProctoringSummary(summary);
+          setRecruiterNotes(summary.recruiter_notes || '');
+          setProctoringDecision(summary.proctoring_decision || 'pending');
+        }
+
+        // Fetch Proctoring Events
+        const { data: events } = await supabase
+          .from('proctoring_events')
+          .select('*')
+          .eq('session_id', sessionId)
+          .order('timestamp', { ascending: true });
+
+        if (events) {
+          setProctoringEvents(events);
+        }
+
+        // Fetch Snapshots from storage
+        const { data: snapshotFiles } = await supabase.storage
+          .from('proctoring-snapshots')
+          .list(sessionId);
+
+        if (snapshotFiles && snapshotFiles.length > 0) {
+          const paths = snapshotFiles
+            .filter((f: any) => f.name !== '.emptyFolderPlaceholder')
+            .map((f: any) => `${sessionId}/${f.name}`);
+          
+          if (paths.length > 0) {
+            const { data: signedUrls } = await supabase.storage
+              .from('proctoring-snapshots')
+              .createSignedUrls(paths, 3600);
+            
+            if (signedUrls) {
+              setSnapshots(signedUrls.map((item: any) => item.signedUrl));
+            }
+          }
+        }
+
+        // Fetch Recordings from storage
+        const { data: recordingFiles } = await supabase.storage
+          .from('screen-recordings')
+          .list(sessionId);
+
+        if (recordingFiles && recordingFiles.length > 0) {
+          const paths = recordingFiles
+            .filter((f: any) => f.name !== '.emptyFolderPlaceholder')
+            .map((f: any) => `${sessionId}/${f.name}`);
+          
+          if (paths.length > 0) {
+            const { data: signedUrls } = await supabase.storage
+              .from('screen-recordings')
+              .createSignedUrls(paths, 3600);
+            
+            if (signedUrls) {
+              setRecordings(signedUrls.map((item: any) => item.signedUrl));
+            }
+          }
+        }
+
+      } catch (err) {
+        console.error('Error fetching proctoring details:', err);
+      }
+    };
+
+    fetchProctoringDetails();
+  }, [sessionId]);
+
+  const handleSaveDecision = async (decision: 'clean' | 'flagged') => {
+    setSavingDecision(true);
+    try {
+      const { error } = await supabase
+        .from('proctoring_summary')
+        .update({
+          proctoring_decision: decision,
+          recruiter_notes: recruiterNotes,
+          generated_at: new Date().toISOString()
+        })
+        .eq('session_id', sessionId);
+
+      if (error) throw error;
+      setProctoringDecision(decision);
+      toast.success(`Candidate review marked as ${decision.toUpperCase()}`);
+    } catch (e) {
+      toast.error('Failed to save proctoring decision review.');
+    } finally {
+      setSavingDecision(false);
+    }
+  };
 
   const compileReportFromAnswers = async (sessId: string, sessObj?: Session | null) => {
     setCompiling(true);
@@ -341,6 +452,208 @@ export default function ReportPage() {
       </div>
     );
   }
+
+  const renderProctoringReportSection = () => {
+    if (!proctoringSummary && proctoringEvents.length === 0) {
+      return null;
+    }
+
+    const summary = proctoringSummary;
+    const score = summary?.overall_integrity_score ?? 100;
+    const riskLevel = summary?.risk_level ?? 'low';
+
+    let scoreColor = 'stroke-emerald-500 text-emerald-400';
+    let riskBadge = 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400';
+    if (score < 50 || riskLevel === 'critical') {
+      scoreColor = 'stroke-rose-500 text-rose-500';
+      riskBadge = 'bg-rose-500/10 border-rose-500/30 text-rose-400';
+    } else if (score < 80) {
+      scoreColor = 'stroke-amber-500 text-amber-500';
+      riskBadge = 'bg-amber-500/10 border-amber-500/30 text-amber-400';
+    }
+
+    return (
+      <div className="bg-[#151d1e] border border-[#3b494b] rounded-xl p-8 shadow-xl print-card space-y-6">
+        <h3 className="text-sm font-bold text-white uppercase tracking-wider border-b border-[#3b494b] pb-2 print-text-dark print:border-slate-300 flex items-center justify-between">
+          <span>Interview Integrity &amp; Proctoring Report</span>
+          <span className={`text-[10px] font-bold px-2.5 py-0.5 border rounded-full uppercase ${riskBadge}`}>
+            {riskLevel === 'critical' ? 'Critical Risk' : `${riskLevel} Risk`}
+          </span>
+        </h3>
+
+        <div className="flex flex-col md:flex-row items-center gap-8 justify-between">
+          <div className="relative h-28 w-28 flex items-center justify-center flex-shrink-0">
+            <svg className="absolute w-full h-full transform -rotate-90">
+              <circle cx="56" cy="56" r="48" strokeWidth="8" stroke="#0d1515" fill="transparent" className="print:stroke-slate-100" />
+              <circle 
+                cx="56" 
+                cy="56" 
+                r="48" 
+                strokeWidth="8" 
+                className={`${scoreColor.split(' ')[0]}`}
+                fill="transparent" 
+                strokeDasharray={`${2 * Math.PI * 48}`}
+                strokeDashoffset={`${2 * Math.PI * 48 * (1 - score / 100)}`}
+                strokeLinecap="round"
+              />
+            </svg>
+            <div className="text-center">
+              <span className={`text-2xl font-black ${scoreColor.split(' ')[1]}`}>{score}</span>
+              <span className="text-xs text-[#94A3B8] block -mt-1">/100</span>
+            </div>
+          </div>
+
+          <div className="flex-1 grid grid-cols-2 sm:grid-cols-3 gap-4 text-xs w-full">
+            <div className="bg-[#0d1515]/40 border border-[#3b494b]/60 rounded-lg p-3">
+              <span className="text-[10px] text-[#94A3B8] block mb-1 font-mono">Tab switches</span>
+              <span className="font-bold text-white text-base">{summary?.total_tab_switches ?? 0}</span>
+            </div>
+            <div className="bg-[#0d1515]/40 border border-[#3b494b]/60 rounded-lg p-3">
+              <span className="text-[10px] text-[#94A3B8] block mb-1 font-mono">Webcam look-away / missing</span>
+              <span className="font-bold text-white text-base">{summary?.total_face_not_visible_seconds ?? 0}s</span>
+            </div>
+            <div className="bg-[#0d1515]/40 border border-[#3b494b]/60 rounded-lg p-3">
+              <span className="text-[10px] text-[#94A3B8] block mb-1 font-mono">Multiple faces</span>
+              <span className="font-bold text-white text-base">{summary?.multiple_faces_count ?? 0}</span>
+            </div>
+            <div className="bg-[#0d1515]/40 border border-[#3b494b]/60 rounded-lg p-3">
+              <span className="text-[10px] text-[#94A3B8] block mb-1 font-mono">Clipboard Copy Attempts</span>
+              <span className="font-bold text-white text-base">{summary?.copy_attempts ?? 0}</span>
+            </div>
+            <div className="bg-[#0d1515]/40 border border-[#3b494b]/60 rounded-lg p-3">
+              <span className="text-[10px] text-[#94A3B8] block mb-1 font-mono">Screen Share Stopped</span>
+              <span className="font-bold text-white text-base">{summary?.screen_sharing_interruptions ?? 0}</span>
+            </div>
+            <div className="bg-[#0d1515]/40 border border-[#3b494b]/60 rounded-lg p-3 flex flex-col justify-center">
+              <span className="text-[10px] text-[#94A3B8] block mb-1 font-mono">Overall Assessment</span>
+              <span className={`font-bold capitalize text-sm ${
+                proctoringDecision === 'clean' ? 'text-emerald-400' : proctoringDecision === 'flagged' ? 'text-rose-400' : 'text-amber-400'
+              }`}>{proctoringDecision}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Snapshots Gallery */}
+        {snapshots.length > 0 && (
+          <div className="space-y-3 pt-2">
+            <span className="text-xs font-bold text-[#06B6D4] uppercase tracking-wider block">Candidate Snapshots Gallery</span>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              {snapshots.map((url, idx) => (
+                <div key={idx} className="relative aspect-video bg-[#0d1515] border border-[#3b494b] rounded-lg overflow-hidden group cursor-zoom-in">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={url} alt={`Webcam Snapshot ${idx + 1}`} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                  <a href={url} target="_blank" rel="noreferrer" className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-[10px] font-bold transition-opacity">
+                    View Full Size
+                  </a>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Screen Recording Video Gallery */}
+        {recordings.length > 0 && (
+          <div className="space-y-3 pt-2">
+            <span className="text-xs font-bold text-[#06B6D4] uppercase tracking-wider block">Screen Recording Clips</span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {recordings.map((url, idx) => (
+                <div key={idx} className="bg-[#0d1515] border border-[#3b494b] rounded-lg p-3 space-y-2">
+                  <div className="flex justify-between items-center text-[10px] text-[#94A3B8]">
+                    <span className="font-bold uppercase">Recording Segment {idx + 1}</span>
+                    <span className="font-mono">WebM Stream</span>
+                  </div>
+                  <video src={url} controls className="w-full rounded bg-black aspect-video border border-[#3b494b]/60" />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Chronological Event Timeline */}
+        {proctoringEvents.length > 0 && (
+          <div className="space-y-3 pt-2">
+            <span className="text-xs font-bold text-[#06B6D4] uppercase tracking-wider block">Detailed Events Timeline</span>
+            <div className="border border-[#3b494b]/60 bg-[#0d1515]/30 rounded-xl p-4 space-y-3 max-h-60 overflow-y-auto custom-scrollbar">
+              {proctoringEvents.map((evt, idx) => {
+                let icon = 'info';
+                let color = 'text-[#06B6D4] bg-[#06B6D4]/10';
+                if (evt.severity === 'critical') {
+                  icon = 'dangerous';
+                  color = 'text-rose-400 bg-rose-500/10';
+                } else if (evt.severity === 'high') {
+                  icon = 'warning';
+                  color = 'text-orange-400 bg-orange-500/10';
+                } else if (evt.severity === 'medium') {
+                  icon = 'notification_important';
+                  color = 'text-amber-400 bg-amber-500/10';
+                }
+
+                const timeStr = new Date(evt.timestamp).toLocaleString();
+
+                return (
+                  <div key={evt.id || idx} className="flex gap-3 items-start text-xs border-b border-[#3b494b]/30 pb-2 last:border-0 last:pb-0">
+                    <span className={`material-symbols-outlined text-sm p-1 rounded font-bold ${color}`}>{icon}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-bold text-white uppercase text-[10px] tracking-wide">
+                        {evt.event_type.replace(/_/g, ' ')}
+                      </p>
+                      <p className="text-[10px] text-[#94A3B8] leading-normal font-sans">
+                        {evt.details?.reason || evt.details?.message || `Incident logged (${evt.severity} severity)`}
+                        {evt.duration_seconds > 0 ? ` for ${evt.duration_seconds} seconds` : ''}
+                      </p>
+                    </div>
+                    <span className="text-[9px] text-[#94A3B8] font-mono whitespace-nowrap mt-0.5">{timeStr}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Recruiter Decisions Section */}
+        <div className="space-y-4 pt-4 border-t border-[#3b494b]/60 no-print">
+          <span className="text-xs font-bold text-[#06B6D4] uppercase tracking-wider block">Recruiter Review Decisions</span>
+          
+          <div className="space-y-2">
+            <label className="text-[10px] font-bold text-[#94A3B8] uppercase tracking-wider block font-mono">Reviewer Notes &amp; Observations</label>
+            <textarea
+              value={recruiterNotes}
+              onChange={(e) => setRecruiterNotes(e.target.value)}
+              className="w-full bg-[#0d1515] border border-[#3b494b] rounded-lg p-3 text-xs text-white h-24 focus:outline-none focus:border-[#06B6D4] resize-none"
+              placeholder="Record final observations or remarks regarding this candidate's integrity assessment..."
+            />
+          </div>
+
+          <div className="flex gap-4">
+            <button
+              onClick={() => handleSaveDecision('clean')}
+              disabled={savingDecision}
+              className={`flex-1 py-2.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 uppercase tracking-wider cursor-pointer ${
+                proctoringDecision === 'clean' 
+                  ? 'bg-emerald-500 text-[#0d1515] hover:bg-emerald-400' 
+                  : 'border border-[#3b494b] text-emerald-400 hover:bg-emerald-500/5'
+              }`}
+            >
+              <span className="material-symbols-outlined text-sm font-bold">check_circle</span>
+              Mark as Clean
+            </button>
+            <button
+              onClick={() => handleSaveDecision('flagged')}
+              disabled={savingDecision}
+              className={`flex-1 py-2.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 uppercase tracking-wider cursor-pointer ${
+                proctoringDecision === 'flagged' 
+                  ? 'bg-rose-600 text-white hover:bg-rose-500' 
+                  : 'border border-[#3b494b] text-rose-500 hover:bg-rose-600/5'
+              }`}
+            >
+              <span className="material-symbols-outlined text-sm font-bold">flag</span>
+              Flag for Review
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   const isRadarActive = session.interview_mode === 'fullstack' || session.interview_mode === 'custom';
 
@@ -563,6 +876,9 @@ export default function ReportPage() {
             </ul>
           </div>
         </div>
+
+        {/* Proctoring integrity section */}
+        {renderProctoringReportSection()}
 
         {/* Detailed Question Analysis list */}
         <div className="space-y-6">
