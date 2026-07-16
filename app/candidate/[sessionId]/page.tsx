@@ -90,6 +90,89 @@ export default function CandidateSessionPage() {
 
   // Drag & Minimize states for Corner Webcam
   const [webcamMinimized, setWebcamMinimized] = useState(false);
+  const [webcamPos, setWebcamPos] = useState({ x: 16, y: 16 }); // offset from bottom-right
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const [dragging, setDragging] = useState(false);
+
+  const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    if ((e.target as HTMLElement).tagName === 'BUTTON') return;
+    setDragging(true);
+    const rect = e.currentTarget.getBoundingClientRect();
+    setDragOffset({
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top
+    });
+  };
+
+  const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+    if ((e.target as HTMLElement).tagName === 'BUTTON') return;
+    setDragging(true);
+    const rect = e.currentTarget.getBoundingClientRect();
+    const touch = e.touches[0];
+    if (touch) {
+      setDragOffset({
+        x: touch.clientX - rect.left,
+        y: touch.clientY - rect.top
+      });
+    }
+  };
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!dragging) return;
+      const width = webcamMinimized ? 96 : 160;
+      const height = webcamMinimized ? 72 : 120;
+      const rightPos = window.innerWidth - e.clientX - (width - dragOffset.x);
+      const bottomPos = window.innerHeight - e.clientY - (height - dragOffset.y);
+      
+      const maxRight = window.innerWidth - width;
+      const maxBottom = window.innerHeight - height;
+      
+      setWebcamPos({
+        x: Math.max(0, Math.min(maxRight, rightPos)),
+        y: Math.max(0, Math.min(maxBottom, bottomPos))
+      });
+    };
+
+    const handleMouseUp = () => {
+      setDragging(false);
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (!dragging) return;
+      const touch = e.touches[0];
+      if (!touch) return;
+      const width = webcamMinimized ? 96 : 160;
+      const height = webcamMinimized ? 72 : 120;
+      const rightPos = window.innerWidth - touch.clientX - (width - dragOffset.x);
+      const bottomPos = window.innerHeight - touch.clientY - (height - dragOffset.y);
+      
+      const maxRight = window.innerWidth - width;
+      const maxBottom = window.innerHeight - height;
+      
+      setWebcamPos({
+        x: Math.max(0, Math.min(maxRight, rightPos)),
+        y: Math.max(0, Math.min(maxBottom, bottomPos))
+      });
+    };
+
+    const handleTouchEnd = () => {
+      setDragging(false);
+    };
+
+    if (dragging) {
+      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('mouseup', handleMouseUp);
+      window.addEventListener('touchmove', handleTouchMove);
+      window.addEventListener('touchend', handleTouchEnd);
+    }
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+      window.removeEventListener('touchmove', handleTouchMove);
+      window.removeEventListener('touchend', handleTouchEnd);
+    };
+  }, [dragging, dragOffset, webcamMinimized]);
 
   // Overlay Warnings
   const [showTabWarning, setShowTabWarning] = useState(false);
@@ -1606,13 +1689,24 @@ export default function CandidateSessionPage() {
           FLOATING BOTTOM CORNER PREVIEW (Part 3)
          ========================================== */}
       {isSetupComplete && webcamStream && (
-        <div className={`fixed bottom-4 right-4 z-50 rounded-xl overflow-hidden shadow-2xl transition-all border-2 ${faceDetected ? 'border-emerald-500' : 'border-rose-500'} ${webcamMinimized ? 'w-24 h-18' : 'w-40 h-30'}`} style={{ width: webcamMinimized ? '96px' : '160px', height: webcamMinimized ? '72px' : '120px' }}>
+        <div 
+          onMouseDown={handleMouseDown}
+          onTouchStart={handleTouchStart}
+          className={`fixed z-50 rounded-xl overflow-hidden shadow-2xl border-2 select-none ${faceDetected ? 'border-emerald-500' : 'border-rose-500'}`} 
+          style={{ 
+            right: `${webcamPos.x}px`, 
+            bottom: `${webcamPos.y}px`,
+            width: webcamMinimized ? '96px' : '160px', 
+            height: webcamMinimized ? '72px' : '120px',
+            cursor: dragging ? 'grabbing' : 'grab'
+          }}
+        >
           <video
             ref={cornerVideoRef}
             autoPlay
             playsInline
             muted
-            className="w-full h-full object-cover scale-x-[-1]"
+            className="w-full h-full object-cover scale-x-[-1] pointer-events-none"
           />
           {/* Active indicator dot and collapse controls */}
           <div className="absolute top-1 right-1 flex gap-1 z-10">
@@ -1623,7 +1717,7 @@ export default function CandidateSessionPage() {
               {webcamMinimized ? '➕' : '➖'}
             </button>
           </div>
-          <div className="absolute bottom-1 left-1 flex items-center gap-1 bg-black/60 px-1 py-0.5 rounded text-[8px] text-white z-10">
+          <div className="absolute bottom-1 left-1 flex items-center gap-1 bg-black/60 px-1 py-0.5 rounded text-[8px] text-white z-10 pointer-events-none">
             <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-ping"></span>
             REC
           </div>
