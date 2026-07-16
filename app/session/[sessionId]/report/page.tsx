@@ -55,6 +55,7 @@ export default function ReportPage() {
   const [report, setReport] = useState<ReportData | null>(null);
   const [questions, setQuestions] = useState<any[]>([]);
   const [scores, setScores] = useState<Record<string, number>>({});
+  const [candidateAnswers, setCandidateAnswers] = useState<any[]>([]);
 
   useEffect(() => {
     if (!user) {
@@ -106,6 +107,7 @@ export default function ReportPage() {
             scoresMap[a.question_id] = a.ai_score;
           });
           setScores(scoresMap);
+          setCandidateAnswers(ansData);
         }
 
         // 4. Fetch Session Report from DB
@@ -163,9 +165,11 @@ export default function ReportPage() {
         .eq('session_id', sessId);
 
       if (ansErr) throw ansErr;
+      setCandidateAnswers(answers || []);
 
       const consolidatedAnswers = (qs || []).map((q: any) => {
         const matchingAns = (answers || []).find((a: any) => a.question_id === q.id);
+        const hasAnswer = matchingAns && matchingAns.answer_text && matchingAns.answer_text.trim() !== '' && matchingAns.answer_text !== 'No response recorded.' && matchingAns.answer_text !== 'time_expired';
         return {
           id: q.id,
           question_text: q.question_text,
@@ -173,7 +177,7 @@ export default function ReportPage() {
           category: q.category,
           difficulty: q.difficulty,
           answer_text: matchingAns?.answer_text || 'No response recorded.',
-          score: matchingAns?.ai_score || 5
+          score: hasAnswer ? (matchingAns.ai_score !== undefined && matchingAns.ai_score !== null ? matchingAns.ai_score : 5) : 0
         };
       });
 
@@ -193,6 +197,31 @@ export default function ReportPage() {
       if (!res.ok) throw new Error(data.error || 'Failed to compile report.');
 
       setReport(data);
+
+      // Save the updated AI scores back to the answers table
+      if (data.question_analysis && Array.isArray(data.question_analysis)) {
+        const updatePromises = data.question_analysis.map(async (qa: any) => {
+          const matchedQ = qs?.find((q: any) => q.question_text === qa.question);
+          if (matchedQ) {
+            await supabase
+              .from('answers')
+              .update({ ai_score: qa.score })
+              .eq('session_id', sessId)
+              .eq('question_id', matchedQ.id);
+          }
+        });
+        await Promise.all(updatePromises);
+
+        // Also update local scores state so charts render updated scores instantly!
+        const newScoresMap = { ...scores };
+        data.question_analysis.forEach((qa: any) => {
+          const matchedQ = qs?.find((q: any) => q.question_text === qa.question);
+          if (matchedQ) {
+            newScoresMap[matchedQ.id] = qa.score;
+          }
+        });
+        setScores(newScoresMap);
+      }
 
       // 4. Save JSON stringified report back to code_story_summary column
       const completedCount = consolidatedAnswers.filter((a: any) => a.answer_text.trim().length > 0).length;
@@ -542,23 +571,36 @@ export default function ReportPage() {
           </h3>
 
           <div className="space-y-4">
-            {report.question_analysis.map((qa, idx) => (
-              <div key={idx} className="bg-[#151d1e] border border-[#3b494b] rounded-xl p-6 shadow-xl print-card space-y-3 page-break-inside-avoid">
-                <div className="flex justify-between items-start gap-4">
-                  <span className="text-[10px] font-mono text-[#06B6D4] uppercase tracking-wider font-bold print-text-light">
-                    Question {idx + 1}
-                  </span>
-                  <span className="px-2.5 py-0.5 bg-[#06B6D4]/10 border border-[#06B6D4]/20 rounded-full text-xs font-bold text-[#06B6D4] print-badge-cyan">
-                    Score: {qa.score || 5}/10
-                  </span>
+            {report.question_analysis.map((qa, idx) => {
+              const matchedQ = questions.find(q => q.question_text === qa.question);
+              const matchedAns = matchedQ ? candidateAnswers.find(a => a.question_id === matchedQ.id) : null;
+              
+              return (
+                <div key={idx} className="bg-[#151d1e] border border-[#3b494b] rounded-xl p-6 shadow-xl print-card space-y-3 page-break-inside-avoid">
+                  <div className="flex justify-between items-start gap-4">
+                    <span className="text-[10px] font-mono text-[#06B6D4] uppercase tracking-wider font-bold print-text-light">
+                      Question {idx + 1}
+                    </span>
+                    <span className="px-2.5 py-0.5 bg-[#06B6D4]/10 border border-[#06B6D4]/20 rounded-full text-xs font-bold text-[#06B6D4] print-badge-cyan">
+                      Score: {(qa.score !== undefined && qa.score !== null) ? qa.score : 5}/10
+                    </span>
+                  </div>
+                  <h4 className="text-sm font-bold leading-relaxed text-white print-text-dark">{qa.question}</h4>
+                  
+                  <div className="bg-[#151d1e]/80 border border-[#3b494b]/60 rounded-lg p-4 text-xs print-card print-text-light space-y-1.5 mt-2">
+                    <span className="font-extrabold text-[10px] uppercase text-[#06B6D4] block print-text-dark">Candidate Response</span>
+                    <p className="leading-relaxed whitespace-pre-wrap font-mono text-[#F1F5F9] bg-[#0d1515]/30 p-2.5 rounded border border-[#3b494b]/30">
+                      {matchedAns?.answer_text || 'No response recorded.'}
+                    </p>
+                  </div>
+
+                  <div className="bg-[#0d1515]/50 border border-[#3b494b] rounded-lg p-4 text-xs text-[#94A3B8] print-card print-text-light space-y-1.5">
+                    <span className="font-extrabold text-[10px] uppercase text-white block print-text-dark">AI Evaluation</span>
+                    <p className="leading-relaxed">{qa.feedback}</p>
+                  </div>
                 </div>
-                <h4 className="text-sm font-bold leading-relaxed text-white print-text-dark">{qa.question}</h4>
-                <div className="bg-[#0d1515]/50 border border-[#3b494b] rounded-lg p-4 text-xs text-[#94A3B8] print-card print-text-light space-y-1.5 mt-2">
-                  <span className="font-extrabold text-[10px] uppercase text-white block print-text-dark">AI Evaluation</span>
-                  <p className="leading-relaxed">{qa.feedback}</p>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 

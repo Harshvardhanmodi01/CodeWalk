@@ -13,10 +13,11 @@ interface Question {
   line_start: number;
   line_end: number;
   difficulty: 'easy' | 'medium' | 'hard';
-  category: 'frontend' | 'backend' | 'dsa' | 'system-design';
+  category: string;
   order_index: number;
   shared_answer?: string;
   show_expected_answer?: boolean;
+  options?: string[];
 }
 
 interface Session {
@@ -48,6 +49,8 @@ export default function CandidateSessionPage() {
   // Timer states
   const [timeLeftSeconds, setTimeLeftSeconds] = useState(0);
   const [timerExpired, setTimerExpired] = useState(false);
+  const [qTimeLeft, setQTimeLeft] = useState(120);
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (!sessionId) return;
@@ -187,6 +190,80 @@ export default function CandidateSessionPage() {
     }, 1000);
     return () => clearInterval(interval);
   }, [timeLeftSeconds, timerExpired, session?.is_paused]);
+
+  const getLogicalDuration = () => {
+    return (session?.mode_config?.logicalTimerMinutes || 2) * 60;
+  };
+
+  // Reset logical question timer when question index changes
+  useEffect(() => {
+    const currentQ = questions[activeQIndex];
+    const isLogicalActive = session?.interview_mode === 'logical' || 
+      (currentQ?.options && currentQ.options.length > 0 && session?.mode_config?.logicalTimerMinutes);
+    if (isLogicalActive) {
+      setQTimeLeft(getLogicalDuration());
+    }
+  }, [activeQIndex, session, questions]);
+
+  const handleLogicalTimeExpired = async () => {
+    const curQ = questions[activeQIndex];
+    if (!curQ) return;
+
+    // Save "time_expired" answer
+    await saveCandidateAnswer(curQ.id, 'time_expired');
+
+    if (activeQIndex < questions.length - 1) {
+      setActiveQIndex(prev => prev + 1);
+    } else {
+      // Automatically submit if it's the last question
+      handleSubmit();
+    }
+  };
+
+  // Question timer countdown hook
+  useEffect(() => {
+    const currentQ = questions[activeQIndex];
+    const isLogicalActive = session?.interview_mode === 'logical' || 
+      (currentQ?.options && currentQ.options.length > 0 && session?.mode_config?.logicalTimerMinutes);
+    if (!isLogicalActive || session?.is_paused || qTimeLeft <= 0 || loading || timerExpired) return;
+
+    const qInterval = setInterval(() => {
+      setQTimeLeft(prev => {
+        const nextVal = prev - 1;
+        if (nextVal <= 0) {
+          clearInterval(qInterval);
+          handleLogicalTimeExpired();
+          return 0;
+        }
+        return nextVal;
+      });
+    }, 1000);
+
+    return () => clearInterval(qInterval);
+  }, [qTimeLeft, session, loading, timerExpired, activeQIndex, questions]);
+
+  const handleSubmit = async () => {
+    if (!sessionId || submitting) return;
+    setSubmitting(true);
+    try {
+      const res = await fetch(`/api/candidate/session`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId, status: 'completed' })
+      });
+      if (res.ok) {
+        setValidationError('COMPLETED');
+      } else {
+        const data = await res.json();
+        alert(data.error || 'Failed to submit interview.');
+      }
+    } catch (err) {
+      console.error('Submit error:', err);
+      alert('Failed to submit interview.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   // Save notes to Supabase via candidate/answer API
   const saveCandidateAnswer = async (qId: string, text: string) => {
@@ -410,11 +487,28 @@ export default function CandidateSessionPage() {
               )}
             </div>
 
-            {/* Right 50% - Explanation Text Area */}
+            {/* Right 50% - Explanation Text Area / Options */}
             <div className="w-1/2 flex flex-col p-6 space-y-4 bg-[#151d1e]/10">
+              
+              {/* Question timer bar (only if MCQ or logical round) */}
+              {(session?.interview_mode === 'logical' || (currentQ?.options && currentQ.options.length > 0 && session?.mode_config?.logicalTimerMinutes)) && (
+                <div className="space-y-1 mb-2 animate-in fade-in duration-300">
+                  <div className="flex justify-between items-center text-[10px] font-bold text-orange-400 uppercase tracking-wider">
+                    <span>Question Timer Limit</span>
+                    <span className="font-mono">{formatTime(qTimeLeft)}</span>
+                  </div>
+                  <div className="w-full bg-[#0d1515] h-2 rounded-full overflow-hidden border border-[#3b494b]/60">
+                    <div 
+                      className="h-full bg-orange-500 rounded-full transition-all duration-1000 ease-linear"
+                      style={{ width: `${Math.max(0, Math.min(100, (qTimeLeft / getLogicalDuration()) * 100))}%` }}
+                    ></div>
+                  </div>
+                </div>
+              )}
+
               <div className="flex justify-between items-center">
                 <label className="text-xs font-bold text-[#94A3B8] uppercase tracking-wider block">
-                  Your Solution Draft & Explanation
+                  {currentQ.options && currentQ.options.length > 0 ? 'Multiple Choice Evaluation' : 'Your Solution Draft & Explanation'}
                 </label>
                 {savingAnswer[currentQ.id] && (
                   <span className="text-[10px] text-cyan-400 font-semibold animate-pulse inline-flex items-center gap-1">
@@ -424,13 +518,51 @@ export default function CandidateSessionPage() {
                 )}
               </div>
 
-              <div className="flex-grow flex flex-col bg-[#0d1515] border border-[#3b494b] rounded-xl overflow-hidden p-4 shadow-xl">
-                <textarea
-                  value={candidateNotes[currentQ.id] || ''}
-                  onChange={(e) => handleNotesChange(e.target.value)}
-                  className="w-full h-full bg-transparent text-sm text-white focus:outline-none resize-none custom-scrollbar leading-relaxed"
-                  placeholder="Draft your solution ideas, complexity analysis, or walkthrough notes here. The interviewer sees these updates in real-time."
-                />
+              <div className="flex-grow flex flex-col bg-[#0d1515] border border-[#3b494b] rounded-xl overflow-hidden p-4 shadow-xl justify-center">
+                {currentQ.options && currentQ.options.length > 0 ? (
+                  <div className="space-y-6 w-full py-4 overflow-y-auto custom-scrollbar">
+                    <label className="text-xs font-bold text-orange-400 uppercase tracking-wider block text-center">
+                      Select Your Answer Option
+                    </label>
+                    <div className="grid grid-cols-1 gap-4 max-w-md mx-auto w-full px-2">
+                      {currentQ.options.map((opt, oIdx) => {
+                        const isSelected = candidateNotes[currentQ.id] === opt;
+                        return (
+                          <button
+                            key={oIdx}
+                            onClick={async () => {
+                              if (timerExpired) return;
+                              // 1. Instantly highlight selection in local state
+                              setCandidateNotes(prev => ({ ...prev, [currentQ.id]: opt }));
+                              // 2. Save choice to database
+                              await saveCandidateAnswer(currentQ.id, opt);
+                              // 3. Briefly pause for visual feedback, then auto-advance
+                              setTimeout(() => {
+                                if (activeQIndex < questions.length - 1) {
+                                  setActiveQIndex(prev => prev + 1);
+                                }
+                              }, 500);
+                            }}
+                            className={`p-4 rounded-xl text-left font-mono text-xs border transition-all cursor-pointer w-full ${
+                              isSelected
+                                ? 'bg-orange-500/10 border-orange-500 text-orange-400 font-bold shadow-lg shadow-orange-500/5'
+                                : 'bg-[#151d1e]/40 border-[#3b494b] text-[#b9cacb] hover:border-orange-500/40 hover:text-white'
+                            }`}
+                          >
+                            {opt}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : (
+                  <textarea
+                    value={candidateNotes[currentQ.id] || ''}
+                    onChange={(e) => handleNotesChange(e.target.value)}
+                    className="w-full h-full bg-transparent text-sm text-white focus:outline-none resize-none custom-scrollbar leading-relaxed"
+                    placeholder="Draft your solution ideas, complexity analysis, or walkthrough notes here. The interviewer sees these updates in real-time."
+                  />
+                )}
               </div>
 
               {/* Navigator footer */}
@@ -446,14 +578,24 @@ export default function CandidateSessionPage() {
                 <span className="text-xs text-[#94A3B8] font-mono">
                   {activeQIndex + 1} / {questions.length}
                 </span>
-                <button
-                  onClick={() => setActiveQIndex(prev => Math.min(questions.length - 1, prev + 1))}
-                  disabled={activeQIndex === questions.length - 1}
-                  className="px-3.5 py-1.5 border border-[#3b494b] text-xs font-bold rounded-lg text-[#94A3B8] hover:bg-[#0d1515] hover:text-white disabled:opacity-40 disabled:hover:bg-transparent transition-all inline-flex items-center gap-1"
-                >
-                  Next
-                  <span className="material-symbols-outlined text-sm">navigate_next</span>
-                </button>
+                {activeQIndex === questions.length - 1 ? (
+                  <button
+                    onClick={handleSubmit}
+                    disabled={submitting}
+                    className="px-4 py-1.5 bg-[#06B6D4] text-xs font-bold rounded-lg text-[#0d1515] hover:bg-cyan-400 disabled:opacity-40 disabled:hover:bg-[#06B6D4] transition-all inline-flex items-center gap-1"
+                  >
+                    {submitting ? 'Submitting...' : 'Submit'}
+                    <span className="material-symbols-outlined text-sm">check_circle</span>
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => setActiveQIndex(prev => Math.min(questions.length - 1, prev + 1))}
+                    className="px-3.5 py-1.5 border border-[#3b494b] text-xs font-bold rounded-lg text-[#94A3B8] hover:bg-[#0d1515] hover:text-white transition-all inline-flex items-center gap-1"
+                  >
+                    Next
+                    <span className="material-symbols-outlined text-sm">navigate_next</span>
+                  </button>
+                )}
               </div>
             </div>
 

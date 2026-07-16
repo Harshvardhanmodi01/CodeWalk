@@ -52,6 +52,7 @@ Based on the interview mode, formulate a comprehensive evaluation report.
 - If behavioral round ratings are provided, evaluate their communication clarity, confidence level, and relevance.
 - If logical round results are provided, evaluate their cognitive ability, number sequences accuracy, and deduction skills.
 - If fullstack or custom modes are used, combine all evaluations together.
+- For the "score" field under "question_analysis", you MUST independently evaluate the candidate's answer based on correctness, technical depth, and completeness. Grade it on a scale of 0 to 10. A strong, detailed, and correct answer should receive a high score (9 or 10). If the candidate skipped or provided an empty/expired response, the score MUST be 0. Do NOT simply copy the default "Recruiter score given" value.
 
 You must return a valid JSON object matching this schema:
 {
@@ -80,7 +81,7 @@ Answers & Recruiter Notes:
 ${answers.map((a, i) => `[Question ${i + 1}] Category: ${a.category}, Difficulty: ${a.difficulty}
 Q: ${a.question_text}
 Candidate Answer/Recruiter Notes: ${a.answer_text || 'No response recorded.'}
-Recruiter score given: ${a.score || 5}/10`).join('\n\n')}
+Recruiter score given: ${(a.score !== undefined && a.score !== null) ? a.score : 5}/10`).join('\n\n')}
 
 ${behavioralScores && behavioralScores.length > 0 ? `HR Behavioral Ratings:
 ${JSON.stringify(behavioralScores, null, 2)}` : ''}

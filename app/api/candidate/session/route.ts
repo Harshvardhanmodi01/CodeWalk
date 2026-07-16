@@ -17,10 +17,10 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Valid sessionId parameter is required.' }, { status: 400 });
     }
 
-    // 1. Fetch session details
+    // 1. Fetch session details (including interview_mode, mode_config, is_paused)
     const { data: session, error: sessionErr } = await supabaseAdmin
       .from('sessions')
-      .select('id, candidate_id, status, started_at, ended_at, timer_duration_minutes, repo_url, remaining_seconds, created_at')
+      .select('id, candidate_id, status, started_at, ended_at, timer_duration_minutes, repo_url, remaining_seconds, created_at, interview_mode, mode_config, is_paused')
       .eq('id', sessionId)
       .single();
 
@@ -28,10 +28,10 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Interview session not found.' }, { status: 404 });
     }
 
-    // 2. Fetch session questions
+    // 2. Fetch session questions (including options)
     const { data: questions, error: qErr } = await supabaseAdmin
       .from('questions')
-      .select('id, question_text, code_snippet, file_path, line_start, line_end, difficulty, category, order_index, show_expected_answer, shared_answer')
+      .select('id, question_text, code_snippet, file_path, line_start, line_end, difficulty, category, order_index, show_expected_answer, shared_answer, options')
       .eq('session_id', sessionId)
       .order('order_index', { ascending: true });
 
@@ -63,3 +63,43 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Something went wrong. Please try again.' }, { status: 500 });
   }
 }
+
+/**
+ * Public/Candidate API to submit/complete the session.
+ */
+export async function POST(req: NextRequest) {
+  try {
+    const body = await req.json();
+    const { sessionId, status } = body;
+
+    if (!sessionId || !validateUUID(sessionId)) {
+      return NextResponse.json({ error: 'Valid sessionId parameter is required.' }, { status: 400 });
+    }
+
+    if (status !== 'completed') {
+      return NextResponse.json({ error: 'Invalid status update request.' }, { status: 400 });
+    }
+
+    // Update session status to completed
+    const { error: updateErr } = await supabaseAdmin
+      .from('sessions')
+      .update({
+        status: 'completed',
+        ended_at: new Date().toISOString(),
+        remaining_seconds: 0
+      })
+      .eq('id', sessionId);
+
+    if (updateErr) {
+      console.error('Failed to complete session:', updateErr);
+      return NextResponse.json({ error: 'Failed to submit interview.' }, { status: 500 });
+    }
+
+    return NextResponse.json({ success: true });
+
+  } catch (err) {
+    console.error('Candidate session POST error:', err);
+    return NextResponse.json({ error: 'Something went wrong. Please try again.' }, { status: 500 });
+  }
+}
+

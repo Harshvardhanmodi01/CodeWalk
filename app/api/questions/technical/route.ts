@@ -223,10 +223,27 @@ Return ONLY valid JSON. No markdown code blocks, no text surrounding the JSON. C
     const rawQuestions = parsed.questions || [];
     const validQuestions: any[] = [];
 
+    function findMatchingFileKey(filePath: string, mapKeys: string[]): string | undefined {
+      if (!filePath) return undefined;
+      const cleanPath = filePath.trim().replace(/\\/g, '/').replace(/^\/+/, '');
+      if (mapKeys.includes(cleanPath)) return cleanPath;
+      if (mapKeys.includes(filePath)) return filePath;
+      for (const key of mapKeys) {
+        const cleanKey = key.replace(/^\/+/, '');
+        if (cleanKey.endsWith(cleanPath) || cleanPath.endsWith(cleanKey)) {
+          return key;
+        }
+      }
+      return undefined;
+    }
+
     for (const q of rawQuestions) {
       if (q.file_path && q.file_path !== 'Custom Question' && q.file_path.trim() !== '') {
-        const fullContent = fileContentsMap.get(q.file_path);
-        if (!fullContent) continue;
+        const matchedKey = findMatchingFileKey(q.file_path, Array.from(fileContentsMap.keys()));
+        if (!matchedKey) continue;
+
+        const fullContent = fileContentsMap.get(matchedKey)!;
+        q.file_path = matchedKey;
 
         const lines = fullContent.split('\n');
         const start = Math.max(1, parseInt(q.line_start) || 1);
@@ -236,7 +253,7 @@ Return ONLY valid JSON. No markdown code blocks, no text surrounding the JSON. C
 
         const extractedLines = lines.slice(start - 1, end);
         const nonEmptyLines = extractedLines.filter(l => l.trim().length > 0);
-        if (nonEmptyLines.length < 3) continue;
+        if (nonEmptyLines.length < 1) continue;
 
         q.code_snippet = extractedLines.join('\n');
         q.line_start = start;

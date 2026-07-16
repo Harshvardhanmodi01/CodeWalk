@@ -739,14 +739,17 @@ export default function LiveSessionPage() {
           setScores(scoresMap);
         }
 
-        // 5. Fetch GitHub file explorer (if repository URL exists)
+        // 5. Fetch GitHub file explorer via proxy API
         if (sess.repo_url) {
           try {
-            const repoParts = sess.repo_url.replace('https://github.com/', '').split('/');
-            const owner = repoParts[0];
-            const repoName = repoParts[1];
-
-            const res = await fetch(`https://api.github.com/repos/${owner}/${repoName}/git/trees/main?recursive=1`);
+            const res = await fetch('/api/session/files', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                repoUrl: sess.repo_url,
+                action: 'tree'
+              })
+            });
             if (res.ok) {
               const data = await res.json();
               if (data.tree) {
@@ -767,6 +770,67 @@ export default function LiveSessionPage() {
 
     loadSessionData();
   }, [sessionId, router]);
+
+  // Poll session data and candidate answers every 3 seconds to keep recruiter updated in real-time
+  useEffect(() => {
+    if (!sessionId || loading) return;
+
+    const interval = setInterval(async () => {
+      try {
+        // 1. Fetch Session details
+        const { data: sess, error: sessErr } = await supabase
+          .from('sessions')
+          .select('*')
+          .eq('id', sessionId)
+          .single();
+
+        if (!sessErr && sess) {
+          setSession(prev => {
+            if (prev && (prev.status !== sess.status || prev.is_paused !== sess.is_paused || JSON.stringify(prev.logical_scores) !== JSON.stringify(sess.logical_scores))) {
+              // Sync recruiter's local state
+              setLogicalScores(sess.logical_scores || []);
+              if (sess.status === 'completed') {
+                router.push(`/session/${sessionId}/report`);
+              }
+              return sess;
+            }
+            return prev;
+          });
+        }
+
+        // 2. Fetch Answers
+        const { data: ans, error: ansErr } = await supabase
+          .from('answers')
+          .select('*')
+          .eq('session_id', sessionId);
+
+        if (!ansErr && ans) {
+          const notesMap: Record<string, string> = {};
+          const scoresMap: Record<string, number> = {};
+          ans.forEach((a: any) => {
+            notesMap[a.question_id] = a.answer_text;
+            scoresMap[a.question_id] = a.ai_score;
+          });
+          setNotes(prev => {
+            if (JSON.stringify(prev) !== JSON.stringify(notesMap)) {
+              return notesMap;
+            }
+            return prev;
+          });
+          setScores(prev => {
+            if (JSON.stringify(prev) !== JSON.stringify(scoresMap)) {
+              return scoresMap;
+            }
+            return prev;
+          });
+        }
+      } catch (err) {
+        console.warn('Failed to sync live session data:', err);
+      }
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [sessionId, loading, router]);
 
   // Set initial active tab based on interview mode and question counts
   useEffect(() => {
@@ -817,7 +881,7 @@ export default function LiveSessionPage() {
   // Reset logical question timer when index changes
   useEffect(() => {
     setQTimeLeft(getLogicalDuration());
-  }, [activeLogicalIdx, activeTab]);
+  }, [activeLogicalIdx, activeQIndex, activeTab]);
 
   // Handle Logical question timer expiration
   const handleLogicalTimeExpired = async () => {
@@ -948,39 +1012,37 @@ export default function LiveSessionPage() {
     setFetchingContent(true);
     setSelectedFilePath(path);
     try {
-      const repoParts = session.repo_url.replace('https://github.com/', '').split('/');
-      const owner = repoParts[0];
-      const repoName = repoParts[1];
-
-      const treeNode = flatTree.find(node => node.path === path);
-      if (treeNode && treeNode.url) {
-        const res = await fetch(treeNode.url);
-        if (res.ok) {
-          const fileData = await res.json();
-          if (fileData.content) {
-            const decoded = atob(fileData.content.replace(/\n/g, ''));
-            setFileContent(decoded);
-            return;
-          }
+      const res = await fetch('/api/session/files', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          repoUrl: session.repo_url,
+          action: 'file',
+          path
+        })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.content !== undefined) {
+          setFileContent(data.content);
+          return;
         }
       }
       
-      // Fallback: fetch raw contents
-      const rawRes = await fetch(`https://raw.githubusercontent.com/${owner}/${repoName}/main/${path}`);
-      if (rawRes.ok) {
-        const content = await rawRes.text();
-        setFileContent(content);
+      // Fallback: Render expected code snippet context inside file explorer
+      const q = getActiveQuestion();
+      if (q && q.file_path === path && q.code_snippet) {
+        setFileContent(`// Loaded from generated snippet (File repository access blocked or fallback)\n\n${q.code_snippet}`);
       } else {
-        // Render expected code snippet context inside file explorer as fallback
-        const q = getActiveQuestion();
-        if (q && q.file_path === path && q.code_snippet) {
-          setFileContent(`// Loaded from generated snippet (File repository access blocked or fallback)\n\n${q.code_snippet}`);
-        } else {
-          setFileContent(`// Failed to fetch contents for: ${path}\nPlease select another file.`);
-        }
+        setFileContent(`// Failed to fetch contents for: ${path}\nPlease select another file.`);
       }
     } catch {
-      setFileContent(`// Error loading file content from GitHub.\n// Check connection or repository access.`);
+      const q = getActiveQuestion();
+      if (q && q.file_path === path && q.code_snippet) {
+        setFileContent(`// Loaded from generated snippet (File repository access blocked or fallback)\n\n${q.code_snippet}`);
+      } else {
+        setFileContent(`// Error loading file content from GitHub.\n// Check connection or repository access.`);
+      }
     } finally {
       setFetchingContent(false);
     }
@@ -1578,15 +1640,18 @@ export default function LiveSessionPage() {
   // autoEndInterview on countdown end
   const autoEndInterview = async () => {
     try {
-      const consolidatedAnswers = questions.map(q => ({
-        id: q.id,
-        question_text: q.question_text,
-        file_path: q.file_path,
-        category: q.category,
-        difficulty: q.difficulty,
-        answer_text: notes[q.id] || '',
-        score: scores[q.id] || 5
-      }));
+      const consolidatedAnswers = questions.map(q => {
+        const hasAnswer = notes[q.id] && notes[q.id].trim() !== '' && notes[q.id] !== 'time_expired' && notes[q.id] !== 'No response recorded.';
+        return {
+          id: q.id,
+          question_text: q.question_text,
+          file_path: q.file_path,
+          category: q.category,
+          difficulty: q.difficulty,
+          answer_text: notes[q.id] || 'No response recorded.',
+          score: hasAnswer ? (scores[q.id] || 5) : 0
+        };
+      });
 
       const repRes = await fetch('/api/session/report', {
         method: 'POST',
@@ -1603,6 +1668,21 @@ export default function LiveSessionPage() {
       });
 
       const repData = await repRes.json();
+
+      // Save the updated AI scores back to the answers table
+      if (repData.question_analysis && Array.isArray(repData.question_analysis)) {
+        const updatePromises = repData.question_analysis.map(async (qa: any) => {
+          const matchedQ = questions.find((q: any) => q.question_text === qa.question);
+          if (matchedQ) {
+            await supabase
+              .from('answers')
+              .update({ ai_score: qa.score })
+              .eq('session_id', sessionId)
+              .eq('question_id', matchedQ.id);
+          }
+        });
+        await Promise.all(updatePromises);
+      }
 
       await supabase
         .from('session_reports')
@@ -1671,15 +1751,18 @@ export default function LiveSessionPage() {
 
     setLoading(true);
     try {
-      const consolidatedAnswers = questions.map(q => ({
-        id: q.id,
-        question_text: q.question_text,
-        file_path: q.file_path,
-        category: q.category,
-        difficulty: q.difficulty,
-        answer_text: notes[q.id] || '',
-        score: scores[q.id] || 5
-      }));
+      const consolidatedAnswers = questions.map(q => {
+        const hasAnswer = notes[q.id] && notes[q.id].trim() !== '' && notes[q.id] !== 'time_expired' && notes[q.id] !== 'No response recorded.';
+        return {
+          id: q.id,
+          question_text: q.question_text,
+          file_path: q.file_path,
+          category: q.category,
+          difficulty: q.difficulty,
+          answer_text: notes[q.id] || 'No response recorded.',
+          score: hasAnswer ? (scores[q.id] || 5) : 0
+        };
+      });
 
       const repRes = await fetch('/api/session/report', {
         method: 'POST',
@@ -1697,6 +1780,21 @@ export default function LiveSessionPage() {
 
       const repData = await repRes.json();
       if (!repRes.ok) throw new Error(repData.error || 'Failed to generate summary report.');
+
+      // Save the updated AI scores back to the answers table
+      if (repData.question_analysis && Array.isArray(repData.question_analysis)) {
+        const updatePromises = repData.question_analysis.map(async (qa: any) => {
+          const matchedQ = questions.find((q: any) => q.question_text === qa.question);
+          if (matchedQ) {
+            await supabase
+              .from('answers')
+              .update({ ai_score: qa.score })
+              .eq('session_id', sessionId)
+              .eq('question_id', matchedQ.id);
+          }
+        });
+        await Promise.all(updatePromises);
+      }
 
       await supabase
         .from('session_reports')
