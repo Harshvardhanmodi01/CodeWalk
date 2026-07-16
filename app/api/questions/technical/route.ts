@@ -132,6 +132,7 @@ Generate ${count} interview questions total split into these categories:
 - System design or architectural questions relevant to the job role [question_type: system-design]
 
 CRITICAL: The "file_path" field MUST match exactly one of the file paths provided in the codebase snippets for code-based and jd-connected questions. Do NOT invent new files or file paths.
+CRITICAL: The "code_snippet" field MUST contain the actual code segment from the file that is the subject of the question (e.g. if asking about class NetworkDataExtract, include that class definition). Do not include unrelated imports or code. The "line_start" and "line_end" MUST be the exact line numbers in the file where that snippet resides.
 For skill-gap and system-design questions, file_path can be empty or "Custom Question", and code_snippet should be empty.
 
 Your output must be a valid JSON object matching this schema:
@@ -171,8 +172,9 @@ Return ONLY valid JSON. No markdown code blocks, no text surrounding the JSON. C
    
        } else {
          systemPrompt = `You are a senior technical interviewer. Analyze the provided codebase file snippets and generate ${count} relevant interview questions.
-   For each question, extract a specific code snippet from the file, and specify its lines.
-   CRITICAL: The "file_path" field MUST match exactly one of the file paths provided in the codebase snippets. Do NOT invent new files or file paths.
+    For each question, extract a specific code snippet from the file, and specify its lines.
+    CRITICAL: The "file_path" field MUST match exactly one of the file paths provided in the codebase snippets. Do NOT invent new files or file paths.
+    CRITICAL: The "code_snippet" field MUST contain the actual code segment from the file that is the subject of the question (e.g. if asking about class NetworkDataExtract, include that class definition). Do not include unrelated imports or code. The "line_start" and "line_end" MUST be the exact line numbers in the file where that snippet resides.
    
    Your output must be a valid JSON object matching this schema:
    {
@@ -237,6 +239,102 @@ Return ONLY valid JSON. No markdown code blocks, no text surrounding the JSON. C
       return undefined;
     }
 
+    function findSnippetLines(fullContent: string, snippet: string): { start: number; end: number } | null {
+      if (!snippet || !snippet.trim()) return null;
+      let index = fullContent.indexOf(snippet);
+      if (index === -1) {
+        const snippetLines = snippet.split('\n').map(l => l.trim()).filter(Boolean);
+        if (snippetLines.length > 0) {
+          const firstLine = snippetLines[0];
+          let searchStart = 0;
+          while (true) {
+            const pos = fullContent.indexOf(firstLine, searchStart);
+            if (pos === -1) break;
+            const linesFromPos = fullContent.slice(pos).split('\n');
+            let matchCount = 0;
+            for (let i = 0; i < Math.min(snippetLines.length, linesFromPos.length); i++) {
+              if (linesFromPos[i].trim().includes(snippetLines[i])) {
+                matchCount++;
+              }
+            }
+            if (matchCount >= Math.min(3, snippetLines.length)) {
+              index = pos;
+              break;
+            }
+            searchStart = pos + 1;
+          }
+        }
+      }
+      if (index !== -1) {
+        const linesBefore = fullContent.slice(0, index).split('\n');
+        const startLine = linesBefore.length;
+        const snippetLineCount = snippet.split('\n').length;
+        const endLine = startLine + snippetLineCount - 1;
+        return { start: startLine, end: endLine };
+      }
+      return null;
+    }
+
+    function selfHealSnippet(questionText: string, fullContent: string): { start: number; end: number; snippet: string } | null {
+      const classRegex = /\b([A-Z][a-zA-Z0-9_]+)\b\s+(?:class)/i;
+      const classRegex2 = /(?:class)\s+\b([A-Z][a-zA-Z0-9_]+)\b/i;
+      const methodRegex = /\b([a-z_][a-z0-9_]+)\b\s+(?:method|function|procedure|decorator)/i;
+      const methodRegex2 = /(?:method|function|procedure|decorator)\s+\b([a-z_][a-z0-9_]+)\b/i;
+
+      let targetName = '';
+      let isClass = false;
+      let isMethod = false;
+
+      let match = questionText.match(classRegex) || questionText.match(classRegex2);
+      if (match) {
+        targetName = match[1];
+        isClass = true;
+      } else {
+        match = questionText.match(methodRegex) || questionText.match(methodRegex2);
+        if (match) {
+          targetName = match[1];
+          isMethod = true;
+        }
+      }
+
+      if (!targetName) {
+        const words = questionText.replace(/[^a-zA-Z0-9_ ]/g, '').split(' ');
+        for (const word of words) {
+          if (word.includes('_') && word.length > 3) {
+            targetName = word;
+            isMethod = true;
+            break;
+          }
+          if (/^[A-Z][a-zA-Z0-9]+$/.test(word) && word.length > 4 && word !== 'Question' && word !== 'GitHub' && word !== 'MongoDB') {
+            targetName = word;
+            isClass = true;
+            break;
+          }
+        }
+      }
+
+      if (targetName) {
+        const lines = fullContent.split('\n');
+        let foundIdx = -1;
+        const searchPatterns = isClass 
+          ? [new RegExp(`class\\s+${targetName}\\b`), new RegExp(`interface\\s+${targetName}\\b`), new RegExp(`struct\\s+${targetName}\\b`)]
+          : [new RegExp(`def\\s+${targetName}\\b`), new RegExp(`function\\s+${targetName}\\b`), new RegExp(`${targetName}\\s*=\\s*\\(`), new RegExp(`\\b${targetName}\\b`)];
+
+        for (const pattern of searchPatterns) {
+          foundIdx = lines.findIndex(line => pattern.test(line));
+          if (foundIdx !== -1) break;
+        }
+
+        if (foundIdx !== -1) {
+          const start = foundIdx + 1;
+          const end = Math.min(lines.length, start + 8);
+          const snippet = lines.slice(start - 1, end).join('\n');
+          return { start, end, snippet };
+        }
+      }
+      return null;
+    }
+
     for (const q of rawQuestions) {
       if (q.file_path && q.file_path !== 'Custom Question' && q.file_path.trim() !== '') {
         const matchedKey = findMatchingFileKey(q.file_path, Array.from(fileContentsMap.keys()));
@@ -245,19 +343,40 @@ Return ONLY valid JSON. No markdown code blocks, no text surrounding the JSON. C
         const fullContent = fileContentsMap.get(matchedKey)!;
         q.file_path = matchedKey;
 
+        let healed = null;
+        if (q.code_snippet && q.code_snippet.trim()) {
+          const matchedLines = findSnippetLines(fullContent, q.code_snippet);
+          if (matchedLines) {
+            healed = {
+              start: matchedLines.start,
+              end: matchedLines.end,
+              snippet: fullContent.split('\n').slice(matchedLines.start - 1, matchedLines.end).join('\n')
+            };
+          }
+        }
+
+        if (!healed) {
+          healed = selfHealSnippet(q.question_text, fullContent);
+        }
+
         const lines = fullContent.split('\n');
-        const start = Math.max(1, parseInt(q.line_start) || 1);
-        const end = Math.min(lines.length, parseInt(q.line_end) || start);
+        let start = Math.max(1, parseInt(q.line_start) || 1);
+        let end = Math.min(lines.length, parseInt(q.line_end) || start);
 
-        if (start > lines.length || end < start) continue;
+        if (healed) {
+          q.code_snippet = healed.snippet;
+          q.line_start = healed.start;
+          q.line_end = healed.end;
+        } else {
+          if (start > lines.length || end < start) continue;
+          const extractedLines = lines.slice(start - 1, end);
+          const nonEmptyLines = extractedLines.filter(l => l.trim().length > 0);
+          if (nonEmptyLines.length < 1) continue;
 
-        const extractedLines = lines.slice(start - 1, end);
-        const nonEmptyLines = extractedLines.filter(l => l.trim().length > 0);
-        if (nonEmptyLines.length < 1) continue;
-
-        q.code_snippet = extractedLines.join('\n');
-        q.line_start = start;
-        q.line_end = end;
+          q.code_snippet = extractedLines.join('\n');
+          q.line_start = start;
+          q.line_end = end;
+        }
       } else {
         q.code_snippet = '';
         q.line_start = 0;
