@@ -25,6 +25,7 @@ export async function GET(req: NextRequest) {
       .single();
 
     if (sessionErr || !session) {
+      console.error('Candidate session fetch failed in API route:', sessionErr);
       return NextResponse.json({ error: 'Interview session not found.' }, { status: 404 });
     }
 
