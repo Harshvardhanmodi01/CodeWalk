@@ -323,30 +323,50 @@ export default function CandidateSessionPage() {
       return;
     }
 
+    let videoStream: MediaStream | null = null;
+    let audioStream: MediaStream | null = null;
+
+    // 1. Request Webcam (Mandatory)
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { width: 320, height: 240, frameRate: { ideal: 15 } },
-        audio: true
+      videoStream = await navigator.mediaDevices.getUserMedia({
+        video: { width: 320, height: 240, frameRate: { ideal: 15 } }
       });
-      
       setWebcamPermission('granted');
-      setMicPermission('granted');
-      setWebcamStream(stream);
-
-      // Play in setup video ref
-      if (setupVideoRef.current) {
-        setupVideoRef.current.srcObject = stream;
-      }
-
-      // Load face-api model weights dynamically
-      loadFaceApiModels();
-
-    } catch (e: any) {
-      console.warn('Webcam/Mic access denied:', e);
+    } catch (videoErr: any) {
+      console.warn('Webcam access denied:', videoErr);
       setWebcamPermission('denied');
-      setMicPermission('denied');
-      toast.error(`Webcam/Mic Error: ${e?.message || String(e)}`);
+      toast.error(`Webcam Error: ${videoErr?.message || String(videoErr)}`);
+      return; // Stop setup if webcam is denied
     }
+
+    // 2. Request Microphone (Optional/Recommended)
+    try {
+      audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      setMicPermission('granted');
+    } catch (audioErr: any) {
+      console.warn('Microphone access denied (optional):', audioErr);
+      setMicPermission('denied');
+      toast('Microphone access denied (optional but recommended). Continuing with camera only.', { icon: '⚠️' });
+    }
+
+    // Combine tracks if microphone was granted
+    const finalStream = videoStream;
+    if (audioStream) {
+      const audioTrack = audioStream.getAudioTracks()[0];
+      if (audioTrack) {
+        finalStream.addTrack(audioTrack);
+      }
+    }
+
+    setWebcamStream(finalStream);
+
+    // Play in setup video ref
+    if (setupVideoRef.current) {
+      setupVideoRef.current.srcObject = finalStream;
+    }
+
+    // Load face-api model weights dynamically
+    loadFaceApiModels();
   };
 
   const requestScreenShare = async () => {
