@@ -434,7 +434,8 @@ export default function CandidateSessionPage() {
     } catch (err) {
       console.error('Face-api models failed to load:', err);
       toast.error('Failed to load face verification library. Skipping face-api check.');
-      setFaceApiLoaded(true); // Fallback so candidate is not permanently blocked
+      setFaceApiLoaded(false); // Fallback so candidate is not permanently blocked
+      setFaceDetected(true);
     } finally {
       setFaceApiLoading(false);
     }
