@@ -341,11 +341,11 @@ export default function CandidateSessionPage() {
       // Load face-api model weights dynamically
       loadFaceApiModels();
 
-    } catch (e) {
+    } catch (e: any) {
       console.warn('Webcam/Mic access denied:', e);
       setWebcamPermission('denied');
       setMicPermission('denied');
-      toast.error('Webcam and Microphone permissions are required.');
+      toast.error(`Webcam/Mic Error: ${e?.message || String(e)}`);
     }
   };
 
