@@ -35,13 +35,16 @@ export async function GET(req: NextRequest) {
     const used = usageRow?.analysis_count || 0;
     const remaining = Math.max(0, limit - used);
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       plan: planType,
       used,
       limit,
       remaining,
       currentPeriodEnd: planRow?.current_period_end || null,
     });
+    response.headers.set('Cache-Control', 'private, s-maxage=30, stale-while-revalidate=60');
+    return response;
+
   } catch (err: any) {
     console.error('API user/quota error:', err);
     return NextResponse.json({ error: 'Something went wrong. Please try again.' }, { status: 500 });

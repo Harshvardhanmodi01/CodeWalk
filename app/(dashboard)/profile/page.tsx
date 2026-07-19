@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { useGlobal } from '@/app/context/GlobalContext';
 import { supabase } from '@/app/lib/supabaseClient';
@@ -535,10 +536,13 @@ export default function ProfilePage() {
             <div className="flex items-center gap-6">
               <div className="w-20 h-20 rounded-lg overflow-hidden border border-[#3b494b] flex items-center justify-center bg-[#06B6D4] text-[#0d1515] font-bold text-2xl select-none shadow-md">
                 {avatarUrlToDisplay ? (
-                  <img 
+                  <Image 
                     className="w-full h-full object-cover" 
                     alt="Profile Avatar"
                     src={avatarUrlToDisplay}
+                    width={100}
+                    height={100}
+                    unoptimized
                   />
                 ) : (
                   <span>{name ? name.slice(0, 1).toUpperCase() : 'U'}</span>
@@ -844,10 +848,13 @@ export default function ProfilePage() {
                 <div className="flex flex-col items-center gap-4 py-4">
                   <div className="w-24 h-24 rounded-full overflow-hidden border-2 border-[#3b494b] flex items-center justify-center bg-[#06B6D4] text-[#0d1515] font-bold text-3xl select-none shadow-lg">
                     {avatarUrlToDisplay ? (
-                      <img 
+                      <Image 
                         className="w-full h-full object-cover animate-fade-in" 
                         alt="Profile Avatar"
                         src={avatarUrlToDisplay}
+                        width={100}
+                        height={100}
+                        unoptimized
                       />
                     ) : (
                       <span>{name ? name.slice(0, 1).toUpperCase() : 'U'}</span>

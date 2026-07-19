@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, memo } from 'react';
 import RatingBar from './RatingBar';
 import { Question } from '@/app/lib/mockData';
 
@@ -13,7 +13,7 @@ interface QuestionCardProps {
   onRatingChange: (val: string) => void;
 }
 
-function QuestionCard({
+const QuestionCard = memo(function QuestionCard({
   jobId,
   question,
   isActive,
@@ -141,7 +141,7 @@ function QuestionCard({
       </div>
     </div>
   );
-}
+});
 
 interface QuestionPanelProps {
   jobId: string;
@@ -158,7 +158,7 @@ interface QuestionPanelProps {
   onToggleTimer: () => void;
 }
 
-export default function QuestionPanel({
+function QuestionPanel({
   jobId,
   questions,
   activeQuestionIndex,
@@ -282,3 +282,5 @@ export default function QuestionPanel({
     </section>
   );
 }
+
+export default memo(QuestionPanel);

@@ -1,14 +1,20 @@
 import type { Metadata } from "next";
+import { Inter } from "next/font/google";
 import "./globals.css";
 import { GlobalProvider } from "@/app/context/GlobalContext";
 import AppContent from "@/app/AppContent";
 import { Toaster } from "react-hot-toast";
 import CookieConsent from "@/components/CookieConsent";
 import { GoogleAnalytics } from '@next/third-parties/google';
+import { Analytics } from '@vercel/analytics/react';
+import { SpeedInsights } from '@vercel/speed-insights/next';
 
-// Use generic system fonts mock to allow offline building without Google Fonts network requests
-const geistSans = { variable: "font-sans" };
-const geistMono = { variable: "font-mono" };
+const inter = Inter({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  display: "swap",
+  variable: "--font-inter",
+});
 
 export const metadata: Metadata = {
   title: "CodeWalk — Enterprise AI that runs on codebase outcomes",
@@ -20,20 +26,17 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  // NOTE: Do NOT call headers() here. It is a Next.js Dynamic API that opts the
-  // entire root layout (and therefore every page in the app) out of static rendering.
-  // On Vercel, this forces every page navigation to go through a cold serverless
-  // function call, causing the "buffering" delay users see when clicking links.
-  // The x-nonce header was never set by middleware anyway (no middleware.ts exists),
-  // so the nonce was always undefined — making the call purely wasted overhead.
-
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased dark`}
+      className={`${inter.variable} ${inter.className} h-full antialiased dark`}
       suppressHydrationWarning
     >
       <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link rel="preconnect" href="https://rteithxwzclqtmjruevb.supabase.co" />
+        <link rel="preconnect" href="https://api.groq.com" />
         <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:FILL,wght@0..1,100..700&display=swap" rel="stylesheet" />
       </head>
       <body className="min-h-full flex flex-col bg-background text-on-surface">
@@ -52,6 +55,8 @@ export default function RootLayout({
           <CookieConsent />
         </GlobalProvider>
         <GoogleAnalytics gaId={process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID!} />
+        <Analytics />
+        <SpeedInsights />
       </body>
     </html>
   );

@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { useGlobal } from '@/app/context/GlobalContext';
 import { toast } from 'react-hot-toast';
@@ -18,7 +19,7 @@ export default function AppContent({ children }: { children: React.ReactNode }) 
   const [chatMessages, setChatMessages] = useState<Array<{ sender: 'user' | 'assistant'; text: string }>>([
     { 
       sender: 'assistant', 
-      text: "Hi! I'm Taylor, your CodeWalk AI agent. How can I help you understand CodeWalk features, workflows, or pricing today?" 
+      text: "Hi! I'm CodeWalk, your AI agent. How can I help you understand CodeWalk features, workflows, or pricing today?" 
     }
   ]);
   const [chatInput, setChatInput] = useState('');
@@ -183,10 +184,10 @@ export default function AppContent({ children }: { children: React.ReactNode }) 
             <div className="px-4 py-3 bg-gradient-to-r from-[#06B6D4] to-indigo-600 flex items-center justify-between text-white select-none">
               <div className="flex items-center gap-2">
                 <span className="h-8 w-8 rounded-full bg-white/20 flex items-center justify-center text-xs font-bold font-mono">
-                  TG
+                  CW
                 </span>
                 <div>
-                  <p className="text-xs font-bold leading-none">Taylor Griggs</p>
+                  <p className="text-xs font-bold leading-none">CodeWalk</p>
                   <p className="text-[10px] text-white/80 mt-0.5">CodeWalk AI Agent</p>
                 </div>
               </div>
@@ -242,7 +243,7 @@ export default function AppContent({ children }: { children: React.ReactNode }) 
           <button
             onClick={() => setChatbotOpen(true)}
             className="h-14 w-14 rounded-full bg-gradient-to-tr from-[#06B6D4] to-indigo-600 flex items-center justify-center text-white shadow-lg shadow-[#06B6D4]/30 hover:scale-110 active:scale-95 hover:rotate-6 transition-all border border-white/10"
-            title="Chat with Taylor"
+            title="Chat with CodeWalk"
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
@@ -338,9 +339,12 @@ export default function AppContent({ children }: { children: React.ReactNode }) 
                   className="flex items-center gap-2 focus:outline-none"
                 >
                   {avatarUrlToDisplay ? (
-                    <img 
+                    <Image 
                       src={avatarUrlToDisplay} 
                       alt="Profile Avatar" 
+                      width={40}
+                      height={40}
+                      unoptimized
                       className="h-10 w-10 rounded-full object-cover hover:scale-105 transition-all border-2 border-[#06B6D4]"
                     />
                   ) : (

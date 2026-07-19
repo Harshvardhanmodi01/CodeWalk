@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, memo } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
 import { useGlobal } from '@/app/context/GlobalContext';
 
@@ -10,7 +11,7 @@ interface SidebarProps {
   onClose?: () => void;
 }
 
-export default function Sidebar({ isOpen, onClose }: SidebarProps) {
+function Sidebar({ isOpen = false, onClose }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const { user, signOut, subscription } = useGlobal();
@@ -105,10 +106,13 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
             <div className="relative shrink-0">
               <div className="w-10 h-10 rounded-lg overflow-hidden border border-[#3b494b] flex items-center justify-center bg-gradient-to-tr from-[#06B6D4] to-indigo-500 text-white font-bold text-lg select-none">
                 {avatarUrlToDisplay ? (
-                  <img 
+                  <Image 
                     className="w-full h-full object-cover" 
                     alt="Recruiter Workspace Avatar"
                     src={avatarUrlToDisplay}
+                    width={40}
+                    height={40}
+                    unoptimized
                   />
                 ) : (
                   <span>{user?.name ? user.name.slice(0, 1).toUpperCase() : 'U'}</span>
@@ -233,3 +237,5 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
     </>
   );
 }
+
+export default memo(Sidebar);

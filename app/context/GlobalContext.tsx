@@ -4,6 +4,25 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '@/app/lib/supabase';
 import { toast } from 'react-hot-toast';
 
+let cachedCsrfToken = '';
+let cachedCsrfTokenExpiresAt = 0;
+
+export async function getOrFetchCsrfToken(): Promise<string> {
+  if (cachedCsrfToken && Date.now() < cachedCsrfTokenExpiresAt) {
+    return cachedCsrfToken;
+  }
+  try {
+    const csrfRes = await fetch('/api/auth/csrf');
+    const data = await csrfRes.json();
+    if (data?.csrfToken) {
+      cachedCsrfToken = data.csrfToken;
+      cachedCsrfTokenExpiresAt = Date.now() + 10 * 60 * 1000;
+      return cachedCsrfToken;
+    }
+  } catch (e) {}
+  return cachedCsrfToken || '';
+}
+
 export interface User {
   id: string;
   email: string;
@@ -192,8 +211,14 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
     } catch {}
   }, [theme]);
 
+  const lastLoadedUserIdRef = React.useRef<string | null>(null);
+
   // Helper to load user profile and token logs from Supabase
-  const loadUserData = async (userId: string, email: string) => {
+  const loadUserData = async (userId: string, email: string, force = false) => {
+    if (!force && lastLoadedUserIdRef.current === userId && user) {
+      return;
+    }
+    lastLoadedUserIdRef.current = userId;
     console.log('[DEBUG] loadUserData starting for ID:', userId, 'Email:', email);
     try {
       // 1. Fetch profile and recruiter in parallel to minimize network latency
@@ -390,8 +415,7 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signIn = async (email: string, password?: string, captchaAnswer?: string, captchaToken?: string) => {
-    const csrfRes = await fetch('/api/auth/csrf');
-    const { csrfToken } = await csrfRes.json().catch(() => ({ csrfToken: '' }));
+    const csrfToken = await getOrFetchCsrfToken();
 
     const nonce = typeof window !== 'undefined' && window.crypto && window.crypto.randomUUID 
       ? window.crypto.randomUUID() 
@@ -435,8 +459,7 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signUp = async (email: string, password?: string, companyName?: string, companySize?: string) => {
-    const csrfRes = await fetch('/api/auth/csrf');
-    const { csrfToken } = await csrfRes.json().catch(() => ({ csrfToken: '' }));
+    const csrfToken = await getOrFetchCsrfToken();
 
     const nonce = typeof window !== 'undefined' && window.crypto && window.crypto.randomUUID 
       ? window.crypto.randomUUID() 

@@ -265,48 +265,51 @@ export default function CandidateProfilePage() {
   };
 
   // Trigger Repo analysis and save Code Story to resume_extracted_data
-  const handleAnalyzeRepo = async () => {
+  const handleAnalyzeRepo = () => {
     if (!candidate?.github_url) return;
     setAnalyzingRepo(true);
     setRepoLoadError(null);
-    try {
-      const res = await fetch('/api/session/analyze', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ repoUrl: candidate.github_url })
-      });
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to analyze repository.');
+    setTimeout(async () => {
+      try {
+        const res = await fetch('/api/session/analyze', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ repoUrl: candidate.github_url })
+        });
 
-      const codeStoryData = {
-        languages: data.analysis?.languages || [],
-        complexity: data.analysis?.complexity || 'Medium',
-        style: data.analysis?.commit_style || 'Clean',
-        overall_summary: data.analysis?.overall_summary || 'No summary available.'
-      };
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to analyze repository.');
 
-      // Merge into resume_extracted_data JSONB
-      const updatedExtData = {
-        ...(candidate.resume_extracted_data || {}),
-        repoAnalysis: codeStoryData
-      };
+        const codeStoryData = {
+          languages: data.analysis?.languages || [],
+          complexity: data.analysis?.complexity || 'Medium',
+          style: data.analysis?.commit_style || 'Clean',
+          overall_summary: data.analysis?.overall_summary || 'No summary available.'
+        };
 
-      const { error: dbErr } = await supabase
-        .from('candidates')
-        .update({ resume_extracted_data: updatedExtData })
-        .eq('id', candidateId);
+        // Merge into resume_extracted_data JSONB
+        const updatedExtData = {
+          ...(candidate.resume_extracted_data || {}),
+          repoAnalysis: codeStoryData
+        };
 
-      if (dbErr) throw dbErr;
+        const { error: dbErr } = await supabase
+          .from('candidates')
+          .update({ resume_extracted_data: updatedExtData })
+          .eq('id', candidateId);
 
-      toast.success('GitHub repository analyzed successfully!');
-      setCandidate(prev => prev ? { ...prev, resume_extracted_data: updatedExtData } : null);
-    } catch (err: any) {
-      setRepoLoadError(err.message || 'Analysis failed.');
-      toast.error(err.message || 'Analysis failed.');
-    } finally {
-      setAnalyzingRepo(false);
-    }
+        if (dbErr) throw dbErr;
+
+        toast.success('GitHub repository analyzed successfully!');
+        setCandidate(prev => prev ? { ...prev, resume_extracted_data: updatedExtData } : null);
+      } catch (err: any) {
+        setRepoLoadError(err.message || 'Analysis failed.');
+        toast.error(err.message || 'Analysis failed.');
+      } finally {
+        setAnalyzingRepo(false);
+      }
+    }, 0);
   };
 
   // Generate Questions handler: redirect to setup with JD & Candidate details pre-filled

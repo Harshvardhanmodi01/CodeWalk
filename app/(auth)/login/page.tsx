@@ -3,7 +3,7 @@
 import React, { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useGlobal } from '@/app/context/GlobalContext';
+import { useGlobal, getOrFetchCsrfToken } from '@/app/context/GlobalContext';
 import { supabase } from '@/app/lib/supabaseClient';
 import { toast } from 'react-hot-toast';
 
@@ -24,6 +24,9 @@ function LoginPageInner() {
 
   useEffect(() => {
     setMounted(true);
+    // Prefetch CSRF token on mount for 0ms submit latency
+    getOrFetchCsrfToken().catch(() => {});
+
     // Show any OAuth provider errors surfaced via URL param from /auth/callback
     const oauthError = searchParams.get('oauth_error');
     if (oauthError) {

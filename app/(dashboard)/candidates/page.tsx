@@ -36,6 +36,7 @@ export default function CandidatesPage() {
 
   // Filters
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   const [techFilter, setTechFilter] = useState('All');
   const [folderFilter, setFolderFilter] = useState('All');
@@ -43,6 +44,13 @@ export default function CandidatesPage() {
   const [page, setPage] = useState(1);
   const [folderName, setFolderName] = useState('');
   const itemsPerPage = 10;
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 300);
+    return () => clearTimeout(handler);
+  }, [searchTerm]);
 
   // CSV Import state
   const [csvFile, setCsvFile] = useState<File | null>(null);
@@ -116,8 +124,8 @@ export default function CandidatesPage() {
   // Filter & Sort candidates
   const filteredCandidates = candidates
     .filter(c => {
-      const matchesSearch = c.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                            c.email.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesSearch = c.name.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) || 
+                            c.email.toLowerCase().includes(debouncedSearchTerm.toLowerCase());
       
       const matchesStatus = statusFilter === 'All' || c.status === statusFilter.toLowerCase();
       
