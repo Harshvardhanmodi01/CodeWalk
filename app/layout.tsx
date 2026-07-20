@@ -4,7 +4,7 @@ import { GlobalProvider } from "@/app/context/GlobalContext";
 import AppContent from "@/app/AppContent";
 import { Toaster } from "react-hot-toast";
 import CookieConsent from "@/components/CookieConsent";
-import { GoogleAnalytics } from '@next/third-parties/google';
+
 
 // Use generic system fonts mock to allow offline building without Google Fonts network requests
 const geistSans = { variable: "font-sans" };
@@ -20,13 +20,6 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  // NOTE: Do NOT call headers() here. It is a Next.js Dynamic API that opts the
-  // entire root layout (and therefore every page in the app) out of static rendering.
-  // On Vercel, this forces every page navigation to go through a cold serverless
-  // function call, causing the "buffering" delay users see when clicking links.
-  // The x-nonce header was never set by middleware anyway (no middleware.ts exists),
-  // so the nonce was always undefined — making the call purely wasted overhead.
-
   return (
     <html
       lang="en"
@@ -51,7 +44,6 @@ export default function RootLayout({
           />
           <CookieConsent />
         </GlobalProvider>
-        <GoogleAnalytics gaId={process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID!} />
       </body>
     </html>
   );

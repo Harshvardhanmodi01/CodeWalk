@@ -29,11 +29,17 @@ export default function CookieConsent() {
     if (window['ga-loaded']) return;
     window['ga-loaded'] = true;
 
+    const gaId = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
+    if (!gaId) {
+      console.warn('Google Analytics Measurement ID is not defined in environment variables.');
+      return;
+    }
+
     console.log('[SECURITY] Cookie Consent: Loading Google Analytics...');
 
     // Load gtag script
     const script = document.createElement('script');
-    script.src = 'https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX';
+    script.src = `https://www.googletagmanager.com/gtag/js?id=${gaId}`;
     script.async = true;
 
     // Retrieve active request nonce from the layout meta tag (Fix 1)
@@ -49,7 +55,7 @@ export default function CookieConsent() {
       window.dataLayer = window.dataLayer || [];
       function gtag(){window.dataLayer.push(arguments);}
       gtag('js', new Date());
-      gtag('config', 'G-XXXXXXXXXX', { 'anonymize_ip': true });
+      gtag('config', '${gaId}', { 'anonymize_ip': true });
     `;
     if (nonce) {
       inlineScript.nonce = nonce;
