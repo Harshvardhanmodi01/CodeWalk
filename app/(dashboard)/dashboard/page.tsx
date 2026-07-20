@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import useSWR from 'swr';
 import { useRouter } from 'next/navigation';
 import { useGlobal } from '@/app/context/GlobalContext';
 import { supabase } from '@/app/lib/supabaseClient';
@@ -8,6 +9,8 @@ import Link from 'next/link';
 import { toast } from 'react-hot-toast';
 import ScheduleInterviewModal from '@/components/modals/ScheduleInterviewModal';
 import RejectModal from '@/components/modals/RejectModal';
+
+const fetcher = (url: string) => fetch(url).then(res => res.json());
 
 interface SessionData {
   id: string;
@@ -138,12 +141,28 @@ export default function RecruiterDashboard() {
     if (!user) return;
     if (showLoadingState) setLoading(true);
     try {
-      await Promise.all([
-        fetchSessions(),
-        fetchCandidatesData(),
-        fetchPositionsData(),
-        fetchDashboardStats()
-      ]);
+      const res = await fetch('/api/dashboard/init');
+      const data = await res.json();
+      if (res.ok && data.success) {
+        const formattedSessions = (data.sessions || []).map((s: any) => ({
+          ...s,
+          report: Array.isArray(s.report) ? s.report[0] : s.report,
+        })) as SessionData[];
+
+        setSessions(formattedSessions);
+        setCandidates(data.candidates || []);
+        setPositions(data.positions || []);
+        if (data.stats) {
+          setStats(data.stats);
+        }
+      } else {
+        await Promise.all([
+          fetchSessions(),
+          fetchCandidatesData(),
+          fetchPositionsData(),
+          fetchDashboardStats()
+        ]);
+      }
     } catch (err) {
       console.error('Error fetching dashboard records:', err);
     } finally {

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import path from 'path';
+import sharp from 'sharp';
 import { requireAuth } from '@/app/lib/auth-middleware';
 import { supabaseAdmin } from '@/app/lib/supabaseAdmin';
 import { logSecurityEvent } from '@/app/lib/security';
@@ -52,22 +53,18 @@ export async function POST(req: NextRequest) {
     // 5. Detect and validate Magic Bytes & Extensions
     const hex = buffer.toString('hex', 0, 12).toLowerCase();
     
-    let extension = '';
     let isValid = false;
 
     // Check PNG: starts with 89 50 4E 47
     if (hex.startsWith('89504e47')) {
-      extension = 'png';
       isValid = true;
     }
     // Check JPEG: starts with FF D8 FF
     else if (hex.startsWith('ffd8ff')) {
-      extension = 'jpg';
       isValid = true;
     }
     // Check WebP: starts with RIFF (52494646) and WEBP (57454250) at position 8
     else if (hex.startsWith('52494646') && hex.slice(16, 24) === '57454250') {
-      extension = 'webp';
       isValid = true;
     }
 
@@ -108,17 +105,21 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'File rejected: malicious content detected' }, { status: 400 });
     }
 
-    // 7. Sanitize filename and rename to [user-id]-avatar.[extension]
-    const sanitizedName = sanitizeFilename(file.name);
-    const safeFilename = `${authResult.id}-avatar.${extension}`;
+    // 7. Process image using sharp: resize to max 200x200 and convert to WebP (quality 80)
+    const processedBuffer = await sharp(buffer)
+      .resize(200, 200, { fit: 'cover' })
+      .webp({ quality: 80 })
+      .toBuffer();
 
-    // 8. Upload to Supabase Storage 'avatars' bucket (bypasses client-side auth)
-    // Using upsert: true to overwrite previous user avatar
+    const sanitizedName = sanitizeFilename(file.name);
+    const safeFilename = `${authResult.id}-avatar.webp`;
+
+    // 8. Upload compressed WebP to Supabase Storage 'avatars' bucket
     const { error: uploadError } = await supabaseAdmin.storage
       .from('avatars')
-      .upload(safeFilename, buffer, {
-        contentType: `image/${extension === 'jpg' ? 'jpeg' : extension}`,
-        cacheControl: '3600',
+      .upload(safeFilename, processedBuffer, {
+        contentType: 'image/webp',
+        cacheControl: '86400',
         upsert: true,
       });
 
@@ -132,10 +133,17 @@ export async function POST(req: NextRequest) {
       .from('avatars')
       .getPublicUrl(safeFilename);
 
+    // 10. Update profiles table directly
+    await supabaseAdmin
+      .from('profiles')
+      .update({ avatar_url: publicUrl })
+      .eq('id', authResult.id);
+
     await logSecurityEvent('AVATAR_UPLOADED', ip, authResult.id, {
       fileName: sanitizedName,
       safeFilename,
       publicUrl,
+      processedSize: processedBuffer.length,
     }, 'info');
 
     return NextResponse.json({

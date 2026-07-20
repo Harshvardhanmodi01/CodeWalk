@@ -16,77 +16,51 @@ export async function checkLoginLockout(email: string, ip: string): Promise<{
   failedAttemptsCount: number;
 }> {
   try {
-    // 1. Check IP lockout: block IP for 1 hour after 10 failed attempts
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-    const { count: ipFailedCount, error: ipError } = await supabaseAdmin
-      .from('login_attempts')
-      .select('*', { count: 'exact', head: true })
-      .eq('ip_address', ip)
-      .eq('success', false)
-      .gt('attempted_at', oneHourAgo);
+    const fifteenMinsAgo = new Date(Date.now() - 15 * 60 * 1000).toISOString();
 
-    if (ipError) {
-      console.error('Error querying IP login attempts:', ipError);
-    } else if (ipFailedCount && ipFailedCount >= 10) {
+    const [ipRes, emailRes] = await Promise.all([
+      supabaseAdmin
+        .from('login_attempts')
+        .select('id', { count: 'exact', head: true })
+        .eq('ip_address', ip)
+        .eq('success', false)
+        .gt('attempted_at', oneHourAgo),
+      supabaseAdmin
+        .from('login_attempts')
+        .select('attempted_at, success')
+        .eq('email', email)
+        .gt('attempted_at', fifteenMinsAgo)
+        .order('attempted_at', { ascending: false })
+    ]);
+
+    if (ipRes.count && ipRes.count >= 10) {
       return {
         blocked: true,
         reason: 'Too many requests from this IP. Please try again in 1 hour.',
-        failedAttemptsCount: ipFailedCount,
+        failedAttemptsCount: ipRes.count,
       };
     }
 
-    // 2. Check Email lockout: block email for 15 minutes after 5 failed attempts
-    // Retrieve the timestamp of the last successful login for this email
-    const { data: lastSuccess, error: successError } = await supabaseAdmin
-      .from('login_attempts')
-      .select('attempted_at')
-      .eq('email', email)
-      .eq('success', true)
-      .order('attempted_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (successError) {
-      console.error('Error querying last successful login:', successError);
+    const emailAttempts = emailRes.data || [];
+    // Count failed attempts before any success attempt in the last 15 minutes
+    let failedCount = 0;
+    for (const attempt of emailAttempts) {
+      if (attempt.success) break;
+      failedCount++;
     }
 
-    // Count failed attempts since the last successful login (or all time if no success)
-    let emailFailedQuery = supabaseAdmin
-      .from('login_attempts')
-      .select('attempted_at', { count: 'exact' })
-      .eq('email', email)
-      .eq('success', false);
-
-    if (lastSuccess?.attempted_at) {
-      emailFailedQuery = emailFailedQuery.gt('attempted_at', lastSuccess.attempted_at);
-    }
-
-    const { count: emailFailedCount, data: failedAttemptsData, error: failedError } = await emailFailedQuery
-      .order('attempted_at', { ascending: false });
-
-    if (failedError) {
-      console.error('Error querying failed login attempts:', failedError);
-    }
-
-    const count = emailFailedCount || 0;
-
-    if (count >= 5 && failedAttemptsData && failedAttemptsData[0]) {
-      const lastFailedAt = new Date(failedAttemptsData[0].attempted_at).getTime();
-      const timeElapsed = Date.now() - lastFailedAt;
-      const lockoutWindow = 15 * 60 * 1000; // 15 minutes
-
-      if (timeElapsed < lockoutWindow) {
-        return {
-          blocked: true,
-          reason: 'Too many failed attempts. Try again in 15 minutes.',
-          failedAttemptsCount: count,
-        };
-      }
+    if (failedCount >= 5) {
+      return {
+        blocked: true,
+        reason: 'Too many failed attempts. Try again in 15 minutes.',
+        failedAttemptsCount: failedCount,
+      };
     }
 
     return {
       blocked: false,
-      failedAttemptsCount: count,
+      failedAttemptsCount: failedCount,
     };
   } catch (err) {
     console.error('Lockout check exception:', err);

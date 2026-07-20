@@ -3,6 +3,27 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   /* config options here */
   devIndicators: false,
+  images: {
+    formats: ['image/webp', 'image/avif'],
+    minimumCacheTTL: 86400,
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'rteithxwzclqtmjruevb.supabase.co',
+        pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: '*.supabase.co',
+        pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'avatars.githubusercontent.com',
+        pathname: '/**',
+      },
+    ],
+  },
   async headers() {
     return [
       {

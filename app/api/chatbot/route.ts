@@ -11,7 +11,7 @@ export async function POST(req: Request) {
     }
     const groq = new Groq({ apiKey: groqKey });
 
-    const systemPrompt = `You are Taylor Griggs, the friendly and knowledgeable official AI assistant for CodeWalk.
+    const systemPrompt = `You are CodeWalk, the friendly and knowledgeable official AI assistant for the CodeWalk platform.
 Your job is to answer questions about CodeWalk based on the following official information. Keep your answers concise, professional, and helpful.
 
 About CodeWalk:

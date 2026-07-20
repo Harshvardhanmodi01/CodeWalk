@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useGlobal } from '@/app/context/GlobalContext';
 
 export default function Navbar() {
@@ -51,9 +52,12 @@ export default function Navbar() {
               className="flex items-center gap-2 focus:outline-none"
             >
               {avatarUrlToDisplay ? (
-                <img 
+                <Image 
                   src={avatarUrlToDisplay} 
                   alt="Profile Avatar" 
+                  width={40}
+                  height={40}
+                  unoptimized
                   className="h-10 w-10 rounded-full object-cover hover:scale-105 transition-all border-2 border-[#06B6D4]"
                 />
               ) : (

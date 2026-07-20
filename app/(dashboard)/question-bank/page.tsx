@@ -135,8 +135,9 @@ export default function QuestionBankDashboardPage() {
       setLoading(true);
       const { data, error } = await supabase
         .from('question_bank')
-        .select('*')
-        .order('created_at', { ascending: false });
+        .select('id, topic, category, subtopic, difficulty, question_text, usage_count, avg_score, tags, expected_answer, created_at')
+        .order('created_at', { ascending: false })
+        .range(0, 49);
 
       if (error) {
         console.warn('Database fetch failed, loading static seed fallback:', error);
