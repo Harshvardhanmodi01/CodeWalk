@@ -5,13 +5,8 @@ import { GlobalProvider } from "@/app/context/GlobalContext";
 import AppContent from "@/app/AppContent";
 import { Toaster } from "react-hot-toast";
 import CookieConsent from "@/components/CookieConsent";
-<<<<<<< HEAD
-
-=======
-import { GoogleAnalytics } from '@next/third-parties/google';
 import { Analytics } from '@vercel/analytics/react';
 import { SpeedInsights } from '@vercel/speed-insights/next';
->>>>>>> 6f8f4619733049dfaa2b9f349a79f86967fcab34
 
 const inter = Inter({
   subsets: ["latin"],
@@ -58,12 +53,8 @@ export default function RootLayout({
           />
           <CookieConsent />
         </GlobalProvider>
-<<<<<<< HEAD
-=======
-        <GoogleAnalytics gaId={process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID!} />
         <Analytics />
         <SpeedInsights />
->>>>>>> 6f8f4619733049dfaa2b9f349a79f86967fcab34
       </body>
     </html>
   );
