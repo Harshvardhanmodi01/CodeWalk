@@ -6,11 +6,13 @@
  * rendering a premium dark theme workspace matching the home page aesthetics.
  */
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useGlobal } from '@/app/context/GlobalContext';
 import { toast } from 'react-hot-toast';
+import hljs from 'highlight.js';
 
 interface Question {
   id: string;
@@ -132,6 +134,40 @@ function ScrollFadeIn({ children, className = '' }: { children: React.ReactNode;
   );
 }
 
+// ── Helpers ──────────────────────────────────────────────────────────────────
+function getWsFileEmoji(name: string): string {
+  const ext = (name || '').split('.').pop()?.toLowerCase() || '';
+  const base = name.toLowerCase();
+  const map: Record<string, string> = {
+    js: '🟨', jsx: '⚛️', ts: '🔷', tsx: '⚛️',
+    py: '🐍', go: '🐹', rs: '🦀', java: '☕',
+    kt: '🟣', cpp: '⚙️', c: '⚙️', h: '📋',
+    cs: '🔵', rb: '💎', php: '🐘', swift: '🟠',
+    html: '🌐', css: '🎨', scss: '🎨',
+    json: '📋', yaml: '📋', yml: '📋', toml: '📋',
+    sh: '🖥️', bash: '🖥️',
+    md: '📝', txt: '📄', sql: '🗄️',
+    dockerfile: '🐳', gitignore: '🔒',
+  };
+  return map[base] || map[ext] || '📄';
+}
+
+function getWsHljsLang(fileName: string): string {
+  const ext = (fileName || '').split('.').pop()?.toLowerCase() || '';
+  const map: Record<string, string> = {
+    py: 'python', js: 'javascript', jsx: 'javascript',
+    ts: 'typescript', tsx: 'typescript',
+    go: 'go', rs: 'rust', java: 'java',
+    cpp: 'cpp', c: 'c', h: 'c', cs: 'csharp',
+    html: 'xml', css: 'css', scss: 'scss',
+    json: 'json', sh: 'bash', bash: 'bash',
+    yml: 'yaml', yaml: 'yaml', md: 'markdown', sql: 'sql',
+    rb: 'ruby', php: 'php', swift: 'swift', kt: 'kotlin',
+  };
+  return map[ext] || 'plaintext';
+}
+
+// ── VS Code-style CodeBlock ──────────────────────────────────────────────────
 function CodeBlock({
   snippet,
   fileName,
@@ -143,36 +179,93 @@ function CodeBlock({
 }) {
   const rawLines = snippet.split('\n');
   const startLine = highlightLine ? Math.max(1, highlightLine - 5) : 1;
+  const lang = getWsHljsLang(fileName || '');
+  const emoji = getWsFileEmoji(fileName || '');
+
+  const highlightedLines = useMemo(() => {
+    return rawLines.map(line => {
+      try {
+        return hljs.highlight(line || ' ', { language: lang, ignoreIllegals: true }).value;
+      } catch {
+        return (line || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [snippet, lang]);
 
   return (
-    <div className="rounded-xl overflow-hidden border border-outline-variant/60 bg-[#080f10] text-gray-300 shadow-md">
-      <div className="flex items-center gap-2 px-3 py-2 bg-[#0d1515] border-b border-outline-variant/60">
-        <span className="w-3.5 h-3.5 rounded-full bg-[#ff5f57]/80" />
-        <span className="w-3.5 h-3.5 rounded-full bg-[#febc2e]/80" />
-        <span className="w-3.5 h-3.5 rounded-full bg-[#28c840]/80" />
-        {fileName && (
-          <span className="ml-3 text-xs text-slate-400 font-mono">{fileName}</span>
-        )}
+    <div
+      className="rounded-xl overflow-hidden shadow-xl w-full"
+      style={{ background: '#1e1e1e', border: '1px solid #3b494b', fontFamily: "'Geist Mono','Cascadia Code','Fira Code',monospace" }}
+    >
+      {/* VS Code-style Tab Bar */}
+      <div
+        className="flex items-stretch select-none"
+        style={{ background: '#252526', borderBottom: '1px solid #3b494b', minHeight: '34px' }}
+      >
+        <div
+          className="flex items-center gap-1.5 px-3"
+          style={{
+            background: '#1e1e1e',
+            borderRight: '1px solid #3b494b',
+            borderTop: '2px solid #007acc',
+            fontSize: '11px',
+            color: '#cccccc',
+          }}
+        >
+          <span style={{ fontSize: '12px' }}>{emoji}</span>
+          <span className="truncate max-w-[180px]">{fileName || 'snippet'}</span>
+        </div>
+        <div className="flex-1" />
+        <div
+          className="flex items-center px-3"
+          style={{ fontSize: '10px', color: '#6a6a6a' }}
+        >
+          {lang.toUpperCase()}
+        </div>
       </div>
-      <pre className="text-[13px] font-mono leading-6 overflow-x-auto p-4 max-h-[300px]">
-        {rawLines.map((ln, idx) => {
+
+      {/* Code lines */}
+      <div
+        className="overflow-x-auto custom-scrollbar"
+        style={{ maxHeight: '300px', background: '#1e1e1e' }}
+      >
+        {highlightedLines.map((html, idx) => {
           const lineNo = startLine + idx;
           const isHl = highlightLine === lineNo;
           return (
             <div
               key={idx}
-              className={`flex ${
-                isHl ? 'bg-cyan-500/20 border-l-2 border-cyan-500' : 'border-l-2 border-transparent'
-              }`}
+              className="flex items-stretch"
+              style={{
+                background: isHl ? 'rgba(0,122,204,0.15)' : 'transparent',
+                borderLeft: isHl ? '2px solid #007acc' : '2px solid transparent',
+                lineHeight: '20px',
+                fontSize: '12.5px',
+              }}
             >
-              <span className="w-10 text-right pr-3 text-gray-600 select-none">{lineNo}</span>
-              <span className={`flex-1 pr-4 ${isHl ? 'text-white font-semibold' : 'text-slate-300'}`}>
-                {ln || ' '}
+              <span
+                className="select-none text-right flex-shrink-0"
+                style={{
+                  width: '44px',
+                  paddingRight: '14px',
+                  color: isHl ? '#c6c6c6' : '#3e4451',
+                  background: '#1e1e1e',
+                  fontSize: '11px',
+                  lineHeight: '20px',
+                }}
+              >
+                {lineNo}
               </span>
+              <pre
+                className="flex-1 whitespace-pre"
+                style={{ color: '#d4d4d4', margin: 0, padding: '0 16px 0 0', lineHeight: '20px' }}
+                dangerouslySetInnerHTML={{ __html: html || ' ' }}
+              />
             </div>
           );
         })}
-      </pre>
+      </div>
     </div>
   );
 }

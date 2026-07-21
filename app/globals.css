@@ -1,5 +1,53 @@
 @import "tailwindcss";
 
+/* ── highlight.js: VS Code Dark+ theme ───────────────────────────────────────
+   Maps hljs token classes to VS Code Dark+ palette colors.
+   This overrides any bundled hljs stylesheet. */
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-built_in,
+.hljs-name,
+.hljs-tag { color: #569cd6; }
+
+.hljs-string,
+.hljs-title,
+.hljs-section,
+.hljs-attribute,
+.hljs-literal,
+.hljs-template-tag,
+.hljs-template-variable,
+.hljs-type,
+.hljs-addition { color: #ce9178; }
+
+.hljs-deletion,
+.hljs-selector-attr,
+.hljs-selector-pseudo,
+.hljs-meta { color: #f44747; }
+
+.hljs-doctag,
+.hljs-quote { color: #608b4e; }
+
+.hljs-comment { color: #6a9955; font-style: italic; }
+
+.hljs-number,
+.hljs-regexp,
+.hljs-symbol,
+.hljs-variable,
+.hljs-template-variable,
+.hljs-link { color: #b5cea8; }
+
+.hljs-params { color: #9cdcfe; }
+.hljs-title.class_,
+.hljs-title.function_ { color: #dcdcaa; }
+.hljs-class .hljs-title { color: #4ec9b0; }
+.hljs-attr { color: #9cdcfe; }
+.hljs-emphasis { font-style: italic; }
+.hljs-strong { font-weight: bold; }
+
+/* Ensure hljs renders inline without extra backgrounds */
+.hljs { background: transparent !important; padding: 0 !important; }
+
+
 /* Hide Next.js development portal, error overlays, and dev indicators */
 nextjs-portal,
 [data-nextjs-dialog-overlay],

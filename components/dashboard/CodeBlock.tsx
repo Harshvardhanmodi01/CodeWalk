@@ -1,8 +1,10 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import hljs from 'highlight.js';
-import 'highlight.js/styles/github-dark.css';
+
+// NOTE: We do NOT import any hljs CSS here.
+// The VS Code Dark+ token colors are defined globally in app/globals.css
 
 interface CodeBlockProps {
   code: string;
@@ -11,37 +13,46 @@ interface CodeBlockProps {
   lineEnd: number;
 }
 
+// File emoji per extension — same palette as session page
+function getFileEmoji(name: string): string {
+  const ext = name.split('.').pop()?.toLowerCase() || '';
+  const base = name.toLowerCase();
+  const map: Record<string, string> = {
+    js: '🟨', jsx: '⚛️', ts: '🔷', tsx: '⚛️',
+    py: '🐍', go: '🐹', rs: '🦀', java: '☕',
+    kt: '🟣', cpp: '⚙️', c: '⚙️', h: '📋',
+    cs: '🔵', rb: '💎', php: '🐘', swift: '🟠',
+    html: '🌐', css: '🎨', scss: '🎨',
+    json: '📋', yaml: '📋', yml: '📋', toml: '📋',
+    sh: '🖥️', bash: '🖥️',
+    md: '📝', txt: '📄', sql: '🗄️',
+    dockerfile: '🐳', gitignore: '🔒',
+  };
+  return map[base] || map[ext] || '📄';
+}
+
+function getLanguage(path: string): string {
+  if (!path) return 'plaintext';
+  const ext = path.split('.').pop()?.toLowerCase() || '';
+  const map: Record<string, string> = {
+    py: 'python', js: 'javascript', jsx: 'javascript',
+    ts: 'typescript', tsx: 'typescript',
+    go: 'go', rs: 'rust', java: 'java',
+    cpp: 'cpp', c: 'c', h: 'c', cs: 'csharp',
+    html: 'xml', css: 'css', scss: 'scss',
+    json: 'json', sh: 'bash', bash: 'bash',
+    yml: 'yaml', yaml: 'yaml', md: 'markdown', sql: 'sql',
+    rb: 'ruby', php: 'php', swift: 'swift', kt: 'kotlin',
+  };
+  return map[ext] || 'plaintext';
+}
+
 export default function CodeBlock({ code, filePath, lineStart, lineEnd }: CodeBlockProps) {
   const [copied, setCopied] = useState(false);
 
-  // Auto-detect language from extension
-  const getLanguage = (path: string) => {
-    if (!path) return 'plaintext';
-    const ext = path.split('.').pop()?.toLowerCase() || '';
-    const map: Record<string, string> = {
-      py: 'python',
-      js: 'javascript',
-      jsx: 'javascript',
-      ts: 'typescript',
-      tsx: 'typescript',
-      go: 'go',
-      rs: 'rust',
-      java: 'java',
-      cpp: 'cpp',
-      c: 'c',
-      h: 'c',
-      cs: 'csharp',
-      html: 'xml',
-      css: 'css',
-      json: 'json',
-      sh: 'bash',
-      yml: 'yaml',
-      yaml: 'yaml',
-      md: 'markdown',
-      sql: 'sql'
-    };
-    return map[ext] || 'plaintext';
-  };
+  const trimmed = code ? code.trim() : '';
+  const lines = code ? code.split('\n') : [];
+  const nonEmptyLines = lines.filter(l => l.trim().length > 0);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(code);
@@ -49,75 +60,150 @@ export default function CodeBlock({ code, filePath, lineStart, lineEnd }: CodeBl
     setTimeout(() => setCopied(false), 2000);
   };
 
-  // Trim and check if code exists and has >= 3 lines of actual code
-  const trimmed = code ? code.trim() : '';
-  const lines = code ? code.split('\n') : [];
-  const nonEmptyLines = lines.filter(l => l.trim().length > 0);
+  const language = getLanguage(filePath);
+  const fileName = filePath.split('/').pop() || filePath;
+
+  // Highlight every line with hljs
+  const highlightedLines = useMemo(() => {
+    return lines.map(line => {
+      try {
+        return hljs.highlight(line || ' ', { language, ignoreIllegals: true }).value;
+      } catch {
+        return line.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [code, language]);
 
   if (!trimmed || nonEmptyLines.length < 3) {
     return (
-      <div className="bg-[#0d1515] border border-[#3b494b] rounded-xl p-4 text-center text-[#849495] italic text-xs">
+      <div
+        className="rounded-xl p-4 text-center italic text-xs"
+        style={{ background: '#1e1e1e', border: '1px solid #3b494b', color: '#6a9955' }}
+      >
         Code reference not available
       </div>
     );
   }
 
-  const language = getLanguage(filePath);
-  const fileName = filePath.split('/').pop() || filePath;
-
   return (
-    <div className="bg-[#0d1515] border border-[#3b494b] rounded-xl overflow-hidden shadow-lg flex flex-col font-mono text-[11px] text-[#b9cacb] relative w-full">
-      {/* Header Bar */}
-      <div className="px-4 py-2 border-b border-[#3b494b] bg-[#151d1e]/40 flex items-center justify-between text-[10px] select-none text-[#94A3B8]">
-        <span>{fileName} — Lines {lineStart} to {lineEnd}</span>
+    <div
+      className="rounded-xl overflow-hidden shadow-xl w-full"
+      style={{ background: '#1e1e1e', border: '1px solid #3b494b', fontFamily: "'Geist Mono','Cascadia Code','Fira Code',monospace" }}
+    >
+      {/* VS Code-style Tab Bar */}
+      <div
+        className="flex items-stretch select-none"
+        style={{ background: '#252526', borderBottom: '1px solid #3b494b', minHeight: '34px' }}
+      >
+        {/* Active tab */}
+        <div
+          className="flex items-center gap-1.5 px-3"
+          style={{
+            background: '#1e1e1e',
+            borderRight: '1px solid #3b494b',
+            borderTop: '2px solid #007acc',
+            fontSize: '11px',
+            color: '#cccccc',
+            maxWidth: '220px',
+          }}
+        >
+          <span style={{ fontSize: '12px' }}>{getFileEmoji(fileName)}</span>
+          <span className="truncate">{fileName}</span>
+          <span
+            className="ml-1 flex-shrink-0"
+            style={{
+              fontSize: '9px',
+              padding: '1px 5px',
+              background: 'rgba(0,122,204,0.2)',
+              border: '1px solid rgba(0,122,204,0.4)',
+              borderRadius: '3px',
+              color: '#4ec9b0',
+              fontWeight: 700,
+            }}
+          >
+            {lineStart}–{lineEnd}
+          </span>
+        </div>
+        <div className="flex-1" />
+        {/* Copy button */}
         <button
           onClick={handleCopy}
-          className="flex items-center gap-1 hover:text-white transition-colors cursor-pointer font-sans"
+          className="flex items-center gap-1 px-3 transition-colors cursor-pointer"
+          style={{ fontSize: '10px', color: copied ? '#4ec9b0' : '#6a6a6a' }}
         >
-          <span className="material-symbols-outlined text-xs">
+          <span className="material-symbols-outlined" style={{ fontSize: '13px' }}>
             {copied ? 'check' : 'content_copy'}
           </span>
           <span>{copied ? 'Copied!' : 'Copy'}</span>
         </button>
       </div>
 
-      {/* Code Area */}
-      <div className="overflow-x-auto custom-scrollbar p-3 max-h-[300px] bg-[#0d1515]">
-        <table className="min-w-full border-collapse">
-          <tbody>
-            {lines.map((line, idx) => {
-              const currentLineNum = lineStart + idx;
-              // Syntax highlight this line
-              let highlightedHtml = line;
-              try {
-                highlightedHtml = hljs.highlight(line || ' ', { language }).value;
-              } catch {
-                // fallback
-              }
+      {/* Breadcrumb */}
+      <div
+        className="flex items-center gap-1 px-3 overflow-x-auto whitespace-nowrap"
+        style={{ background: '#1e1e1e', borderBottom: '1px solid rgba(59,73,75,0.4)', padding: '2px 12px', fontSize: '10px', color: '#858585' }}
+      >
+        {filePath.split('/').map((part, i, arr) => (
+          <React.Fragment key={i}>
+            <span style={{ color: i === arr.length - 1 ? '#cccccc' : '#555' }}>{part}</span>
+            {i < arr.length - 1 && <span style={{ color: '#444' }}>/</span>}
+          </React.Fragment>
+        ))}
+      </div>
 
-              return (
-                <tr
-                  key={idx}
-                  className="hover:bg-[#151d1e]/40 transition-colors"
-                  style={{
-                    backgroundColor: 'rgba(6, 182, 212, 0.04)' // subtle cyan background highlight
-                  }}
-                >
-                  {/* Line Number */}
-                  <td className="w-10 pr-4 text-right text-[#475569] select-none align-top border-r border-[#3b494b]/20">
-                    {currentLineNum}
-                  </td>
-                  {/* Code Line */}
-                  <td className="pl-4 text-left whitespace-pre align-top text-white">
-                    <code
-                      dangerouslySetInnerHTML={{ __html: highlightedHtml || ' ' }}
-                    />
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+      {/* Code Area */}
+      <div
+        className="overflow-x-auto custom-scrollbar"
+        style={{ maxHeight: '320px', background: '#1e1e1e' }}
+      >
+        {highlightedLines.map((html, idx) => {
+          const lineNum = lineStart + idx;
+          const isHighlighted = lineNum >= lineStart && lineNum <= lineEnd;
+
+          return (
+            <div
+              key={idx}
+              className="flex items-stretch"
+              style={{
+                background: isHighlighted ? 'rgba(0,122,204,0.12)' : 'transparent',
+                borderLeft: isHighlighted ? '2px solid #007acc' : '2px solid transparent',
+                lineHeight: '20px',
+                fontSize: '12px',
+              }}
+            >
+              {/* Line number gutter */}
+              <span
+                className="select-none text-right flex-shrink-0"
+                style={{
+                  width: '44px',
+                  paddingRight: '14px',
+                  color: isHighlighted ? '#c6c6c6' : '#3e4451',
+                  background: '#1e1e1e',
+                  fontSize: '11px',
+                  lineHeight: '20px',
+                }}
+              >
+                {lineNum}
+              </span>
+              {/* Highlighted code */}
+              <pre
+                className="flex-1 whitespace-pre"
+                style={{ color: '#d4d4d4', margin: 0, padding: '0 16px 0 0', lineHeight: '20px' }}
+                dangerouslySetInnerHTML={{ __html: html || ' ' }}
+              />
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Footer */}
+      <div
+        className="flex items-center justify-between px-3 select-none"
+        style={{ background: '#007acc', padding: '2px 12px', fontSize: '10px', color: '#ffffff' }}
+      >
+        <span>{language.toUpperCase()}</span>
+        <span>Lines {lineStart}–{lineEnd}</span>
       </div>
     </div>
   );

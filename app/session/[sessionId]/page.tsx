@@ -1,11 +1,87 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { supabase } from '@/app/lib/supabaseClient';
 import { useGlobal } from '@/app/context/GlobalContext';
 import { toast } from 'react-hot-toast';
 import { seedQuestions } from '@/app/lib/seedQuestions';
+import hljs from 'highlight.js';
+
+// ── VS Code-style file-icon helpers ────────────────────────────────────
+const FILE_ICON_MAP: Record<string, { icon: string; color: string }> = {
+  // JavaScript / TypeScript
+  js:   { icon: '󰌞', color: '#F7DF1E' },
+  jsx:  { icon: '󰜈', color: '#61DAFB' },
+  ts:   { icon: '󰛦', color: '#3178C6' },
+  tsx:  { icon: '󰜈', color: '#61DAFB' },
+  // Web
+  html: { icon: '󰌝', color: '#E34F26' },
+  css:  { icon: '󰌜', color: '#1572B6' },
+  scss: { icon: '󰌜', color: '#CC6699' },
+  // Python
+  py:   { icon: '󰌠', color: '#3776AB' },
+  // Rust
+  rs:   { icon: '󱘗', color: '#F74C00' },
+  // Go
+  go:   { icon: '󰟓', color: '#00ACD7' },
+  // Java / Kotlin
+  java: { icon: '󰬷', color: '#ED8B00' },
+  kt:   { icon: '󱈙', color: '#7F52FF' },
+  // C / C++
+  c:    { icon: '󰙲', color: '#5C6BC0' },
+  cpp:  { icon: '󰙲', color: '#00599C' },
+  h:    { icon: '󰙲', color: '#A9B7C6' },
+  // C#
+  cs:   { icon: '󰌛', color: '#9B4F96' },
+  // Ruby / PHP / Swift
+  rb:   { icon: '󰴭', color: '#CC342D' },
+  php:  { icon: '󰌟', color: '#8892BE' },
+  swift:{ icon: '󰛥', color: '#FA7343' },
+  // Data / Config
+  json: { icon: '󰘦', color: '#F9A825' },
+  yaml: { icon: '󱃺', color: '#CB171E' },
+  yml:  { icon: '󱃺', color: '#CB171E' },
+  toml: { icon: '󱃺', color: '#9C4221' },
+  // Shell
+  sh:   { icon: '󰆍', color: '#89E051' },
+  bash: { icon: '󰆍', color: '#89E051' },
+  // Markdown / Text
+  md:   { icon: '󰍔', color: '#519ABA' },
+  txt:  { icon: '󰈙', color: '#A9B7C6' },
+  // SQL
+  sql:  { icon: '󰆼', color: '#FFCA28' },
+  // Docker / Git
+  dockerfile: { icon: '󰡨', color: '#2496ED' },
+  gitignore:  { icon: '󰊢', color: '#F1502F' },
+};
+
+const DIR_ICON  = { icon: '󰉋', color: '#E8A87C' };
+const DIR_OPEN  = { icon: '󰝰', color: '#E8A87C' };
+const FILE_DEFAULT = { icon: '󰈙', color: '#8899A6' };
+
+function getFileIcon(name: string, isDir: boolean, isOpen = false) {
+  if (isDir) return isOpen ? DIR_OPEN : DIR_ICON;
+  const ext = name.split('.').pop()?.toLowerCase() || '';
+  const baseName = name.toLowerCase();
+  return FILE_ICON_MAP[baseName] || FILE_ICON_MAP[ext] || FILE_DEFAULT;
+}
+
+// ── hljs language from extension ───────────────────────────────────────
+function getHljsLang(filePath: string): string {
+  const ext = filePath.split('.').pop()?.toLowerCase() || '';
+  const map: Record<string, string> = {
+    py: 'python', js: 'javascript', jsx: 'javascript',
+    ts: 'typescript', tsx: 'typescript',
+    go: 'go', rs: 'rust', java: 'java',
+    cpp: 'cpp', c: 'c', h: 'c', cs: 'csharp',
+    html: 'xml', css: 'css', scss: 'scss',
+    json: 'json', sh: 'bash', bash: 'bash',
+    yml: 'yaml', yaml: 'yaml', md: 'markdown',
+    sql: 'sql', rb: 'ruby', php: 'php', swift: 'swift', kt: 'kotlin',
+  };
+  return map[ext] || 'plaintext';
+}
 
 interface Question {
   id: string;
@@ -62,6 +138,81 @@ interface FileTreeNode {
   path: string;
   type: 'file' | 'dir';
   children: Record<string, FileTreeNode>;
+}
+
+// ── VS Code-style Syntax Highlighted Viewer ──────────────────────────────────
+interface SyntaxHighlightedViewerProps {
+  content: string;
+  filePath: string;
+  highlightStart: number | null;
+  highlightEnd: number | null;
+  isFallbackSnippet?: boolean;
+}
+
+function SyntaxHighlightedViewer({
+  content,
+  filePath,
+  highlightStart,
+  highlightEnd,
+  isFallbackSnippet = false,
+}: SyntaxHighlightedViewerProps) {
+  const lines = content.split('\n');
+  const lang = getHljsLang(filePath);
+
+  // Highlight each line individually for accurate line-level styling
+  const highlightedLines = useMemo(() => {
+    return lines.map(line => {
+      try {
+        return hljs.highlight(line || ' ', { language: lang, ignoreIllegals: true }).value;
+      } catch {
+        return line.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [content, lang]);
+
+  return (
+    <div className="min-w-full" style={{ background: '#1e1e1e', fontFamily: "'Geist Mono', 'Cascadia Code', 'Fira Code', 'Consolas', monospace", fontSize: '12.5px', lineHeight: '20px' }}>
+      {highlightedLines.map((html, idx) => {
+        const lineNum = idx + 1;
+        const isHighlighted = isFallbackSnippet
+          ? lineNum > 2
+          : (highlightStart !== null && highlightEnd !== null && lineNum >= highlightStart && lineNum <= highlightEnd);
+
+        return (
+          <div
+            key={idx}
+            id={`line-${lineNum}`}
+            className="flex items-stretch group"
+            style={{
+              background: isHighlighted ? 'rgba(0, 122, 204, 0.15)' : 'transparent',
+              borderLeft: isHighlighted ? '2px solid #007acc' : '2px solid transparent',
+            }}
+          >
+            {/* Gutter — line numbers */}
+            <span
+              className="select-none text-right flex-shrink-0"
+              style={{
+                width: '48px',
+                paddingRight: '16px',
+                color: isHighlighted ? '#c6c6c6' : '#3e4451',
+                background: '#1e1e1e',
+                userSelect: 'none',
+              }}
+            >
+              {lineNum}
+            </span>
+            {/* Code */}
+            <pre
+              className="flex-1 whitespace-pre overflow-visible"
+              style={{ color: '#d4d4d4', margin: 0, padding: '0 16px 0 0' }}
+              dangerouslySetInnerHTML={{ __html: html || ' ' }}
+            />
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 export default function LiveSessionPage() {
@@ -1972,17 +2123,24 @@ export default function LiveSessionPage() {
     }
   };
 
-  // Folder Explorer tree renderer
+  // Folder Explorer tree renderer — VS Code style with coloured file icons
   const renderTree = (node: FileTreeNode) => {
+    const sorted = Object.values(node.children).sort((a, b) => {
+      // Directories first, then files, then alphabetically
+      if (a.type !== b.type) return a.type === 'dir' ? -1 : 1;
+      return a.name.localeCompare(b.name);
+    });
+
     return (
-      <div key={node.path} className="pl-2 select-none">
-        {Object.values(node.children).map(child => {
+      <div key={node.path} className="select-none">
+        {sorted.map(child => {
           const isDir = child.type === 'dir';
           const isExpanded = !!expandedDirs[child.path];
           const isSelected = selectedFilePath === child.path;
+          const iconInfo = getFileIcon(child.name, isDir, isExpanded);
 
           return (
-            <div key={child.path} className="my-1">
+            <div key={child.path}>
               <div
                 onClick={() => {
                   if (isDir) {
@@ -1991,21 +2149,46 @@ export default function LiveSessionPage() {
                     loadFileContent(child.path);
                   }
                 }}
-                className={`flex items-center gap-1.5 px-2 py-1 rounded text-[11px] font-mono cursor-pointer transition-colors ${
-                  isSelected 
-                    ? 'bg-[#06B6D4]/15 text-[#06B6D4] font-bold border-l-2 border-[#06B6D4] -ml-2 pl-2.5' 
-                    : 'text-[#b9cacb] hover:bg-[#151d1e] hover:text-white'
+                className={`group flex items-center gap-1.5 px-2 py-[3px] rounded-[3px] text-[11.5px] cursor-pointer transition-all duration-100 ${
+                  isSelected
+                    ? 'bg-[#37373d] text-white'
+                    : 'text-[#cccccc] hover:bg-[#2a2d2e]'
                 }`}
+                style={isSelected ? { outline: '1px solid #007fd4', outlineOffset: '-1px' } : {}}
               >
-                <span className="material-symbols-outlined text-[14px] text-[#475569]">
-                  {isDir 
-                    ? (isExpanded ? 'folder_open' : 'folder') 
-                    : 'description'}
+                {/* Indent indicator for depth */}
+                {isDir && (
+                  <span
+                    className="text-[#848484] text-[10px] leading-none flex-shrink-0 transition-transform duration-150"
+                    style={{ transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)', display: 'inline-block' }}
+                  >
+                    ▶
+                  </span>
+                )}
+                {/* File/folder icon using nerd-font fallback + emoji fallback */}
+                <span
+                  className="flex-shrink-0 font-mono leading-none"
+                  style={{ color: iconInfo.color, fontSize: '13px' }}
+                  aria-hidden="true"
+                >
+                  {isDir
+                    ? (isExpanded ? '📂' : '📁')
+                    : getFileEmoji(child.name)}
                 </span>
-                <span className="truncate">{child.name}</span>
+                <span
+                  className="truncate leading-snug"
+                  title={child.name}
+                  style={{
+                    color: isSelected ? '#ffffff' : isDir ? '#e2c08d' : '#cccccc',
+                    fontWeight: isDir ? 500 : 400,
+                    fontFamily: "'Geist Mono', 'Cascadia Code', 'Fira Code', monospace"
+                  }}
+                >
+                  {child.name}
+                </span>
               </div>
               {isDir && isExpanded && (
-                <div className="border-l border-[#3b494b] ml-2 pl-1.5">
+                <div className="ml-3 border-l border-[#3b494b]/50 pl-0">
                   {renderTree(child)}
                 </div>
               )}
@@ -2015,6 +2198,24 @@ export default function LiveSessionPage() {
       </div>
     );
   };
+
+  // Emoji-based file icon (works in all browsers, no font dependency)
+  function getFileEmoji(name: string): string {
+    const ext = name.split('.').pop()?.toLowerCase() || '';
+    const base = name.toLowerCase();
+    const map: Record<string, string> = {
+      js: '🟨', jsx: '⚛️', ts: '🔷', tsx: '⚛️',
+      py: '🐍', go: '🐹', rs: '🦀', java: '☕',
+      kt: '🟣', cpp: '⚙️', c: '⚙️', h: '📋',
+      cs: '🔵', rb: '💎', php: '🐘', swift: '🟠',
+      html: '🌐', css: '🎨', scss: '🎨',
+      json: '📋', yaml: '📋', yml: '📋', toml: '📋',
+      sh: '🖥️', bash: '🖥️',
+      md: '📝', txt: '📄', sql: '🗄️',
+      dockerfile: '🐳', gitignore: '🔒',
+    };
+    return map[base] || map[ext] || '📄';
+  }
 
   // ==========================================
   // PROCTORING RECORDER CONTROLS & MONITOR
@@ -2317,56 +2518,81 @@ export default function LiveSessionPage() {
       <div className="flex flex-1 overflow-hidden w-full h-full">
         {/* LEFT WORKSPACE (60%) */}
         <div className="w-[60%] flex border-r border-[#3b494b] bg-[#0d1515] overflow-hidden">
-          <div className="w-1/4 border-r border-[#3b494b] flex flex-col bg-[#151d1e]/60 overflow-y-auto custom-scrollbar p-3">
-            <h2 className="text-[10px] font-bold text-[#94A3B8] uppercase tracking-wider mb-3 px-1">Repository Explorer</h2>
-            {treeRoot && Object.keys(treeRoot.children).length > 0 ? renderTree(treeRoot) : <p className="text-[10px] text-[#94A3B8] px-1 italic">No files found.</p>}
+          {/* VS Code-style File Explorer sidebar */}
+          <div className="w-[220px] min-w-[160px] border-r border-[#3b494b] flex flex-col bg-[#1e1e1e] overflow-hidden">
+            {/* Explorer header — matches VS Code activity bar */}
+            <div className="px-3 py-2 bg-[#252526] border-b border-[#3b494b] flex items-center gap-1.5 select-none">
+              <span className="text-[9px] font-bold text-[#bbbbbb] uppercase tracking-[0.12em]">Explorer</span>
+            </div>
+            {/* Repo label */}
+            <div className="px-2 py-1.5 bg-[#252526] border-b border-[#3b494b]/50 flex items-center gap-1.5 select-none">
+              <span className="text-[9px] font-semibold text-[#cccccc] uppercase tracking-wider truncate">📦 Repository</span>
+            </div>
+            <div className="flex-1 overflow-y-auto custom-scrollbar py-1 px-1">
+              {treeRoot && Object.keys(treeRoot.children).length > 0
+                ? renderTree(treeRoot)
+                : <p className="text-[10px] text-[#6a9955] px-2 py-2 italic">No files found.</p>}
+            </div>
           </div>
 
-          <div className="flex-1 flex flex-col overflow-hidden bg-[#0d1515]">
-            <div className="flex justify-between items-center px-4 py-2.5 bg-[#151d1e]/40 border-b border-[#3b494b] text-xs select-none">
-              <div className="flex items-center gap-2 text-[#94A3B8] font-mono">
-                <span className="material-symbols-outlined text-sm">code</span>
-                <span className="truncate max-w-xs">{selectedFilePath || 'Select a file'}</span>
-              </div>
-              {q.file_path === selectedFilePath && (
-                <span className="px-2 py-0.5 bg-[#06B6D4]/10 border border-[#06B6D4]/20 rounded-full text-[10px] text-[#06B6D4] font-semibold">
-                  Highlighting Question {localIdx + 1} Snippet
-                </span>
+          {/* VS Code-style Code Viewer */}
+          <div className="flex-1 flex flex-col overflow-hidden bg-[#1e1e1e]">
+            {/* Tab bar */}
+            <div className="flex items-stretch bg-[#252526] border-b border-[#3b494b] min-h-[35px] select-none">
+              {selectedFilePath ? (
+                <div className="flex items-center gap-1.5 px-4 py-0 bg-[#1e1e1e] border-r border-[#3b494b] border-t-2 border-t-[#007acc] text-[11px] text-[#cccccc] max-w-[200px]">
+                  <span className="text-[11px]">{getFileEmoji(selectedFilePath.split('/').pop() || '')}</span>
+                  <span className="truncate">{selectedFilePath.split('/').pop()}</span>
+                  {q.file_path === selectedFilePath && (
+                    <span className="ml-1 px-1.5 py-0.5 bg-[#007acc]/20 border border-[#007acc]/40 rounded text-[8px] text-[#4ec9b0] font-bold whitespace-nowrap">
+                      Q{localIdx + 1} ↑
+                    </span>
+                  )}
+                </div>
+              ) : (
+                <div className="flex items-center gap-1.5 px-4 text-[11px] text-[#6a6a6a] italic">
+                  No file open
+                </div>
+              )}
+              <div className="flex-1" />
+              {selectedFilePath && (
+                <div className="flex items-center pr-3 text-[10px] text-[#6a6a6a] gap-1">
+                  <span>{getHljsLang(selectedFilePath).toUpperCase()}</span>
+                </div>
               )}
             </div>
 
-            <div className="flex-1 overflow-auto custom-scrollbar font-mono text-xs p-4 leading-relaxed" ref={codeViewerRef}>
+            {/* Breadcrumb bar */}
+            {selectedFilePath && (
+              <div className="flex items-center gap-1 px-3 py-1 bg-[#1e1e1e] border-b border-[#3b494b]/40 text-[10px] text-[#858585] overflow-x-auto whitespace-nowrap">
+                {selectedFilePath.split('/').map((part, i, arr) => (
+                  <React.Fragment key={i}>
+                    <span className={i === arr.length - 1 ? 'text-[#cccccc]' : ''}>{part}</span>
+                    {i < arr.length - 1 && <span className="text-[#555]">/</span>}
+                  </React.Fragment>
+                ))}
+              </div>
+            )}
+
+            <div className="flex-1 overflow-auto custom-scrollbar" ref={codeViewerRef} style={{ background: '#1e1e1e' }}>
               {fetchingContent ? (
                 <div className="flex flex-col items-center justify-center h-full">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#06B6D4] mb-2"></div>
-                  <p className="text-[10px] text-[#94A3B8]">Loading file contents...</p>
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#007acc] mb-2"></div>
+                  <p className="text-[10px] text-[#6a6a6a]">Loading file contents...</p>
                 </div>
               ) : fileContent ? (
-                <div className="min-w-full inline-block">
-                  {fileContent.split('\n').map((line, idx) => {
-                    const lineNum = idx + 1;
-                    const isHighlighted = q.file_path === selectedFilePath && (
-                      fileContent.startsWith('// Loaded from generated snippet')
-                        ? lineNum > 2
-                        : (lineNum >= q.line_start && lineNum <= q.line_end)
-                    );
-
-                    return (
-                      <div
-                        key={idx}
-                        id={`line-${lineNum}`}
-                        className={`flex py-0.5 w-full ${isHighlighted ? 'bg-[#06B6D4]/10 border-l-4 border-[#06B6D4] -ml-4 pl-3' : 'pl-0'}`}
-                      >
-                        <span className="w-12 text-[#475569] text-right pr-4 select-none">{lineNum}</span>
-                        <pre className={`whitespace-pre text-left ${isHighlighted ? 'text-white font-semibold' : 'text-[#94A3B8]'}`}>{line}</pre>
-                      </div>
-                    );
-                  })}
-                </div>
+                <SyntaxHighlightedViewer
+                  content={fileContent}
+                  filePath={selectedFilePath}
+                  highlightStart={q.file_path === selectedFilePath ? q.line_start : null}
+                  highlightEnd={q.file_path === selectedFilePath ? q.line_end : null}
+                  isFallbackSnippet={fileContent.startsWith('// Loaded from generated snippet')}
+                />
               ) : (
-                <div className="flex flex-col items-center justify-center h-full text-[#94A3B8] text-center p-4">
-                  <span className="material-symbols-outlined text-3xl mb-2 text-[#3b494b]">developer_board</span>
-                  <p className="text-xs">Select a file from the repository explorer to view the code.</p>
+                <div className="flex flex-col items-center justify-center h-full text-[#6a6a6a] text-center p-4">
+                  <div className="text-4xl mb-3 opacity-20">{'</>'}</div>
+                  <p className="text-xs text-[#6a6a6a]">Select a file from the explorer to view the code.</p>
+                  <p className="text-[10px] text-[#444] mt-1">Syntax highlighting powered by highlight.js</p>
                 </div>
               )}
             </div>
