@@ -1,4 +1,4 @@
-import { getNextToken, markTokenExhausted } from '@/app/lib/github-token-pool';
+import { getNextToken, markTokenExhausted } from './github-token-pool';
 
 interface RepoInfo {
   owner: string;
