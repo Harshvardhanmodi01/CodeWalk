@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { extractRepoInfo, fetchFileContent, fetchGitHub } from '@/app/lib/github';
+import { getNextToken } from '@/app/lib/github-token-pool';
 
 export async function POST(req: Request) {
   try {
@@ -10,7 +11,7 @@ export async function POST(req: Request) {
     }
 
     const { owner, repo } = extractRepoInfo(repoUrl);
-    const token = process.env.GITHUB_TOKEN;
+    const token = getNextToken() ?? undefined;
 
     const headers: HeadersInit = {
       Accept: 'application/vnd.github+json',

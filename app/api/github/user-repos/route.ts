@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { getNextToken } from '@/app/lib/github-token-pool';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,7 +11,7 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: 'Username is required' }, { status: 400 });
     }
 
-    const token = process.env.GITHUB_TOKEN;
+    const token = getNextToken();
     const headers: HeadersInit = {
       'Accept': 'application/vnd.github.v3+json',
       'User-Agent': 'CodeWalk-App'

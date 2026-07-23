@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/app/lib/supabaseAdmin';
 import { extractRepoInfo, fetchGitHub } from '@/app/lib/github';
 import { Resend } from 'resend';
+import { getNextToken } from '@/app/lib/github-token-pool';
 
 export async function POST(req: NextRequest) {
   try {
@@ -26,7 +27,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 2. Validate that the GitHub repository is public
-    const githubToken = process.env.GITHUB_TOKEN;
+    const githubToken = getNextToken();
     const gitCheckUrl = `https://api.github.com/repos/${owner}/${repo}`;
     const checkRes = await fetchGitHub(gitCheckUrl, githubToken);
 

@@ -3,6 +3,7 @@ import { requireAuth } from '@/app/lib/auth-middleware';
 import { createServerSupabaseClient } from '@/app/lib/supabaseServer';
 import { extractRepoInfo, fetchGitHub, fetchRepoContents, fetchFileContent, isCodeFile, getReadme } from '@/app/lib/github';
 import Groq from 'groq-sdk';
+import { getNextToken } from '@/app/lib/github-token-pool';
 
 // Helper to collect top files for interview context
 async function collectFilesForInterview(
@@ -76,7 +77,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 2. Fetch repo context for questions
-    const githubToken = process.env.GITHUB_TOKEN;
+    const githubToken = getNextToken() ?? undefined;
     const readme = await getReadme(owner, repo, undefined, githubToken);
     const codeContext = await collectFilesForInterview(owner, repo, githubToken);
 

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { extractRepoInfo, fetchRepoContents, fetchFileContent, isCodeFile } from '@/app/lib/github';
 import Groq from 'groq-sdk';
+import { getNextToken } from '@/app/lib/github-token-pool';
 
 async function collectCodeFiles(
   owner: string,
@@ -57,7 +58,7 @@ export async function POST(req: Request) {
     }
 
     const { owner, repo } = extractRepoInfo(repoUrl);
-    const token = process.env.GITHUB_TOKEN;
+    const token = getNextToken() ?? undefined;
 
     // 1. Collect files
     const allCodeFiles = await collectCodeFiles(owner, repo, token);

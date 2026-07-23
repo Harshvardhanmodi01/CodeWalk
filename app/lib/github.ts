@@ -1,3 +1,5 @@
+import { getNextToken, markTokenExhausted } from '@/app/lib/github-token-pool';
+
 interface RepoInfo {
   owner: string;
   repo: string;
@@ -24,13 +26,14 @@ const sleep = (ms: number): Promise<void> =>
 /**
  * Build GitHub API headers with optional auth token
  */
-function buildHeaders(customToken?: string): HeadersInit {
+function buildHeaders(customToken?: string | null): HeadersInit {
   const headers: HeadersInit = {
     Accept: 'application/vnd.github+json',
     'X-GitHub-Api-Version': '2022-11-28',
     'User-Agent': 'CodeWalk-App',
   };
-  const token = customToken || process.env.GITHUB_TOKEN;
+  // Prefer explicit token, then fall back to pool
+  const token = customToken ?? getNextToken();
   if (token) {
     (headers as Record<string, string>).Authorization = `Bearer ${token}`;
   }
@@ -76,33 +79,64 @@ async function fetchWithRetry(
  */
 export async function fetchGitHub(
   url: string,
-  token?: string,
+  token?: string | null,
   init?: RequestInit
 ): Promise<Response> {
-  const actualToken = token || process.env.GITHUB_TOKEN;
-  
-  if (actualToken) {
+  // If a specific token was passed in, use it directly (single attempt).
+  // Otherwise pull from the pool and retry on rate-limit across available tokens.
+  if (token) {
     const headers = {
-      ...buildHeaders(actualToken),
+      ...buildHeaders(token),
       ...((init?.headers || {}) as Record<string, string>),
     };
+    return fetchWithRetry(url, { ...init, headers });
+  }
+
+  // Pool-driven path: try each available token in round-robin order.
+  // We attempt up to (pool size + 1) times to cover all tokens plus one
+  // unauthenticated fallback.
+  const MAX_TOKEN_ATTEMPTS = 5; // 4 tokens + 1 unauthenticated fallback
+  let lastResponse: Response | null = null;
+
+  for (let attempt = 0; attempt < MAX_TOKEN_ATTEMPTS; attempt++) {
+    const pickedToken = getNextToken();
+
+    const headers: Record<string, string> = {
+      Accept: 'application/vnd.github+json',
+      'X-GitHub-Api-Version': '2022-11-28',
+      'User-Agent': 'CodeWalk-App',
+      ...((init?.headers || {}) as Record<string, string>),
+    };
+    if (pickedToken) {
+      headers.Authorization = `Bearer ${pickedToken}`;
+    }
+
     const response = await fetchWithRetry(url, { ...init, headers });
+
+    // Success — return immediately
     if (response.ok) {
       return response;
     }
-    console.warn(`GitHub API returned status ${response.status} for token. Retrying without Authorization header for: ${url}`);
+
+    // Rate-limited or forbidden — exhaust this token and try the next one
+    if (response.status === 403 || response.status === 429) {
+      if (pickedToken) {
+        markTokenExhausted(pickedToken);
+        console.warn(
+          `[TokenPool] Token exhausted (HTTP ${response.status}) for ${url}. Trying next token…`
+        );
+        lastResponse = response;
+        continue;
+      }
+    }
+
+    // Any other non-ok status — return as-is (let caller handle 404, 422, etc.)
+    return response;
   }
 
-  // Fallback: fetch without token
-  const headersWithoutAuth = {
-    Accept: 'application/vnd.github+json',
-    'X-GitHub-Api-Version': '2022-11-28',
-    'User-Agent': 'CodeWalk-App',
-    ...((init?.headers || {}) as Record<string, string>),
-  };
-  delete (headersWithoutAuth as any).Authorization;
-  
-  return fetchWithRetry(url, { ...init, headers: headersWithoutAuth });
+  // All tokens exhausted — return the last response we got
+  console.error('[TokenPool] All tokens are exhausted. Returning last response.');
+  return lastResponse!;
 }
 
 /**

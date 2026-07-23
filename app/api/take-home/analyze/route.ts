@@ -3,6 +3,7 @@ import { supabaseAdmin } from '@/app/lib/supabaseAdmin';
 import { extractRepoInfo, fetchGitHub, fetchRepoContents, fetchFileContent, isCodeFile, getReadme } from '@/app/lib/github';
 import Groq from 'groq-sdk';
 import { Resend } from 'resend';
+import { getNextToken } from '@/app/lib/github-token-pool';
 
 // Helper to collect code files recursively up to a limit
 async function collectTopCodeFiles(
@@ -87,7 +88,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid submission repository URL' }, { status: 400 });
     }
 
-    const githubToken = process.env.GITHUB_TOKEN;
+    const githubToken = getNextToken() ?? undefined;
     const groqKey = process.env.GROQ_API_KEY;
     if (!groqKey) {
       return NextResponse.json({ error: 'GROQ_API_KEY is not configured' }, { status: 500 });
