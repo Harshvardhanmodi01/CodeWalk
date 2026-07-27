@@ -3,6 +3,7 @@ import { extractRepoInfo, fetchRepoContents, fetchFileContent } from '@/app/lib/
 import Groq from 'groq-sdk';
 import { requireAuth } from '@/app/lib/auth-middleware';
 import { validateGithubUrl } from '@/app/lib/validation';
+import { getNextToken } from '@/app/lib/github-token-pool';
 
 export async function POST(req: Request) {
   try {
@@ -17,7 +18,7 @@ export async function POST(req: Request) {
     }
 
     const { owner, repo } = extractRepoInfo(repoUrl);
-    const token = process.env.GITHUB_TOKEN;
+    const token = getNextToken() ?? undefined;
 
     // Fetch top-level contents
     let files: any[] = [];

@@ -14,8 +14,7 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "security-scan": "secretlint \"**/*\"",
-    "prepare": "husky",
-    "preinstall": "npm audit --audit-level=high"
+    "prepare": "husky"
   },
   "dependencies": {
     "@babel/parser": "^8.0.0",

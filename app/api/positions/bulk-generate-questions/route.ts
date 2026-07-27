@@ -4,6 +4,7 @@ import { extractRepoInfo, fetchRepoContents, fetchFileContent, isCodeFile } from
 import Groq from 'groq-sdk';
 import { requireAuth } from '@/app/lib/auth-middleware';
 import { validateUUID } from '@/app/lib/validation';
+import { getNextToken } from '@/app/lib/github-token-pool';
 
 export const dynamic = 'force-dynamic';
 
@@ -165,7 +166,7 @@ async function processSingleCandidate(candidateId: string, positionId: string, r
 
   // 3. Fetch GitHub codebase
   const { owner, repo } = extractRepoInfo(candidate.github_url);
-  const token = process.env.GITHUB_TOKEN;
+  const token = getNextToken() ?? undefined;
 
   const allCodeFiles = await collectCodeFiles(owner, repo, token);
   if (allCodeFiles.length === 0) {
