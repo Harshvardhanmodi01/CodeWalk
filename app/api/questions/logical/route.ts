@@ -12,6 +12,7 @@ export async function POST(req: Request) {
 
     const body = await req.json().catch(() => ({}));
     const count = body.count || 15;
+    const difficulty = body.difficulty || 'medium';
 
     const groqKey = process.env.GROQ_API_KEY;
     if (!groqKey) {
@@ -20,7 +21,7 @@ export async function POST(req: Request) {
     const groq = new Groq({ apiKey: groqKey });
 
     const systemPrompt = `You are a cognitive screener creating aptitude tests.
-Generate exactly ${count} logical reasoning and aptitude questions.
+Generate exactly ${count} logical reasoning and aptitude questions of "${difficulty}" difficulty.
 
 The questions should be split proportionately across these categories:
 1. Number Series (numerical sequences requiring mathematical deduction)
@@ -55,9 +56,9 @@ Return a valid JSON object matching this schema:
     }
   ]
 }
-Return ONLY valid JSON. No markdown code blocks, no text surrounding the JSON. Category must be strictly one of: number-series, pattern-recognition, logical-deduction, situational-judgement, verbal-reasoning. Difficulty must be: easy, medium, or hard.`;
+Return ONLY valid JSON. No markdown code blocks, no text surrounding the JSON. Category must be strictly one of: number-series, pattern-recognition, logical-deduction, situational-judgement, verbal-reasoning. Difficulty must be strictly: "${difficulty}".`;
 
-    const userPrompt = `Generate exactly ${count} logical and aptitude questions.`;
+    const userPrompt = `Generate exactly ${count} logical and aptitude questions of "${difficulty}" difficulty.`;
 
     const completion = await groq.chat.completions.create({
       model: 'llama-3.3-70b-versatile',

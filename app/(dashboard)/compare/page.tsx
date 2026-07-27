@@ -340,7 +340,7 @@ function ComparisonContent() {
                   </div>
 
                   {/* 2. Radar Chart */}
-                  <div className="h-[300px] flex flex-col items-center justify-center">
+                  <div className="min-h-[300px] h-auto flex flex-col items-center justify-center">
                     <span className="md:hidden text-[10px] font-bold uppercase text-[#94A3B8] mb-2 tracking-wider">Radar Chart</span>
                     <RadarChart scores={breakdown} />
                   </div>

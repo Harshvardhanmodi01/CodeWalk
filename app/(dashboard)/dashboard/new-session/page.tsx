@@ -59,6 +59,14 @@ function NewSessionFlowContent() {
   // Logical Specific Setup
   const [logicalTimerMinutes, setLogicalTimerMinutes] = useState('2');
 
+  // Evolution Questions Setup
+  const [enableEvolutionQuestions, setEnableEvolutionQuestions] = useState(true);
+
+  // Micro-Challenge Setup
+  const [enableChallenge, setEnableChallenge] = useState(false);
+  const [challengeDuration, setChallengeDuration] = useState('15');
+  const [challengeType, setChallengeType] = useState<'bug' | 'feature' | 'any'>('any');
+
   // Custom Mode Builder Setup
   const [customSections, setCustomSections] = useState({
     technical: true,
@@ -326,7 +334,8 @@ function NewSessionFlowContent() {
             difficulty,
             focus,
             jobDescription,
-            count: 12
+            count: 12,
+            enableEvolutionQuestions
           })
         });
         const data = await res.json();
@@ -340,7 +349,8 @@ function NewSessionFlowContent() {
           body: JSON.stringify({
             role_title: roleTitle || 'Software Engineer',
             experience_level: experienceLevel,
-            count: 10
+            count: 10,
+            difficulty
           })
         });
         const data = await res.json();
@@ -352,7 +362,8 @@ function NewSessionFlowContent() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            count: 15
+            count: 15,
+            difficulty
           })
         });
         const data = await res.json();
@@ -364,16 +375,19 @@ function NewSessionFlowContent() {
         const techRes = await fetch('/api/questions/technical', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ repoUrl, difficulty, focus, jobDescription, count: 8 })
+          body: JSON.stringify({ repoUrl, difficulty, focus, jobDescription, count: 8, enableEvolutionQuestions })
         });
         const techData = await techRes.json();
-        if (techRes.ok && techData.questions) allQs.push(...techData.questions);
+        if (!techRes.ok) {
+          throw new Error(techData.error || 'Failed to generate technical questions. Please double check the repository and try again.');
+        }
+        if (techData.questions) allQs.push(...techData.questions);
 
         // Behavioral (5)
         const behRes = await fetch('/api/questions/behavioral', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ role_title: roleTitle || 'Software Engineer', experience_level: experienceLevel, count: 5 })
+          body: JSON.stringify({ role_title: roleTitle || 'Software Engineer', experience_level: experienceLevel, count: 5, difficulty })
         });
         const behData = await behRes.json();
         if (behRes.ok && behData.questions) allQs.push(...behData.questions);
@@ -382,7 +396,7 @@ function NewSessionFlowContent() {
         const logRes = await fetch('/api/questions/logical', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ count: 5 })
+          body: JSON.stringify({ count: 5, difficulty })
         });
         const logData = await logRes.json();
         if (logRes.ok && logData.questions) allQs.push(...logData.questions);
@@ -392,17 +406,20 @@ function NewSessionFlowContent() {
           const techRes = await fetch('/api/questions/technical', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ repoUrl, difficulty, focus, jobDescription, count: customCounts.technical })
+            body: JSON.stringify({ repoUrl, difficulty, focus, jobDescription, count: customCounts.technical, enableEvolutionQuestions })
           });
           const techData = await techRes.json();
-          if (techRes.ok && techData.questions) allQs.push(...techData.questions);
+          if (!techRes.ok) {
+            throw new Error(techData.error || 'Failed to generate technical questions. Please double check the repository and try again.');
+          }
+          if (techData.questions) allQs.push(...techData.questions);
         }
 
         if (customSections.behavioral) {
           const behRes = await fetch('/api/questions/behavioral', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ role_title: roleTitle || 'Software Engineer', experience_level: experienceLevel, count: customCounts.behavioral })
+            body: JSON.stringify({ role_title: roleTitle || 'Software Engineer', experience_level: experienceLevel, count: customCounts.behavioral, difficulty })
           });
           const behData = await behRes.json();
           if (behRes.ok && behData.questions) allQs.push(...behData.questions);
@@ -412,7 +429,7 @@ function NewSessionFlowContent() {
           const logRes = await fetch('/api/questions/logical', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ count: customCounts.logical })
+            body: JSON.stringify({ count: customCounts.logical, difficulty })
           });
           const logData = await logRes.json();
           if (logRes.ok && logData.questions) allQs.push(...logData.questions);
@@ -524,7 +541,12 @@ function NewSessionFlowContent() {
             customCounts,
             roleTitle,
             experienceLevel,
-            logicalTimerMinutes: parseInt(logicalTimerMinutes)
+            logicalTimerMinutes: parseInt(logicalTimerMinutes),
+            enableEvolutionQuestions: requiresRepo() ? enableEvolutionQuestions : false,
+            enableChallenge: requiresRepo() ? enableChallenge : false,
+            challengeDurationMinutes: requiresRepo() ? parseInt(challengeDuration) : 15,
+            challengeType: requiresRepo() ? challengeType : 'any',
+            jobDescription: jobDescription.trim()
           },
           custom_questions: customSections.custom ? customQuestionsInput.split('\n').filter(Boolean) : []
         })
@@ -1207,6 +1229,86 @@ function NewSessionFlowContent() {
                         })}
                       </div>
                     </div>
+
+                    <div className="flex items-center justify-between bg-[#0d1515]/30 border border-[#3b494b]/50 rounded-lg p-4 mt-2">
+                      <div className="space-y-0.5 pr-4">
+                        <span className="text-xs font-bold text-white uppercase tracking-wider block">Enable Git Evolution Questions</span>
+                        <p className="text-[10px] text-[#94A3B8]">Analyze git commit history of top files to ask questions about code evolution.</p>
+                      </div>
+                      <label className="relative inline-flex items-center cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={enableEvolutionQuestions}
+                          onChange={(e) => setEnableEvolutionQuestions(e.target.checked)}
+                          className="sr-only peer"
+                        />
+                        <div className="w-9 h-5 bg-[#3b494b] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#06B6D4]"></div>
+                      </label>
+                    </div>
+
+                    <div className="flex items-center justify-between bg-[#0d1515]/30 border border-[#3b494b]/50 rounded-lg p-4 mt-2">
+                      <div className="space-y-0.5 pr-4">
+                        <span className="text-xs font-bold text-white uppercase tracking-wider block">Enable Repository Micro-Challenge</span>
+                        <p className="text-[10px] text-[#94A3B8]">Add a live coding task (bug fix or feature addition) as a final interview stage.</p>
+                      </div>
+                      <label className="relative inline-flex items-center cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={enableChallenge}
+                          onChange={(e) => setEnableChallenge(e.target.checked)}
+                          className="sr-only peer"
+                        />
+                        <div className="w-9 h-5 bg-[#3b494b] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#06B6D4]"></div>
+                      </label>
+                    </div>
+
+                    {enableChallenge && (
+                      <div className="bg-[#0d1515]/50 border border-[#3b494b]/50 rounded-lg p-4 mt-2 space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] font-bold text-[#94A3B8] uppercase tracking-wider block">Challenge Task Type</label>
+                          <div className="grid grid-cols-3 gap-2 bg-[#0d1515] p-1 border border-[#3b494b]/60 rounded-md text-xs font-bold text-center">
+                            {([
+                              { value: 'any', label: 'AI Choice' },
+                              { value: 'bug', label: 'Bug Fix' },
+                              { value: 'feature', label: 'Feature Add' }
+                            ] as const).map((t) => (
+                              <button
+                                key={t.value}
+                                type="button"
+                                onClick={() => setChallengeType(t.value)}
+                                className={`py-1.5 rounded transition-all cursor-pointer ${
+                                  challengeType === t.value 
+                                    ? 'bg-[#06B6D4] text-[#0d1515]' 
+                                    : 'text-[#94A3B8] hover:text-white'
+                                }`}
+                              >
+                                {t.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] font-bold text-[#94A3B8] uppercase tracking-wider block">Duration (Minutes)</label>
+                          <div className="grid grid-cols-3 gap-2 bg-[#0d1515] p-1 border border-[#3b494b]/60 rounded-md text-xs font-bold text-center">
+                            {['10', '15', '20'].map((mins) => (
+                              <button
+                                key={mins}
+                                type="button"
+                                onClick={() => setChallengeDuration(mins)}
+                                className={`py-1.5 rounded transition-all cursor-pointer ${
+                                  challengeDuration === mins 
+                                    ? 'bg-[#06B6D4] text-[#0d1515]' 
+                                    : 'text-[#94A3B8] hover:text-white'
+                                }`}
+                              >
+                                {mins} min
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    )}
 
                     <div className="space-y-1.5">
                       <label className="text-xs font-bold text-[#94A3B8] uppercase tracking-wider block">Target Code Difficulty</label>

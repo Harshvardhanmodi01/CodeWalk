@@ -361,14 +361,22 @@ function getGuestFileScore(path: string, size: number): number {
   let score = 0;
 
   // Preferred extensions
-  const preferredExts = ['ts', 'tsx', 'js', 'jsx', 'py', 'go', 'java'];
+  const preferredExts = ['ts', 'tsx', 'js', 'jsx', 'py', 'go', 'java', 'rb', 'php', 'swift', 'kt', 'scala', 'cs', 'vue', 'svelte', 'cpp', 'c', 'rs'];
+  const okExts = [
+    'h', 'hpp', 'cc', 'cxx', 'c++', 'hxx', 'hh', 'h++', 'm', 'mm', 'zig', 'nim', 'cr', 'asm', 's', 'f', 'f90', 'cbl', 'cob',
+    'cshtml', 'razor', 'fs', 'fsi', 'fsx', 'phtml', 'erb', 'gemspec', 'dart', 'ex', 'exs', 'erl', 'hrl',
+    'hs', 'lhs', 'clj', 'cljs', 'cljc', 'edn', 'ml', 'mli', 'elm', 'rkt', 'lisp', 'lsp', 'scm', 'sol', 'sql', 'jl',
+    'sh', 'bash', 'zsh', 'fish', 'bat', 'ps1', 'groovy', 'gvy', 'gy', 'gsh', 'gradle', 'html', 'htm', 'xhtml', 'xml',
+    'css', 'scss', 'sass', 'less', 'styl', 'astro', 'marko', 'liquid'
+  ];
+  const exactNames = [
+    'gemfile', 'rakefile', 'dockerfile', 'cmakelists.txt', 'makefile', 'procfile', 'jenkinsfile', 'vagrantfile'
+  ];
+
   if (preferredExts.includes(ext)) {
     score += 100;
-  } else {
-    const okExts = ['rs', 'c', 'cpp', 'h', 'hpp', 'rb', 'php', 'swift', 'kt', 'scala', 'cs', 'vue', 'svelte'];
-    if (okExts.includes(ext)) {
-      score += 50;
-    }
+  } else if (okExts.includes(ext) || exactNames.includes(filename.toLowerCase())) {
+    score += 50;
   }
 
   // Prefer shallower files

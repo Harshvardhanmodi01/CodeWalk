@@ -55,8 +55,15 @@ export async function POST(req: Request) {
       if (isAll) return true;
       const ext = file.name.split('.').pop()?.toLowerCase() || '';
       
-      const isFrontend = ['tsx', 'jsx', 'ts', 'js', 'html', 'css'].includes(ext);
-      const isBackend = ['py', 'go', 'rs', 'java', 'cs', 'cpp', 'c', 'rb', 'php'].includes(ext);
+      const frontendExtensions = [
+        'tsx', 'jsx', 'ts', 'js', 'mjs', 'cjs', 'es6', 'html', 'htm', 'xhtml', 'xml', 'css', 'scss', 'sass', 'less', 'styl', 'vue', 'svelte', 'astro', 'marko', 'liquid', 'elm'
+      ];
+      const backendExtensions = [
+        'py', 'ipynb', 'pyi', 'go', 'rs', 'java', 'kt', 'kts', 'scala', 'sc', 'cs', 'cshtml', 'razor', 'cpp', 'c', 'cc', 'cxx', 'c++', 'h', 'hpp', 'hxx', 'hh', 'h++', 'rb', 'erb', 'gemspec', 'gemfile', 'rakefile', 'php', 'phtml', 'swift', 'dart', 'ex', 'exs', 'erl', 'hrl', 'clj', 'cljs', 'cljc', 'edn', 'hs', 'lhs', 'ml', 'mli', 'rkt', 'lisp', 'lsp', 'scm', 'sol', 'sql', 'sh', 'bash', 'zsh', 'fish', 'bat', 'ps1', 'groovy', 'gvy', 'gy', 'gsh', 'gradle', 'asm', 's', 'jl', 'zig', 'nim', 'cr', 'fs', 'fsi', 'fsx', 'dockerfile', 'makefile', 'json', 'toml', 'yaml', 'yml', 'ini'
+      ];
+
+      const isFrontend = frontendExtensions.includes(ext);
+      const isBackend = backendExtensions.includes(ext);
       
       if (focusList.includes('Frontend') && isFrontend) return true;
       if (focusList.includes('Backend') && isBackend) return true;

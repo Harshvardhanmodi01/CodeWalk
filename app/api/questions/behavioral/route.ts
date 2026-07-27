@@ -15,6 +15,7 @@ export async function POST(req: Request) {
     const roleTitle = sanitizeString(body.role_title || body.positionTitle || 'Software Engineer');
     const experienceLevel = sanitizeString(body.experience_level || 'mid-level');
     const count = body.count || 10;
+    const difficulty = body.difficulty || 'medium';
 
     const groqKey = process.env.GROQ_API_KEY;
     if (!groqKey) {
@@ -23,7 +24,7 @@ export async function POST(req: Request) {
     const groq = new Groq({ apiKey: groqKey });
 
     const systemPrompt = `You are an expert HR interviewer conducting a behavioral screening.
-Your task is to generate ${count} structured behavioral questions for a candidate applying for the role of "${roleTitle}" with "${experienceLevel}" experience.
+Your task is to generate ${count} structured behavioral questions of "${difficulty}" difficulty for a candidate applying for the role of "${roleTitle}" with "${experienceLevel}" experience.
 
 The questions should be split proportionately across these five categories:
 1. Teamwork (collaboration, supporting peers, cross-functional work)
@@ -59,9 +60,9 @@ Return a valid JSON object matching this schema:
     }
   ]
 }
-Return ONLY valid JSON. No markdown code blocks, no text surrounding the JSON. Category must be strictly one of: teamwork, leadership, conflict-resolution, career-goals, culture-fit. Difficulty must be: easy, medium, or hard.`;
+Return ONLY valid JSON. No markdown code blocks, no text surrounding the JSON. Category must be strictly one of: teamwork, leadership, conflict-resolution, career-goals, culture-fit. Difficulty must be strictly: "${difficulty}".`;
 
-    const userPrompt = `Generate exactly ${count} behavioral questions for:
+    const userPrompt = `Generate exactly ${count} behavioral questions of "${difficulty}" difficulty for:
 Role: ${roleTitle}
 Experience Level: ${experienceLevel}`;
 

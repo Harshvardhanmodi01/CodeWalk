@@ -44,7 +44,9 @@ export function sanitizeSession(session: any): any {
     'scheduled_at',
     'created_at',
     'repo_url',           // functionally required by both recruiter & candidate sessions
-    'remaining_seconds'   // functionally required by candidate session timer
+    'remaining_seconds',  // functionally required by candidate session timer
+    'is_paused',
+    'recruiter_warning'
   ];
 
   const sanitized: any = {};

@@ -7,6 +7,7 @@ import { useGlobal } from '@/app/context/GlobalContext';
 import { toast } from 'react-hot-toast';
 import { seedQuestions } from '@/app/lib/seedQuestions';
 import hljs from 'highlight.js';
+import { isCodeFile } from '@/app/lib/github';
 
 // ── VS Code-style file-icon helpers ────────────────────────────────────
 const FILE_ICON_MAP: Record<string, { icon: string; color: string }> = {
@@ -131,6 +132,7 @@ interface Session {
   logical_scores?: any[];
   custom_questions?: string[];
   section_scores?: any;
+  result?: any;
 }
 
 interface FileTreeNode {
@@ -263,6 +265,11 @@ export default function LiveSessionPage() {
   const [fileContent, setFileContent] = useState<string>('');
   const [fetchingContent, setFetchingContent] = useState(false);
 
+  // Dynamic Challenge states
+  const [generatingChallenge, setGeneratingChallenge] = useState(false);
+  const [challengeTypePref, setChallengeTypePref] = useState<'bug' | 'feature'>('bug');
+  const [customChallengeFile, setCustomChallengeFile] = useState<string>('');
+
   // Copilot follow-up states
   const [copilotLoading, setCopilotLoading] = useState(false);
   const [copilotFollowUp, setCopilotFollowUp] = useState('');
@@ -298,10 +305,18 @@ export default function LiveSessionPage() {
   // Proctoring States & Refs
   const [proctoringEvents, setProctoringEvents] = useState<any[]>([]);
   const [proctoringSummary, setProctoringSummary] = useState<any>(null);
-  const [activeRightTab, setActiveRightTab] = useState<'evaluation' | 'jobDescription' | 'proctoring'>('evaluation');
+  const [activeRightTab, setActiveRightTab] = useState<'evaluation' | 'jobDescription' | 'proctoring' | 'challenge'>('evaluation');
   const [sendingWarning, setSendingWarning] = useState(false);
   const [warningInput, setWarningInput] = useState('');
   const toastedEventIdsRef = useRef<Set<string>>(new Set());
+  const lastScrollTimeRef = useRef<number>(0);
+
+  // Load question bank when modal is opened
+  useEffect(() => {
+    if (showQuestionBankModal) {
+      fetchQuestionBank();
+    }
+  }, [showQuestionBankModal]);
 
   // Debouncing search
   useEffect(() => {
@@ -647,7 +662,7 @@ export default function LiveSessionPage() {
         tags: q.tags || [],
         is_ai_generated: true,
         is_verified: false,
-        created_by: null,
+        created_by: user?.id || null,
         usage_count: 0,
         avg_score: 0.0
       }));
@@ -945,7 +960,12 @@ export default function LiveSessionPage() {
 
         if (!sessErr && sess) {
           setSession(prev => {
-            if (prev && (prev.status !== sess.status || prev.is_paused !== sess.is_paused || JSON.stringify(prev.logical_scores) !== JSON.stringify(sess.logical_scores))) {
+            if (prev && (
+              prev.status !== sess.status || 
+              prev.is_paused !== sess.is_paused || 
+              JSON.stringify(prev.logical_scores) !== JSON.stringify(sess.logical_scores) ||
+              JSON.stringify(prev.result) !== JSON.stringify(sess.result)
+            )) {
               // Sync recruiter's local state
               setLogicalScores(sess.logical_scores || []);
               if (sess.status === 'completed') {
@@ -1858,13 +1878,8 @@ export default function LiveSessionPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          answers: consolidatedAnswers,
           sessionId,
-          interviewMode: session?.interview_mode,
-          behavioralScores,
-          logicalScores,
-          customQuestions: session?.custom_questions,
-          sectionScores: session?.section_scores
+          forceRefresh: true
         })
       });
 
@@ -1969,13 +1984,8 @@ export default function LiveSessionPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          answers: consolidatedAnswers,
           sessionId,
-          interviewMode: session?.interview_mode,
-          behavioralScores,
-          logicalScores,
-          customQuestions: session?.custom_questions,
-          sectionScores: session?.section_scores
+          forceRefresh: true
         })
       });
 
@@ -2092,33 +2102,49 @@ export default function LiveSessionPage() {
 
   // Mouse Wheel question changer
   const handleQuestionCardWheel = (e: React.WheelEvent) => {
-    e.stopPropagation();
-    const threshold = 50;
-    
+    // Cooldown window of 800ms
+    const COOLDOWN_MS = 800;
+    const now = Date.now();
+    if (now - lastScrollTimeRef.current < COOLDOWN_MS) {
+      return; // Ignore rapid wheel events
+    }
+
+    const threshold = 30;
+    if (Math.abs(e.deltaY) < threshold) return;
+
+    const isNext = e.deltaY > 0;
+    lastScrollTimeRef.current = now;
+
+    const isTabbed = session?.interview_mode === 'fullstack' || session?.interview_mode === 'custom';
+
     if (session?.interview_mode === 'technical' || session?.interview_mode === 'behavioral' || session?.interview_mode === 'logical') {
-      if (e.deltaY > threshold && activeQIndex < questions.length - 1) {
+      if (isNext && activeQIndex < questions.length - 1) {
         setActiveQIndex(prev => prev + 1);
-      } else if (e.deltaY < -threshold && activeQIndex > 0) {
+      } else if (!isNext && activeQIndex > 0) {
         setActiveQIndex(prev => prev - 1);
       }
     } else {
       // Tab specific list index updates
       if (activeTab === 'technical') {
         const list = getTechnicalQs();
-        if (e.deltaY > threshold && activeTechIdx < list.length - 1) setActiveTechIdx(prev => prev + 1);
-        else if (e.deltaY < -threshold && activeTechIdx > 0) setActiveTechIdx(prev => prev - 1);
+        const localIdx = activeTechIdx;
+        if (isNext && localIdx < list.length - 1) setActiveTechIdx(prev => prev + 1);
+        else if (!isNext && localIdx > 0) setActiveTechIdx(prev => prev - 1);
       } else if (activeTab === 'behavioral') {
         const list = getBehavioralQs();
-        if (e.deltaY > threshold && activeBehavioralIdx < list.length - 1) setActiveBehavioralIdx(prev => prev + 1);
-        else if (e.deltaY < -threshold && activeBehavioralIdx > 0) setActiveBehavioralIdx(prev => prev - 1);
+        const localIdx = activeBehavioralIdx;
+        if (isNext && localIdx < list.length - 1) setActiveBehavioralIdx(prev => prev + 1);
+        else if (!isNext && localIdx > 0) setActiveBehavioralIdx(prev => prev - 1);
       } else if (activeTab === 'logical') {
         const list = getLogicalQs();
-        if (e.deltaY > threshold && activeLogicalIdx < list.length - 1) setActiveLogicalIdx(prev => prev + 1);
-        else if (e.deltaY < -threshold && activeLogicalIdx > 0) setActiveLogicalIdx(prev => prev - 1);
+        const localIdx = activeLogicalIdx;
+        if (isNext && localIdx < list.length - 1) setActiveLogicalIdx(prev => prev + 1);
+        else if (!isNext && localIdx > 0) setActiveLogicalIdx(prev => prev - 1);
       } else if (activeTab === 'custom') {
         const list = getCustomQs();
-        if (e.deltaY > threshold && activeCustomIdx < list.length - 1) setActiveCustomIdx(prev => prev + 1);
-        else if (e.deltaY < -threshold && activeCustomIdx > 0) setActiveCustomIdx(prev => prev - 1);
+        const localIdx = activeCustomIdx;
+        if (isNext && localIdx < list.length - 1) setActiveCustomIdx(prev => prev + 1);
+        else if (!isNext && localIdx > 0) setActiveCustomIdx(prev => prev - 1);
       }
     }
   };
@@ -2322,6 +2348,16 @@ export default function LiveSessionPage() {
         >
           Job Description
         </button>
+        <button
+          onClick={() => setActiveRightTab('challenge')}
+          className={`text-xs font-bold pb-1 border-b-2 transition-all cursor-pointer ${
+            activeRightTab === 'challenge' 
+              ? activeBorderText 
+              : 'border-transparent text-[#94A3B8] hover:text-white'
+          }`}
+        >
+          Coding Challenge
+        </button>
       </div>
     );
   };
@@ -2505,19 +2541,18 @@ export default function LiveSessionPage() {
     const localLength = isTabbed ? getTechnicalQs().length : questions.length;
     const setLocalIdx = isTabbed ? setActiveTechIdx : setActiveQIndex;
 
-    if (!q) {
-      return (
-        <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-[#94A3B8] italic bg-[#0d1515]">
-          <span className="material-symbols-outlined text-4xl mb-2 text-[#3b494b]">question_mark</span>
-          No Technical questions mapped for this session.
-        </div>
-      );
-    }
-
     return (
       <div className="flex flex-1 overflow-hidden w-full h-full">
         {/* LEFT WORKSPACE (60%) */}
         <div className="w-[60%] flex border-r border-[#3b494b] bg-[#0d1515] overflow-hidden">
+          {!q ? (
+            <div className="flex-grow flex flex-col items-center justify-center p-8 text-center text-[#94A3B8] italic bg-[#0d1515]">
+              <span className="material-symbols-outlined text-4xl mb-2 text-[#3b494b]">question_mark</span>
+              No Technical questions mapped for this session.
+              <p className="text-[10px] text-gray-500 mt-2">Use "+ Add Topic Questions" on the right or search the Question Bank to insert technical questions.</p>
+            </div>
+          ) : (
+            <>
           {/* VS Code-style File Explorer sidebar */}
           <div className="w-[220px] min-w-[160px] border-r border-[#3b494b] flex flex-col bg-[#1e1e1e] overflow-hidden">
             {/* Explorer header — matches VS Code activity bar */}
@@ -2597,6 +2632,8 @@ export default function LiveSessionPage() {
               )}
             </div>
           </div>
+          </>
+          )}
         </div>
 
         {/* RIGHT EVALUATION PANEL (40%) */}
@@ -2605,11 +2642,26 @@ export default function LiveSessionPage() {
             {renderRightColumnTabsHeader('cyan')}
             
             {activeRightTab === 'evaluation' && (
-              <div className="space-y-6 animate-in fade-in duration-300">
-                <div 
+              !q ? (
+                <div className="space-y-6 animate-in fade-in duration-300">
+                  <div className="bg-[#151d1e] border border-[#3b494b] rounded-xl p-5 shadow-xl space-y-4 text-center">
+                    <span className="material-symbols-outlined text-[#06B6D4] text-3xl">info</span>
+                    <p className="text-xs text-[#CBD5E1]">No technical questions are currently assigned to this session.</p>
+                  </div>
+                  <button
+                    onClick={() => setShowQuestionBankModal(true)}
+                    className="w-full py-2.5 border border-dashed border-[#06B6D4]/40 text-[#06B6D4] hover:bg-[#06B6D4]/5 hover:border-[#06B6D4] text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer uppercase tracking-wider"
+                  >
+                    <span className="material-symbols-outlined text-sm">library_books</span>
+                    + Add Topic Questions
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-6 animate-in fade-in duration-300">
+                  <div 
                   onWheel={handleQuestionCardWheel}
                   className="bg-[#151d1e] border border-[#3b494b] rounded-xl p-5 shadow-xl space-y-4 hover:border-[#06B6D4]/40 transition-all duration-300 relative group cursor-ns-resize"
-                  title="Scroll vertical here to switch questions"
+                  title="Scroll vertical here to switch questions (1 scroll per jump)"
                 >
                   <div className="flex justify-between items-center">
                     <span className="text-[10px] uppercase font-bold text-[#06B6D4] tracking-widest">
@@ -2670,14 +2722,17 @@ export default function LiveSessionPage() {
                   + Add Topic Questions
                 </button>
               </div>
+            )
             )}
 
             {activeRightTab === 'proctoring' && renderProctoringMonitorPanel()}
 
             {activeRightTab === 'jobDescription' && renderJobDescriptionPanel()}
+
+            {activeRightTab === 'challenge' && renderChallengeTabPanel()}
           </div>
 
-          {activeRightTab === 'evaluation' && (
+          {activeRightTab === 'evaluation' && q && (
             <div className="flex justify-between items-center border-t border-[#3b494b] pt-4 mt-6">
               <button
                 onClick={() => setLocalIdx(prev => Math.max(0, prev - 1))}
@@ -2697,6 +2752,297 @@ export default function LiveSessionPage() {
             </div>
           )}
         </div>
+      </div>
+    );
+  };
+
+  const renderChallengeTabPanel = () => {
+    const resObj = session?.result as any;
+    const challenge = resObj?.challenge;
+    if (!challenge) {
+      const codeFiles = flatTree.filter(
+        (f: any) => f.type === 'blob' && isCodeFile(f.path)
+      );
+
+      const targetPath = customChallengeFile || selectedFilePath || (codeFiles[0]?.path || '');
+
+      const handleGenerate = async () => {
+        if (!targetPath) {
+          toast.error('Please select a file to generate the challenge from.');
+          return;
+        }
+
+        setGeneratingChallenge(true);
+        try {
+          const bodyPayload: any = {
+            sessionId,
+            filePath: targetPath,
+            challengeType: challengeTypePref,
+          };
+
+          if (targetPath === selectedFilePath && fileContent) {
+            bodyPayload.content = fileContent;
+          }
+
+          const response = await fetch('/api/session/challenge/generate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(bodyPayload),
+          });
+
+          const data = await response.json();
+          if (!response.ok) {
+            throw new Error(data.error || 'Failed to generate challenge');
+          }
+
+          toast.success('Coding challenge generated and activated!');
+          
+          if (session) {
+            const updatedResult = {
+              ...(session.result || {}),
+              challenge: data.challenge,
+            };
+            setSession({
+              ...session,
+              result: updatedResult,
+            });
+          }
+        } catch (err: any) {
+          console.error(err);
+          toast.error(err.message || 'Error generating challenge');
+        } finally {
+          setGeneratingChallenge(false);
+        }
+      };
+
+      return (
+        <div className="flex-grow flex flex-col bg-[#151d1e]/40 p-5 rounded-xl border border-[#3b494b] space-y-4 animate-in fade-in duration-300 min-h-[300px]">
+          <div className="text-center space-y-2 pb-2 border-b border-[#3b494b]/50">
+            <span className="material-symbols-outlined text-4xl text-[#06B6D4]">integration_instructions</span>
+            <h4 className="text-sm font-bold text-white uppercase tracking-wider block">Live Coding Challenge</h4>
+            <p className="text-[11px] text-[#94A3B8] max-w-sm mx-auto leading-relaxed">
+              Dynamically activate a coding challenge for the candidate. 
+              The candidate will receive a workspace to write their solution, and AI will evaluate it.
+            </p>
+          </div>
+
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-bold text-[#94A3B8] uppercase tracking-wider block">
+                Target Code File
+              </label>
+              {codeFiles.length > 0 ? (
+                <select
+                  value={targetPath}
+                  onChange={(e) => setCustomChallengeFile(e.target.value)}
+                  className="w-full bg-[#0d1515] border border-[#3b494b] rounded-md px-3 py-2 text-xs text-white focus:outline-none focus:border-[#06B6D4] transition-all"
+                >
+                  {codeFiles.map((file: any) => (
+                    <option key={file.path} value={file.path}>
+                      {file.path} ({Math.round(file.size / 102) / 10} KB)
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <div className="bg-[#0d1515] p-3 rounded-lg border border-[#3b494b]/40 text-center text-rose-400 text-xs font-semibold">
+                  ⚠️ No code files found in the repository index.
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-bold text-[#94A3B8] uppercase tracking-wider block">
+                Challenge Type
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setChallengeTypePref('bug')}
+                  className={`py-2 px-3 border rounded-lg text-xs font-bold text-center transition-all cursor-pointer ${
+                    challengeTypePref === 'bug'
+                      ? 'bg-[#06B6D4]/10 border-[#06B6D4] text-[#06B6D4] shadow-lg shadow-[#06B6D4]/5'
+                      : 'bg-[#0d1515]/60 border-[#3b494b]/60 text-[#94A3B8] hover:border-[#94A3B8]/40'
+                  }`}
+                >
+                  🐛 Bug Fix Challenge
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setChallengeTypePref('feature')}
+                  className={`py-2.5 px-3 border rounded-lg text-xs font-bold text-center transition-all cursor-pointer ${
+                    challengeTypePref === 'feature'
+                      ? 'bg-[#06B6D4]/10 border-[#06B6D4] text-[#06B6D4] shadow-lg shadow-[#06B6D4]/5'
+                      : 'bg-[#0d1515]/60 border-[#3b494b]/60 text-[#94A3B8] hover:border-[#94A3B8]/40'
+                  }`}
+                >
+                  ✨ Feature Addition
+                </button>
+              </div>
+              <p className="text-[9px] text-[#6a7a7d] leading-normal pt-1">
+                {challengeTypePref === 'bug'
+                  ? 'Planted logical bug: Candidate must find and correct a subtle bug inside the code.'
+                  : 'New functionality: Candidate is asked to implement a small helper feature or extension.'}
+              </p>
+            </div>
+
+            <button
+              type="button"
+              disabled={generatingChallenge || codeFiles.length === 0}
+              onClick={handleGenerate}
+              className="w-full py-2.5 bg-[#06B6D4] text-black font-extrabold text-xs uppercase tracking-wider rounded-lg shadow-lg hover:bg-[#0891b2] disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+            >
+              {generatingChallenge ? (
+                <>
+                  <div className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-black"></div>
+                  Generating challenge with AI...
+                </>
+              ) : (
+                <>
+                  <span className="material-symbols-outlined text-sm font-bold">bolt</span>
+                  Activate Coding Challenge
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    const submission = resObj?.challenge_submission;
+    const evaluation = resObj?.challenge_evaluation;
+
+    const handleStartChallenge = async () => {
+      if (!session || !sessionId) return;
+      try {
+        const challengeSubmission = submission || {
+          submittedCode: challenge.starterCode || '',
+          timeLeftSeconds: 900,
+          started: true,
+          savedAt: new Date().toISOString()
+        };
+        
+        const updatedResult = {
+          ...resObj,
+          challenge_submission: {
+            ...challengeSubmission,
+            started: true
+          }
+        };
+
+        const { error } = await supabase
+          .from('sessions')
+          .update({ result: updatedResult })
+          .eq('id', sessionId);
+
+        if (error) throw error;
+        
+        toast.success("Coding challenge launched on candidate's screen!");
+        
+        setSession({
+          ...session,
+          result: updatedResult
+        });
+      } catch (err: any) {
+        console.error(err);
+        toast.error('Failed to start coding challenge: ' + err.message);
+      }
+    };
+
+    let statusText = 'Not Started';
+    let statusColor = 'bg-slate-500/10 border-slate-500/30 text-slate-400';
+    if (session?.status === 'completed' || submission?.submittedCode) {
+      statusText = 'Completed / Submitted';
+      statusColor = 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400';
+    } else if (submission?.started) {
+      statusText = 'In Progress';
+      statusColor = 'bg-amber-500/10 border-amber-500/30 text-amber-400 animate-pulse';
+    }
+
+    return (
+      <div className="flex-grow flex flex-col bg-[#151d1e]/40 p-4 rounded-xl space-y-4 text-xs overflow-y-auto custom-scrollbar min-h-[300px] animate-in fade-in duration-300">
+        {!submission?.started && (
+          <div className="bg-[#151d1e] border border-[#3b494b] rounded-xl p-4 shadow-xl space-y-3">
+            <h5 className="text-[10px] font-bold text-amber-400 uppercase tracking-wider block border-b border-[#3b494b]/60 pb-1.5 flex items-center gap-1.5">
+              <span className="material-symbols-outlined text-sm">rocket_launch</span>
+              Launch Live Coding
+            </h5>
+            <p className="text-[11px] text-[#94A3B8] leading-relaxed">
+              The candidate is currently on the Q&A stage. Click below to immediately switch their screen to the live coding workspace and begin the test.
+            </p>
+            <button
+              type="button"
+              onClick={handleStartChallenge}
+              className="w-full py-2 bg-amber-500 hover:bg-amber-600 text-black font-extrabold text-xs uppercase tracking-wider rounded-lg shadow-lg transition-all flex items-center justify-center gap-1 cursor-pointer"
+            >
+              <span className="material-symbols-outlined text-sm font-bold">play_arrow</span>
+              Launch Challenge on Candidate Screen
+            </button>
+          </div>
+        )}
+
+        <div className="bg-[#151d1e] border border-[#3b494b] rounded-xl p-4 shadow-xl space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] uppercase font-bold text-[#94A3B8] tracking-widest block">Coding Challenge Status</span>
+            <span className={`text-[9px] font-bold px-2 py-0.5 border rounded-full uppercase ${statusColor}`}>
+              {statusText}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 text-xs">
+            <div className="bg-[#0d1515] p-2.5 rounded-lg border border-[#3b494b]/60">
+              <span className="text-[#94A3B8] block text-[9px] uppercase tracking-wider font-bold">Challenge Type</span>
+              <span className="text-white font-bold block mt-0.5">
+                {challenge.challengeType === 'bug' ? '🐛 Bug Fix' : '✨ Feature Addition'}
+              </span>
+            </div>
+            <div className="bg-[#0d1515] p-2.5 rounded-lg border border-[#3b494b]/60">
+              <span className="text-[#94A3B8] block text-[9px] uppercase tracking-wider font-bold">Target File</span>
+              <span className="text-white font-bold block mt-0.5 truncate" title={challenge.filePath}>
+                {challenge.filePath.split('/').pop()}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-[#151d1e] border border-[#3b494b] rounded-xl p-4 shadow-xl space-y-2">
+          <h5 className="text-[10px] font-bold text-[#06B6D4] uppercase tracking-wider block border-b border-[#3b494b] pb-1.5">
+            Task Instructions
+          </h5>
+          <p className="text-xs text-[#D1D5DB] leading-relaxed whitespace-pre-wrap">
+            {challenge.taskDescription}
+          </p>
+        </div>
+
+        <div className="bg-[#151d1e] border border-[#3b494b] rounded-xl p-4 shadow-xl space-y-2">
+          <h5 className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider block border-b border-[#3b494b] pb-1.5">
+            Reference Solution
+          </h5>
+          <pre className="bg-[#0d1515] p-3 rounded-lg border border-[#3b494b]/60 text-[10px] font-mono text-[#A7F3D0] overflow-x-auto max-h-48 whitespace-pre custom-scrollbar">
+            {challenge.referenceSolution}
+          </pre>
+        </div>
+
+        {submission?.submittedCode && (
+          <div className="bg-[#151d1e] border border-[#3b494b] rounded-xl p-4 shadow-xl space-y-2">
+            <h5 className="text-[10px] font-bold text-[#06B6D4] uppercase tracking-wider block border-b border-[#3b494b] pb-1.5 flex justify-between items-center">
+              <span>Candidate Solution</span>
+              {evaluation && (
+                <span className="text-[9px] text-emerald-400 font-mono font-bold">
+                  Score: {evaluation.score}/100
+                </span>
+              )}
+            </h5>
+            <pre className="bg-[#0d1515] p-3 rounded-lg border border-[#3b494b]/60 text-[10px] font-mono text-[#D1D5DB] overflow-x-auto max-h-60 whitespace-pre custom-scrollbar">
+              {submission.submittedCode}
+            </pre>
+            {evaluation?.evaluationText && (
+              <div className="bg-[#0d1515] p-2.5 rounded-lg border border-[#3b494b]/60 text-[10px] text-[#94A3B8] leading-relaxed">
+                <span className="text-white font-bold block mb-0.5">AI Evaluation:</span>
+                {evaluation.evaluationText}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     );
   };
@@ -2798,6 +3144,7 @@ export default function LiveSessionPage() {
             <div 
               onWheel={handleQuestionCardWheel}
               className="bg-[#151d1e] border border-[#3b494b] rounded-xl p-5 shadow-lg space-y-3 cursor-ns-resize"
+              title="Scroll vertical here to switch questions (1 scroll per jump)"
             >
               <div className="flex justify-between items-center">
                 <span className="text-[10px] uppercase font-bold text-purple-400 tracking-widest">
@@ -2963,6 +3310,8 @@ export default function LiveSessionPage() {
             {activeRightTab === 'proctoring' && renderProctoringMonitorPanel()}
 
             {activeRightTab === 'jobDescription' && renderJobDescriptionPanel()}
+
+            {activeRightTab === 'challenge' && renderChallengeTabPanel()}
           </div>
 
           {/* Running average score */}
@@ -3032,6 +3381,7 @@ export default function LiveSessionPage() {
             <div 
               onWheel={handleQuestionCardWheel}
               className="bg-[#151d1e] border border-[#3b494b] rounded-xl p-5 shadow-lg space-y-3 cursor-ns-resize"
+              title="Scroll vertical here to switch questions (1 scroll per jump)"
             >
               <div className="flex justify-between items-center">
                 <span className="text-[10px] uppercase font-bold text-orange-400 tracking-widest">
@@ -3185,6 +3535,8 @@ export default function LiveSessionPage() {
             {activeRightTab === 'proctoring' && renderProctoringMonitorPanel()}
 
             {activeRightTab === 'jobDescription' && renderJobDescriptionPanel()}
+
+            {activeRightTab === 'challenge' && renderChallengeTabPanel()}
           </div>
         </div>
 
@@ -3213,6 +3565,7 @@ export default function LiveSessionPage() {
             <div 
               onWheel={handleQuestionCardWheel}
               className="bg-[#151d1e] border border-[#3b494b] rounded-xl p-5 shadow-lg space-y-3 cursor-ns-resize"
+              title="Scroll vertical here to switch questions (1 scroll per jump)"
             >
               <div className="flex justify-between items-center">
                 <span className="text-[10px] uppercase font-bold text-gray-400 tracking-widest block">
@@ -3296,6 +3649,8 @@ export default function LiveSessionPage() {
             {activeRightTab === 'proctoring' && renderProctoringMonitorPanel()}
 
             {activeRightTab === 'jobDescription' && renderJobDescriptionPanel()}
+
+            {activeRightTab === 'challenge' && renderChallengeTabPanel()}
           </div>
         </div>
       </div>

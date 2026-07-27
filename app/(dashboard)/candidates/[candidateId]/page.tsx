@@ -37,6 +37,9 @@ interface SessionItem {
   session_reports?: {
     overall_score: number;
     hire_recommendation: string;
+    code_story_summary?: string;
+    repo_authenticity_score?: number;
+    repo_authenticity_flags?: string[];
   }[];
 }
 
@@ -94,7 +97,8 @@ export default function CandidateProfilePage() {
           interview_mode,
           session_reports (
             overall_score,
-            hire_recommendation
+            hire_recommendation,
+            code_story_summary
           )
         `)
         .eq('candidate_id', candidateId);
@@ -734,11 +738,38 @@ export default function CandidateProfilePage() {
                       <div className="space-y-2">
                         {modeSess.map((sess) => {
                           const report = sess.session_reports?.[0];
+                          let authScore: number | undefined = undefined;
+                          let authFlags: string[] = [];
+                          
+                          if (report?.code_story_summary) {
+                            try {
+                              const summary = JSON.parse(report.code_story_summary);
+                              if (summary?.repo_authenticity) {
+                                authScore = summary.repo_authenticity.score;
+                                authFlags = summary.repo_authenticity.flags || [];
+                              }
+                            } catch {}
+                          }
+
                           return (
                             <div key={sess.id} className="bg-[#0d1515] border border-[#3b494b]/60 p-3 rounded-lg text-xs flex justify-between items-center">
                               <div>
                                 <p className="font-semibold text-white">{sess.timer_duration_minutes} Min Interview</p>
                                 <p className="text-[10px] text-[#94A3B8] mt-0.5">{new Date(sess.created_at).toLocaleDateString()}</p>
+                                {authScore !== undefined && authScore !== null && (
+                                  <div className="mt-1.5 flex items-center gap-1.5">
+                                    <span className="text-[9px] font-bold text-[#94A3B8] uppercase font-mono">Repo Auth:</span>
+                                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase border ${
+                                      authScore >= 80 
+                                        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
+                                        : authScore >= 50 
+                                          ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' 
+                                          : 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+                                    }`} title={authFlags.join(', ') || 'No flags raised.'}>
+                                      {authScore}/100 - {authScore >= 80 ? 'Good' : authScore >= 50 ? 'Worth Reviewing' : 'Review Flags'}
+                                    </span>
+                                  </div>
+                                )}
                               </div>
                               <div className="text-right">
                                 {report ? (

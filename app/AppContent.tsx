@@ -173,9 +173,9 @@ export default function AppContent({ children }: { children: React.ReactNode }) 
         : 'text-on-surface-variant hover:text-[#06B6D4]'
     }`;
 
-  // Shared chatbot renderer (unconditional on non-candidate pages)
+  // Shared chatbot renderer (unconditional on non-candidate and non-session pages)
   const renderChatbot = () => {
-    if (pathname?.startsWith('/candidate')) return null;
+    if (pathname?.startsWith('/candidate') || pathname?.startsWith('/session/')) return null;
     return (
       <div className="fixed bottom-6 right-6 z-50">
         {chatbotOpen ? (

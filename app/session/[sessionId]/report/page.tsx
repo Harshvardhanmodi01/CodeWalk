@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { supabase } from '@/app/lib/supabaseClient';
 import { useGlobal } from '@/app/context/GlobalContext';
@@ -24,6 +24,27 @@ interface ReportData {
   technical_summary?: string;
   behavioral_summary?: string;
   logical_summary?: string;
+  repo_authenticity?: {
+    score: number;
+    flags: string[];
+    signals: {
+      commitCount: number;
+      uniqueDays: number;
+      spanHours: number;
+      averageGapMinutes: number;
+      genericMessageRatio: number;
+      largestCommitRatio: number;
+      aiProbability: number;
+      aiVerdict: string;
+      recentCommits: Array<{
+        sha: string;
+        message: string;
+        date: string;
+        additions: number;
+        deletions: number;
+      }>;
+    };
+  };
 }
 
 interface Candidate {
@@ -57,6 +78,7 @@ export default function ReportPage() {
   const [questions, setQuestions] = useState<any[]>([]);
   const [scores, setScores] = useState<Record<string, number>>({});
   const [candidateAnswers, setCandidateAnswers] = useState<any[]>([]);
+  const compilationStartedRef = useRef(false);
 
   // Proctoring States
   const [proctoringSummary, setProctoringSummary] = useState<any | null>(null);
@@ -66,6 +88,7 @@ export default function ReportPage() {
   const [recruiterNotes, setRecruiterNotes] = useState('');
   const [proctoringDecision, setProctoringDecision] = useState<'clean' | 'flagged' | 'pending'>('pending');
   const [savingDecision, setSavingDecision] = useState(false);
+  const [isAuthLogsExpanded, setIsAuthLogsExpanded] = useState(false);
 
   useEffect(() => {
     if (!user) {
@@ -136,7 +159,7 @@ export default function ReportPage() {
           }
         }
 
-        if (parsedReport && parsedReport.strengths) {
+        if (parsedReport && parsedReport.overall_score !== undefined) {
           setReport(parsedReport);
         } else {
           // Self-healing: if report details aren't saved yet, compile it now
@@ -254,7 +277,9 @@ export default function ReportPage() {
     }
   };
 
-  const compileReportFromAnswers = async (sessId: string, sessObj?: Session | null) => {
+  const compileReportFromAnswers = async (sessId: string, sessObj?: Session | null, force = false) => {
+    if (compiling || (compilationStartedRef.current && !force)) return;
+    compilationStartedRef.current = true;
     setCompiling(true);
     try {
       const activeSession = sessObj || session;
@@ -297,11 +322,8 @@ export default function ReportPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          answers: consolidatedAnswers,
           sessionId: sessId,
-          interviewMode: activeSession.interview_mode,
-          behavioralScores: activeSession.behavioral_scores,
-          logicalScores: activeSession.logical_scores
+          forceRefresh: force
         })
       });
       const data = await res.json();
@@ -336,18 +358,22 @@ export default function ReportPage() {
 
       // 4. Save JSON stringified report back to code_story_summary column
       const completedCount = consolidatedAnswers.filter((a: any) => a.answer_text.trim().length > 0).length;
+      const repoAuth = data.repo_authenticity || null;
+      
+      const payload: any = {
+        session_id: sessId,
+        overall_score: data.overall_score || 50,
+        custom_score: data.overall_score || 50,
+        hire_recommendation: data.hire_recommendation || 'maybe',
+        code_story_summary: JSON.stringify(data),
+        total_questions: consolidatedAnswers.length,
+        completed_questions: completedCount,
+        generated_at: new Date().toISOString()
+      };
+
       await supabase
         .from('session_reports')
-        .upsert({
-          session_id: sessId,
-          overall_score: data.overall_score || 50,
-          custom_score: data.overall_score || 50,
-          hire_recommendation: data.hire_recommendation || 'maybe',
-          code_story_summary: JSON.stringify(data),
-          total_questions: consolidatedAnswers.length,
-          completed_questions: completedCount,
-          generated_at: new Date().toISOString()
-        }, { onConflict: 'session_id' });
+        .upsert(payload, { onConflict: 'session_id' });
 
     } catch (err: any) {
       console.error(err);
@@ -655,6 +681,308 @@ export default function ReportPage() {
     );
   };
 
+  const renderRepoAuthenticitySection = () => {
+    if (!report?.repo_authenticity) return null;
+
+    const auth = report.repo_authenticity;
+    const score = auth.score;
+    const flags = auth.flags || [];
+    const signals = auth.signals || {};
+
+    let scoreColor = 'stroke-emerald-500 text-emerald-400';
+    let riskBadge = 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400';
+    let statusText = 'Good';
+
+    if (score < 50) {
+      scoreColor = 'stroke-rose-500 text-rose-500';
+      riskBadge = 'bg-rose-500/10 border-rose-500/30 text-rose-400';
+      statusText = 'Significant Flags';
+    } else if (score < 80) {
+      scoreColor = 'stroke-amber-500 text-amber-500';
+      riskBadge = 'bg-amber-500/10 border-amber-500/30 text-amber-400';
+      statusText = 'Worth Reviewing';
+    }
+
+    return (
+      <div className="bg-[#151d1e] border border-[#3b494b] rounded-xl p-8 shadow-xl print-card space-y-6">
+        <h3 className="text-sm font-bold text-white uppercase tracking-wider border-b border-[#3b494b] pb-2 print-text-dark print:border-slate-300 flex items-center justify-between">
+          <span>Repository Ingestion &amp; Commit Authenticity Check</span>
+          <span className={`text-[10px] font-bold px-2.5 py-0.5 border rounded-full uppercase ${riskBadge}`}>
+            {statusText}
+          </span>
+        </h3>
+
+        <div className="flex flex-col md:flex-row items-center gap-8 justify-between">
+          {/* Circular Score Gauge */}
+          <div className="relative h-28 w-28 flex items-center justify-center flex-shrink-0">
+            <svg className="absolute w-full h-full transform -rotate-90">
+              <circle cx="56" cy="56" r="48" strokeWidth="8" stroke="#0d1515" fill="transparent" className="print:stroke-slate-100" />
+              <circle 
+                cx="56" 
+                cy="56" 
+                r="48" 
+                strokeWidth="8" 
+                className={`${scoreColor.split(' ')[0]}`}
+                fill="transparent" 
+                strokeDasharray={`${2 * Math.PI * 48}`}
+                strokeDashoffset={`${2 * Math.PI * 48 * (1 - score / 100)}`}
+                strokeLinecap="round"
+              />
+            </svg>
+            <div className="text-center">
+              <span className={`text-2xl font-black ${scoreColor.split(' ')[1]}`}>{score}</span>
+              <span className="text-xs text-[#94A3B8] block -mt-1">/100</span>
+            </div>
+          </div>
+
+          {/* Core Signal Indicators */}
+          <div className="flex-1 grid grid-cols-2 sm:grid-cols-3 gap-4 text-xs w-full">
+            <div className="bg-[#0d1515]/40 border border-[#3b494b]/60 rounded-lg p-3">
+              <span className="text-[10px] text-[#94A3B8] block mb-1 font-mono">Total Commits</span>
+              <span className="font-bold text-white text-base">{signals.commitCount ?? 0}</span>
+            </div>
+            <div className="bg-[#0d1515]/40 border border-[#3b494b]/60 rounded-lg p-3">
+              <span className="text-[10px] text-[#94A3B8] block mb-1 font-mono">Development Days</span>
+              <span className="font-bold text-white text-base">{signals.uniqueDays ?? 0} Days</span>
+            </div>
+            <div className="bg-[#0d1515]/40 border border-[#3b494b]/60 rounded-lg p-3">
+              <span className="text-[10px] text-[#94A3B8] block mb-1 font-mono">Git Activity Span</span>
+              <span className="font-bold text-white text-base">{(signals.spanHours ?? 0).toFixed(1)} Hrs</span>
+            </div>
+            <div className="bg-[#0d1515]/40 border border-[#3b494b]/60 rounded-lg p-3">
+              <span className="text-[10px] text-[#94A3B8] block mb-1 font-mono">Generic Msg Ratio</span>
+              <span className="font-bold text-white text-base">{Math.round((signals.genericMessageRatio ?? 0) * 100)}%</span>
+            </div>
+            <div className="bg-[#0d1515]/40 border border-[#3b494b]/60 rounded-lg p-3">
+              <span className="text-[10px] text-[#94A3B8] block mb-1 font-mono">Single Commit Bulk</span>
+              <span className="font-bold text-white text-base">{Math.round((signals.largestCommitRatio ?? 0) * 100)}%</span>
+            </div>
+            <div className="bg-[#0d1515]/40 border border-[#3b494b]/60 rounded-lg p-3">
+              <span className="text-[10px] text-[#94A3B8] block mb-1 font-mono">AI Code Likelihood</span>
+              <span className="font-bold text-white text-base">{signals.aiProbability ?? 0}%</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Human Readable Warning Flags */}
+        <div className="space-y-2.5">
+          <span className="text-xs font-bold text-[#06B6D4] uppercase tracking-wider block">Observed Flags &amp; Triggers</span>
+          <div className="border border-[#3b494b]/60 bg-[#0d1515]/30 rounded-xl p-4 space-y-2">
+            {flags.length === 0 ? (
+              <div className="flex gap-2 items-center text-xs text-emerald-400">
+                <span className="material-symbols-outlined text-base">check_circle</span>
+                <span>No authenticity anomalies detected. Commit patterns suggest organic progressive development.</span>
+              </div>
+            ) : (
+              flags.map((flag, idx) => (
+                <div key={idx} className="flex gap-2 items-start text-xs text-[#D1D5DB]">
+                  <span className="material-symbols-outlined text-amber-500 text-sm mt-0.5">warning</span>
+                  <span>{flag}</span>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* Collapsible Commit History Log */}
+        <div className="pt-2">
+          <button
+            onClick={() => setIsAuthLogsExpanded(prev => !prev)}
+            className="flex items-center gap-1.5 text-xs text-[#06B6D4] font-bold uppercase hover:underline cursor-pointer select-none no-print"
+          >
+            <span className="material-symbols-outlined text-base">
+              {isAuthLogsExpanded ? 'expand_less' : 'expand_more'}
+            </span>
+            <span>{isAuthLogsExpanded ? 'Hide' : 'View'} Raw Commits &amp; Signals Log</span>
+          </button>
+
+          {isAuthLogsExpanded && (
+            <div className="mt-4 border border-[#3b494b]/60 bg-[#0d1515]/50 rounded-xl p-5 space-y-4 animate-fadeIn">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                <div>
+                  <p className="font-mono text-[10px] text-[#94A3B8] uppercase">AI Verdict Description</p>
+                  <p className="font-semibold text-white mt-1">{signals.aiVerdict ?? 'N/A'}</p>
+                </div>
+                <div>
+                  <p className="font-mono text-[10px] text-[#94A3B8] uppercase">Average Gap between Commits</p>
+                  <p className="font-semibold text-white mt-1">{(signals.averageGapMinutes ?? 0).toFixed(1)} Minutes</p>
+                </div>
+              </div>
+
+              {signals.recentCommits && signals.recentCommits.length > 0 && (
+                <div className="space-y-2.5 pt-2">
+                  <span className="text-[10px] font-bold text-[#94A3B8] uppercase tracking-wider block font-mono">Recent Commit Activity details (Top 15)</span>
+                  <div className="border border-[#3b494b]/40 rounded-lg overflow-hidden max-h-60 overflow-y-auto custom-scrollbar">
+                    <table className="w-full text-[11px] font-mono text-left border-collapse">
+                      <thead>
+                        <tr className="bg-[#151d1e] text-[#94A3B8] border-b border-[#3b494b]/60">
+                          <th className="p-2 border-r border-[#3b494b]/40 w-16">Commit</th>
+                          <th className="p-2 border-r border-[#3b494b]/40 w-28">Date</th>
+                          <th className="p-2 border-r border-[#3b494b]/40">Message</th>
+                          <th className="p-2 text-right w-20">Changes</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[#3b494b]/30">
+                        {signals.recentCommits.map((c: any, idx: number) => (
+                          <tr key={c.sha || idx} className="hover:bg-[#151d1e]/30 text-[#D1D5DB]">
+                            <td className="p-2 border-r border-[#3b494b]/30 font-semibold text-[#06B6D4] truncate" title={c.sha}>
+                              {c.sha ? c.sha.slice(0, 7) : 'n/a'}
+                            </td>
+                            <td className="p-2 border-r border-[#3b494b]/30 text-[10px] text-[#94A3B8] whitespace-nowrap">
+                              {c.date ? new Date(c.date).toLocaleString() : 'n/a'}
+                            </td>
+                            <td className="p-2 border-r border-[#3b494b]/30 truncate max-w-xs" title={c.message}>
+                              {c.message}
+                            </td>
+                            <td className="p-2 text-right whitespace-nowrap text-[10px] text-[#94A3B8]">
+                              <span className="text-emerald-400 font-bold">+{c.additions}</span> / <span className="text-rose-400 font-bold">-{c.deletions}</span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Disclaimer text */}
+        <p className="text-[10px] text-[#94A3B8] leading-relaxed italic border-t border-[#3b494b]/40 pt-3">
+          ℹ️ <strong>Advisory Signal:</strong> This check evaluates repository metadata and static code styles. Genuinely fast coders or repositories migrated from other version control systems may trigger false anomalies. This score is provided solely as review guidance for the recruiter and does not decrease or impact the candidate's core interview score.
+        </p>
+      </div>
+    );
+  };
+
+  const renderMicroChallengeSection = () => {
+    const challenge = (report as any).challenge_evaluation;
+    if (!challenge) return null;
+
+    return (
+      <div className="bg-[#151d1e] border border-[#3b494b] rounded-xl p-6 shadow-xl print-card space-y-4">
+        <h4 className="text-xs font-bold text-[#06B6D4] uppercase tracking-wider block pb-2 border-b border-[#3b494b] print-text-dark print:border-slate-300 flex items-center gap-1.5">
+          <span className="material-symbols-outlined text-sm">rocket_launch</span>
+          Micro-Challenge Coding Assessment
+        </h4>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="space-y-1">
+            <span className="text-[10px] text-[#94A3B8] uppercase font-mono">Evaluation Score</span>
+            <div className="flex items-baseline gap-1">
+              <span className="text-2xl font-black text-white">{challenge.score}</span>
+              <span className="text-xs text-[#94A3B8]">/100</span>
+            </div>
+          </div>
+          <div className="space-y-1">
+            <span className="text-[10px] text-[#94A3B8] uppercase font-mono">Code Style Match</span>
+            <div className="text-sm font-bold text-white flex items-center gap-1.5">
+              <span className={`h-2 w-2 rounded-full ${
+                challenge.codeStyleMatch === 'High' 
+                  ? 'bg-emerald-400' 
+                  : challenge.codeStyleMatch === 'Medium'
+                    ? 'bg-amber-400'
+                    : 'bg-rose-400'
+              }`}></span>
+              {challenge.codeStyleMatch}
+            </div>
+          </div>
+          <div className="space-y-1">
+            <span className="text-[10px] text-[#94A3B8] uppercase font-mono">Assessment Status</span>
+            <div className="text-sm font-bold text-white flex items-center gap-1">
+              <span className="material-symbols-outlined text-xs text-emerald-400">task_alt</span>
+              Successfully Evaluated
+            </div>
+          </div>
+        </div>
+        <div className="bg-[#0d1515]/40 border border-[#3b494b]/60 rounded-lg p-4 font-mono text-xs leading-relaxed text-[#CBD5E1]">
+          <p className="font-bold text-white uppercase tracking-wider mb-1">Feedback Summary</p>
+          {challenge.evaluationText}
+        </div>
+      </div>
+    );
+  };
+
+  const renderSkillMatchSection = () => {
+    const matchReport = (report as any).skill_match_report;
+    if (!matchReport) return null;
+
+    const strongMatches = matchReport.strong_match || [];
+    const partialMatches = matchReport.partial_match || [];
+    const noEvidence = matchReport.no_evidence || [];
+
+    return (
+      <div className="bg-[#151d1e] border border-[#3b494b] rounded-xl p-6 shadow-xl print-card space-y-4">
+        <h4 className="text-xs font-bold text-[#06B6D4] uppercase tracking-wider block pb-2 border-b border-[#3b494b] print-text-dark print:border-slate-300 flex items-center gap-1.5">
+          <span className="material-symbols-outlined text-sm">compare_arrows</span>
+          JD-to-Skill Gap Matching
+        </h4>
+        <p className="text-xs text-[#94A3B8] leading-relaxed -mt-2">
+          This section maps the candidate's repository analysis (file extensions, imports, code implementations) against the requirements of the job description.
+        </p>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-2">
+          {/* Strong Match Column */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-1.5 pb-1.5 border-b border-emerald-500/20">
+              <span className="h-2 w-2 rounded-full bg-emerald-400"></span>
+              <span className="text-[11px] font-bold text-emerald-400 uppercase tracking-wider">Strong Match ({strongMatches.length})</span>
+            </div>
+            <ul className="space-y-2.5">
+              {strongMatches.map((item: any, idx: number) => (
+                <li key={idx} className="bg-[#0d1515]/30 border border-emerald-500/10 rounded-lg p-3 space-y-1">
+                  <span className="text-xs font-bold text-white block">{item.skill}</span>
+                  <span className="text-[10px] text-[#94A3B8] leading-relaxed block font-mono">{item.justification}</span>
+                </li>
+              ))}
+              {strongMatches.length === 0 && (
+                <p className="text-[10px] text-[#94A3B8] italic font-mono">No strong matches identified.</p>
+              )}
+            </ul>
+          </div>
+
+          {/* Partial Match Column */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-1.5 pb-1.5 border-b border-amber-500/20">
+              <span className="h-2 w-2 rounded-full bg-amber-400"></span>
+              <span className="text-[11px] font-bold text-amber-400 uppercase tracking-wider">Partial Match ({partialMatches.length})</span>
+            </div>
+            <ul className="space-y-2.5">
+              {partialMatches.map((item: any, idx: number) => (
+                <li key={idx} className="bg-[#0d1515]/30 border border-amber-500/10 rounded-lg p-3 space-y-1">
+                  <span className="text-xs font-bold text-white block">{item.skill}</span>
+                  <span className="text-[10px] text-[#94A3B8] leading-relaxed block font-mono">{item.justification}</span>
+                </li>
+              ))}
+              {partialMatches.length === 0 && (
+                <p className="text-[10px] text-[#94A3B8] italic font-mono">No partial matches identified.</p>
+              )}
+            </ul>
+          </div>
+
+          {/* No Evidence Column */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-1.5 pb-1.5 border-b border-rose-500/20">
+              <span className="h-2 w-2 rounded-full bg-rose-400"></span>
+              <span className="text-[11px] font-bold text-rose-400 uppercase tracking-wider">No Evidence Found ({noEvidence.length})</span>
+            </div>
+            <ul className="space-y-2.5">
+              {noEvidence.map((item: any, idx: number) => (
+                <li key={idx} className="bg-[#0d1515]/30 border border-rose-500/10 rounded-lg p-3 space-y-1">
+                  <span className="text-xs font-bold text-white block">{item.skill}</span>
+                  <span className="text-[10px] text-[#94A3B8] leading-relaxed block font-mono">{item.justification}</span>
+                </li>
+              ))}
+              {noEvidence.length === 0 && (
+                <p className="text-[10px] text-[#94A3B8] italic font-mono">No missing gaps flagged.</p>
+              )}
+            </ul>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const isRadarActive = session.interview_mode === 'fullstack' || session.interview_mode === 'custom';
 
   return (
@@ -711,7 +1039,7 @@ export default function ReportPage() {
 
         <div className="flex items-center gap-3">
           <button
-            onClick={() => compileReportFromAnswers(sessionId)}
+            onClick={() => compileReportFromAnswers(sessionId, null, true)}
             className="text-xs px-3.5 py-1.5 font-bold rounded-lg bg-[#151d1e] border border-[#3b494b] text-[#94A3B8] hover:bg-[#0d1515] hover:text-white transition-colors inline-flex items-center gap-1.5 cursor-pointer"
           >
             <span className="material-symbols-outlined text-sm">refresh</span>
@@ -747,6 +1075,40 @@ export default function ReportPage() {
               <p className="text-xs text-[#94A3B8] print-text-light font-mono truncate max-w-md">
                 GitHub repository: {session.repo_url.replace('https://github.com/', '')}
               </p>
+            )}
+            {report.repo_authenticity && (
+              <div className="flex items-center gap-2 mt-2">
+                <span className="text-[10px] font-bold text-[#94A3B8] uppercase tracking-wider block font-mono">Repo Authenticity:</span>
+                <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase border ${
+                  report.repo_authenticity.score >= 80 
+                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
+                    : report.repo_authenticity.score >= 50 
+                      ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' 
+                      : 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+                }`} title={report.repo_authenticity.flags.join(', ') || 'No flags raised.'}>
+                  {report.repo_authenticity.score}/100 - {
+                    report.repo_authenticity.score >= 80 
+                      ? 'Good' 
+                      : report.repo_authenticity.score >= 50 
+                        ? 'Worth Reviewing' 
+                        : 'Review Flags'
+                  }
+                </span>
+              </div>
+            )}
+            {(report as any).challenge_evaluation && (
+              <div className="flex items-center gap-2 mt-2">
+                <span className="text-[10px] font-bold text-[#94A3B8] uppercase tracking-wider block font-mono">Coding Challenge:</span>
+                <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase border ${
+                  (report as any).challenge_evaluation.score >= 80 
+                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
+                    : (report as any).challenge_evaluation.score >= 50 
+                      ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' 
+                      : 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+                }`} title={(report as any).challenge_evaluation.evaluationText}>
+                  {(report as any).challenge_evaluation.score}/100 (Style Match: {(report as any).challenge_evaluation.codeStyleMatch})
+                </span>
+              </div>
             )}
           </div>
           
@@ -795,10 +1157,13 @@ export default function ReportPage() {
           </div>
         </div>
 
+        {/* JD-to-Skill Gap Matching analysis */}
+        {renderSkillMatchSection()}
+
         {/* Multi-Section radar chart analysis */}
         {isRadarActive && (
           <div className="bg-[#151d1e] border border-[#3b494b] rounded-xl p-6 shadow-xl print-card flex flex-col md:flex-row items-center gap-6 justify-center">
-            <div className="w-64 h-64 flex justify-center items-center">
+            <div className="w-full md:w-80 flex justify-center items-center flex-shrink-0">
               <RadarChart scores={getRadarData()} size={240} />
             </div>
             <div className="flex-1 space-y-3">
@@ -850,13 +1215,13 @@ export default function ReportPage() {
               Candidate Strengths
             </h4>
             <ul className="space-y-3">
-              {report.strengths.map((str, idx) => (
+              {(report.strengths || []).map((str, idx) => (
                 <li key={idx} className="flex gap-2 text-xs text-[#D1D5DB] print-text-light">
                   <span className="material-symbols-outlined text-[#06B6D4] text-base mt-0.5 print:text-cyan-600">check_circle</span>
                   <span>{str}</span>
                 </li>
               ))}
-              {report.strengths.length === 0 && <p className="text-xs text-[#94A3B8] italic">No specific strengths logged.</p>}
+              {(report.strengths || []).length === 0 && <p className="text-xs text-[#94A3B8] italic">No specific strengths logged.</p>}
             </ul>
           </div>
 
@@ -866,19 +1231,25 @@ export default function ReportPage() {
               Areas of Improvement
             </h4>
             <ul className="space-y-3">
-              {report.areas_of_improvement.map((imp, idx) => (
+              {(report.areas_of_improvement || []).map((imp, idx) => (
                 <li key={idx} className="flex gap-2 text-xs text-[#D1D5DB] print-text-light">
                   <span className="material-symbols-outlined text-amber-500 text-base mt-0.5 print:text-amber-600">arrow_right_alt</span>
                   <span>{imp}</span>
                 </li>
               ))}
-              {report.areas_of_improvement.length === 0 && <p className="text-xs text-[#94A3B8] italic">No improvements flagged.</p>}
+              {(report.areas_of_improvement || []).length === 0 && <p className="text-xs text-[#94A3B8] italic">No improvements flagged.</p>}
             </ul>
           </div>
         </div>
 
         {/* Proctoring integrity section */}
         {renderProctoringReportSection()}
+
+        {/* Repository Ingestion & Commit Authenticity Section */}
+        {renderRepoAuthenticitySection()}
+
+        {/* Repository Micro-Challenge Section */}
+        {renderMicroChallengeSection()}
 
         {/* Detailed Question Analysis list */}
         <div className="space-y-6">

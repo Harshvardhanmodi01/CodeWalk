@@ -17,10 +17,10 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Valid sessionId parameter is required.' }, { status: 400 });
     }
 
-    // 1. Fetch session details (including interview_mode, mode_config, is_paused)
+    // 1. Fetch session details (including interview_mode, mode_config, is_paused, and result for challenge details)
     const { data: session, error: sessionErr } = await supabaseAdmin
       .from('sessions')
-      .select('id, candidate_id, status, started_at, ended_at, timer_duration_minutes, repo_url, remaining_seconds, created_at, interview_mode, mode_config, is_paused')
+      .select('id, candidate_id, status, started_at, ended_at, timer_duration_minutes, repo_url, remaining_seconds, created_at, interview_mode, mode_config, is_paused, result, recruiter_warning')
       .eq('id', sessionId)
       .single();
 
@@ -52,9 +52,25 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Failed to retrieve session answers.' }, { status: 500 });
     }
 
+    const sanitizedSess = sanitizeSession(session);
+    if (session.result?.challenge) {
+      sanitizedSess.challenge = {
+        filePath: session.result.challenge.filePath,
+        challengeType: session.result.challenge.challengeType,
+        taskDescription: session.result.challenge.taskDescription,
+        starterCode: session.result.challenge.starterCode
+      };
+      if (session.result?.challenge_submission) {
+        sanitizedSess.challenge_submission = session.result.challenge_submission;
+      }
+    }
+    if (session.mode_config) {
+      sanitizedSess.mode_config = session.mode_config;
+    }
+
     return NextResponse.json({
       success: true,
-      session: sanitizeSession(session),
+      session: sanitizedSess,
       questions: questions || [],
       answers: answers || []
     });
@@ -130,6 +146,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid status update request.' }, { status: 400 });
     }
 
+    // Check if challenge is enabled
+    const { data: session } = await supabaseAdmin
+      .from('sessions')
+      .select('result')
+      .eq('id', sessionId)
+      .maybeSingle();
+
+    const hasChallenge = !!(session?.result as any)?.challenge;
+
     // Update session status to completed
     const { error: updateErr } = await supabaseAdmin
       .from('sessions')
@@ -143,6 +168,14 @@ export async function POST(req: NextRequest) {
     if (updateErr) {
       console.error('Failed to complete session:', updateErr);
       return NextResponse.json({ error: 'Failed to submit interview.' }, { status: 500 });
+    }
+
+    // Trigger pre-compilation in background if candidate has no coding challenge stage
+    if (!hasChallenge) {
+      const { compileAndSaveReport } = require('@/app/lib/reportCompiler');
+      compileAndSaveReport(sessionId, true).catch((err: any) => {
+        console.error('[candidate-session] Async pre-compilation failed:', err.message);
+      });
     }
 
     return NextResponse.json({ success: true });

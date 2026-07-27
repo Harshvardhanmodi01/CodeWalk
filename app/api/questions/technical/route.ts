@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { extractRepoInfo, fetchRepoContents, fetchFileContent, isCodeFile } from '@/app/lib/github';
 import Groq from 'groq-sdk';
+import { fetchFileCommitTimeline } from '@/app/lib/authenticity';
 
 async function collectCodeFiles(
   owner: string,
@@ -47,6 +48,7 @@ export async function POST(req: Request) {
     const focus = body.focus || ['All'];
     const jobDescription = body.job_description || body.jobDescription;
     const count = body.count || 12;
+    const enableEvolutionQuestions = body.enableEvolutionQuestions ?? false;
 
     if (!repoUrl || !validateGithubUrl(repoUrl)) {
       return NextResponse.json({ error: 'Valid repository URL is required' }, { status: 400 });
@@ -73,8 +75,15 @@ export async function POST(req: Request) {
       if (isAll) return true;
       const ext = file.name.split('.').pop()?.toLowerCase() || '';
       
-      const isFrontend = ['tsx', 'jsx', 'ts', 'js', 'html', 'css'].includes(ext);
-      const isBackend = ['py', 'go', 'rs', 'java', 'cs', 'cpp', 'c', 'rb', 'php'].includes(ext);
+      const frontendExtensions = [
+        'tsx', 'jsx', 'ts', 'js', 'mjs', 'cjs', 'es6', 'html', 'htm', 'xhtml', 'xml', 'css', 'scss', 'sass', 'less', 'styl', 'vue', 'svelte', 'astro', 'marko', 'liquid', 'elm'
+      ];
+      const backendExtensions = [
+        'py', 'ipynb', 'pyi', 'go', 'rs', 'java', 'kt', 'kts', 'scala', 'sc', 'cs', 'cshtml', 'razor', 'cpp', 'c', 'cc', 'cxx', 'c++', 'h', 'hpp', 'hxx', 'hh', 'h++', 'rb', 'erb', 'gemspec', 'gemfile', 'rakefile', 'php', 'phtml', 'swift', 'dart', 'ex', 'exs', 'erl', 'hrl', 'clj', 'cljs', 'cljc', 'edn', 'hs', 'lhs', 'ml', 'mli', 'rkt', 'lisp', 'lsp', 'scm', 'sol', 'sql', 'sh', 'bash', 'zsh', 'fish', 'bat', 'ps1', 'groovy', 'gvy', 'gy', 'gsh', 'gradle', 'asm', 's', 'jl', 'zig', 'nim', 'cr', 'fs', 'fsi', 'fsx', 'dockerfile', 'makefile', 'json', 'toml', 'yaml', 'yml', 'ini'
+      ];
+
+      const isFrontend = frontendExtensions.includes(ext);
+      const isBackend = backendExtensions.includes(ext);
       
       if (focusList.includes('Frontend') && isFrontend) return true;
       if (focusList.includes('Backend') && isBackend) return true;
@@ -108,6 +117,20 @@ export async function POST(req: Request) {
 
     const fileContents = (await Promise.all(fileContentsPromises)).filter(Boolean);
 
+    let commitTimelines = '';
+    if (enableEvolutionQuestions) {
+      for (const file of pickedFiles) {
+        try {
+          const timeline = await fetchFileCommitTimeline(owner, repo, file.path, token);
+          if (timeline) {
+            commitTimelines += `\n### COMMIT TIMELINE FOR FILE: ${file.path}\n${timeline}\n`;
+          }
+        } catch (err) {
+          console.warn(`Failed to fetch commit timeline for ${file.path} in API:`, err);
+        }
+      }
+    }
+
     // Prepare Groq client
     const groqKey = process.env.GROQ_API_KEY;
     if (!groqKey) {
@@ -125,14 +148,15 @@ export async function POST(req: Request) {
 1. Candidate's actual code from their GitHub repository
 2. Job description for the role they are applying for
 
-Generate ${count} interview questions total split into these categories:
+Generate ${count + (enableEvolutionQuestions ? 6 : 0)} interview questions total split into these categories:
 - Directly about the candidate's actual code (reference specific functions, files, or patterns you see in their code) [question_type: code-based]
-- Connect their code experience to the job requirements (e.g. if JD requires microservices and their code shows REST APIs, ask about scaling their approach) [question_type: jd-connected]
-- Technologies mentioned in JD that are NOT in their code (to assess learning ability and gaps) [question_type: skill-gap]
+- Connect their code experience to the job requirements [question_type: jd-connected]
+- Technologies mentioned in JD that are NOT in their code [question_type: skill-gap]
 - System design or architectural questions relevant to the job role [question_type: system-design]
+${enableEvolutionQuestions ? `- Ask about the history and evolution of the code based on the provided commit timelines (exactly 2 questions per file that has timeline) [category: evolution, question_type: code-based]` : ''}
 
 CRITICAL: The "file_path" field MUST match exactly one of the file paths provided in the codebase snippets for code-based and jd-connected questions. Do NOT invent new files or file paths.
-CRITICAL: The "code_snippet" field MUST contain the actual code segment from the file that is the subject of the question (e.g. if asking about class NetworkDataExtract, include that class definition). Do not include unrelated imports or code. The "line_start" and "line_end" MUST be the exact line numbers in the file where that snippet resides.
+CRITICAL: The "code_snippet" field MUST contain the actual code segment from the file that is the subject of the question. For evolution questions, code_snippet can be empty or have the relevant code, line_start/line_end can be 0 or null, and the question must target specific commits or file changes from the timeline.
 For skill-gap and system-design questions, file_path can be empty or "Custom Question", and code_snippet should be empty.
 
 Your output must be a valid JSON object matching this schema:
@@ -145,7 +169,7 @@ Your output must be a valid JSON object matching this schema:
       "line_start": 10,
       "line_end": 20,
       "difficulty": "easy" | "medium" | "hard",
-      "category": "frontend" | "backend" | "dsa" | "system-design" | "behavioral",
+      "category": "frontend" | "backend" | "dsa" | "system-design" | "behavioral"${enableEvolutionQuestions ? ' | "evolution"' : ''},
       "question_type": "code-based" | "jd-connected" | "skill-gap" | "system-design",
       "why_asked": "One sentence explaining why this question is relevant to the role.",
       "expected_answer": {
@@ -159,7 +183,7 @@ Your output must be a valid JSON object matching this schema:
     }
   ]
 }
-Return ONLY valid JSON. No markdown code blocks, no text surrounding the JSON. Category must be strictly: frontend, backend, dsa, system-design, or behavioral. Difficulty must be strictly: easy, medium, or hard.`;
+Return ONLY valid JSON. Category must be strictly: frontend, backend, dsa, system-design, behavioral${enableEvolutionQuestions ? ', or evolution' : ''}. Difficulty must be strictly: easy, medium, or hard.`;
 
       userPrompt = `Target Difficulty: ${difficulty || 'medium'}
    Target Focus Areas: ${focusList.join(', ')}
@@ -168,13 +192,15 @@ Return ONLY valid JSON. No markdown code blocks, no text surrounding the JSON. C
    ${jobDescription.trim()}
    
    Codebase Snippets:
-   ${fileContents.map(f => `--- FILE: ${f?.path} ---\n${f?.content}`).join('\n\n')}`;
+   ${fileContents.map(f => `--- FILE: ${f?.path} ---\n${f?.content}`).join('\n\n')}
+   ${commitTimelines ? `\n\nCommit Timelines:\n${commitTimelines}` : ''}`;
    
        } else {
-         systemPrompt = `You are a senior technical interviewer. Analyze the provided codebase file snippets and generate ${count} relevant interview questions.
+         systemPrompt = `You are a senior technical interviewer. Analyze the provided codebase file snippets and generate ${count + (enableEvolutionQuestions ? 6 : 0)} relevant interview questions.
     For each question, extract a specific code snippet from the file, and specify its lines.
+    ${enableEvolutionQuestions ? `Include exactly 2 evolution questions per file (using category: 'evolution' and question_type: 'code-based'), referencing the historical commits and changes of that file shown in the commit timeline.` : ''}
     CRITICAL: The "file_path" field MUST match exactly one of the file paths provided in the codebase snippets. Do NOT invent new files or file paths.
-    CRITICAL: The "code_snippet" field MUST contain the actual code segment from the file that is the subject of the question (e.g. if asking about class NetworkDataExtract, include that class definition). Do not include unrelated imports or code. The "line_start" and "line_end" MUST be the exact line numbers in the file where that snippet resides.
+    CRITICAL: For non-evolution questions, the "code_snippet" field MUST contain the actual code segment from the file that is the subject of the question. For evolution questions, code_snippet can be empty or have the relevant code, line_start/line_end can be 0 or null, and the question must target specific commits or file changes from the timeline.
    
    Your output must be a valid JSON object matching this schema:
    {
@@ -186,7 +212,7 @@ Return ONLY valid JSON. No markdown code blocks, no text surrounding the JSON. C
          "line_start": 10,
          "line_end": 20,
          "difficulty": "easy" | "medium" | "hard",
-         "category": "frontend" | "backend" | "dsa" | "system-design",
+         "category": "frontend" | "backend" | "dsa" | "system-design"${enableEvolutionQuestions ? ' | "evolution"' : ''},
          "question_type": "code-based",
          "why_asked": "One sentence explaining why this question is relevant to their code.",
          "expected_answer": {
@@ -200,13 +226,14 @@ Return ONLY valid JSON. No markdown code blocks, no text surrounding the JSON. C
        }
      ]
    }
-   Return ONLY valid JSON. No markdown code blocks, no text surrounding the JSON. Category must be strictly: frontend, backend, dsa, or system-design. Difficulty must be strictly: easy, medium, or hard.`;
+   Return ONLY valid JSON. Category must be strictly: frontend, backend, dsa, system-design${enableEvolutionQuestions ? ', or evolution' : ''}. Difficulty must be strictly: easy, medium, or hard.`;
    
          userPrompt = `Target Difficulty: ${difficulty || 'medium'}
    Target Focus Areas: ${focusList.join(', ')}
    
    Codebase Snippets:
-   ${fileContents.map(f => `--- FILE: ${f?.path} ---\n${f?.content}`).join('\n\n')}`;
+   ${fileContents.map(f => `--- FILE: ${f?.path} ---\n${f?.content}`).join('\n\n')}
+   ${commitTimelines ? `\n\nCommit Timelines:\n${commitTimelines}` : ''}`;
        }
 
     const completion = await groq.chat.completions.create({
@@ -225,8 +252,8 @@ Return ONLY valid JSON. No markdown code blocks, no text surrounding the JSON. C
     const rawQuestions = parsed.questions || [];
     const validQuestions: any[] = [];
 
-    function findMatchingFileKey(filePath: string, mapKeys: string[]): string | undefined {
-      if (!filePath) return undefined;
+    function findMatchingFileKey(filePath: any, mapKeys: string[]): string | undefined {
+      if (!filePath || typeof filePath !== 'string') return undefined;
       const cleanPath = filePath.trim().replace(/\\/g, '/').replace(/^\/+/, '');
       if (mapKeys.includes(cleanPath)) return cleanPath;
       if (mapKeys.includes(filePath)) return filePath;
@@ -275,7 +302,8 @@ Return ONLY valid JSON. No markdown code blocks, no text surrounding the JSON. C
       return null;
     }
 
-    function selfHealSnippet(questionText: string, fullContent: string): { start: number; end: number; snippet: string } | null {
+    function selfHealSnippet(questionText: any, fullContent: string): { start: number; end: number; snippet: string } | null {
+      if (!questionText || typeof questionText !== 'string') return null;
       const classRegex = /\b([A-Z][a-zA-Z0-9_]+)\b\s+(?:class)/i;
       const classRegex2 = /(?:class)\s+\b([A-Z][a-zA-Z0-9_]+)\b/i;
       const methodRegex = /\b([a-z_][a-z0-9_]+)\b\s+(?:method|function|procedure|decorator)/i;
@@ -389,6 +417,13 @@ Return ONLY valid JSON. No markdown code blocks, no text surrounding the JSON. C
 
   } catch (err: any) {
     console.error('API technical questions error:', err);
-    return NextResponse.json({ error: 'Something went wrong. Please try again.' }, { status: 500 });
+    const msg = err.message?.toLowerCase() || '';
+    let errorMsg = 'Failed to generate technical questions. Please try again.';
+    if (msg.includes('rate limit')) {
+      errorMsg = 'The AI service is temporarily busy. Please wait a moment and try again.';
+    } else if (msg.includes('api key') || msg.includes('unauthorized')) {
+      errorMsg = 'AI service configuration error. Please notify system administration.';
+    }
+    return NextResponse.json({ error: errorMsg }, { status: 500 });
   }
 }

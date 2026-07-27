@@ -33,6 +33,8 @@ interface Session {
   recruiter_warning?: string | null;
   interview_mode?: 'technical' | 'behavioral' | 'logical' | 'fullstack' | 'custom';
   mode_config?: any;
+  challenge?: any;
+  challenge_submission?: any;
 }
 
 export default function CandidateSessionPage() {
@@ -58,6 +60,14 @@ export default function CandidateSessionPage() {
   const [timerExpired, setTimerExpired] = useState(false);
   const [qTimeLeft, setQTimeLeft] = useState(120);
   const [submitting, setSubmitting] = useState(false);
+
+  // Micro-Challenge States
+  const [activeStage, setActiveStage] = useState<'qa' | 'challenge' | 'completed'>('qa');
+  const [challengeCode, setChallengeCode] = useState('');
+  const [challengeTimeLeft, setChallengeTimeLeft] = useState(900); // 15 mins default
+  const [challengeActive, setChallengeActive] = useState(false);
+  const [submittingChallenge, setSubmittingChallenge] = useState(false);
+  const [isSavingChallenge, setIsSavingChallenge] = useState(false);
 
   // ==========================================
   // PROCTORING STATES
@@ -345,6 +355,21 @@ export default function CandidateSessionPage() {
           restoredNotes[a.question_id] = a.answer_text || '';
         });
         setCandidateNotes(restoredNotes);
+
+        const challengeData = sessData.challenge;
+        if (challengeData) {
+          const savedCode = sessData.challenge_submission?.submittedCode;
+          setChallengeCode(savedCode !== undefined ? savedCode : challengeData.starterCode);
+          
+          const savedTime = sessData.challenge_submission?.timeLeftSeconds;
+          const challengeMins = sessData.mode_config?.challengeDurationMinutes || 15;
+          setChallengeTimeLeft(savedTime !== undefined ? savedTime : challengeMins * 60);
+
+          if (sessData.challenge_submission?.started) {
+            setActiveStage('challenge');
+            setChallengeActive(true);
+          }
+        }
 
         // Run System Checks
         runSystemChecks();
@@ -911,17 +936,18 @@ export default function CandidateSessionPage() {
     const preventContextMenu = (e: MouseEvent) => {
       e.preventDefault();
       logProctoringEvent('right_click_attempt', 'low', { clientX: e.clientX, clientY: e.clientY });
-      toast.error('Right-click context menu is disabled.');
+      toast.error('🤖 AI Proctor: Right-click context menu is disabled.');
     };
 
     const preventShortcuts = (e: KeyboardEvent) => {
-      // 1. Copy & Cut blocker
+      // 1. Copy, Cut & Paste blocker
       const isCtrlC = (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c';
       const isCtrlX = (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'x';
-      if (isCtrlC || isCtrlX) {
+      const isCtrlV = (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v';
+      if (isCtrlC || isCtrlX || isCtrlV) {
         e.preventDefault();
-        logProctoringEvent('copy_attempt', 'medium', { shortcut: isCtrlC ? 'Ctrl+C' : 'Ctrl+X' });
-        toast.error('Copying or cutting content is disabled.');
+        logProctoringEvent('clipboard_attempt', 'medium', { shortcut: isCtrlV ? 'Ctrl+V' : (isCtrlC ? 'Ctrl+C' : 'Ctrl+X') });
+        toast.error('🤖 AI Proctor: Copying, cutting, or pasting content is disabled.');
       }
 
       // 2. DevTools blocker (F12, Ctrl+Shift+I, Ctrl+Shift+J, Ctrl+Shift+C)
@@ -968,6 +994,21 @@ export default function CandidateSessionPage() {
           // Real-time Recruiter Warnings check
           if (sessData.recruiter_warning) {
             setActiveRecruiterWarning(sessData.recruiter_warning);
+          }
+
+          // Real-time Recruiter-forced challenge activation check
+          if (sessData.result?.challenge && sessData.result?.challenge_submission?.started) {
+            setActiveStage(prev => {
+              if (prev === 'qa') {
+                setChallengeActive(true);
+                const challengeMins = sessData.mode_config?.challengeDurationMinutes || 15;
+                const timeLeft = sessData.result?.challenge_submission?.timeLeftSeconds ?? (challengeMins * 60);
+                setChallengeTimeLeft(timeLeft);
+                setChallengeCode(prevCode => prevCode || sessData.result?.challenge?.starterCode || '');
+                return 'challenge';
+              }
+              return prev;
+            });
           }
 
           if (sessData.status === 'completed') {
@@ -1047,6 +1088,7 @@ export default function CandidateSessionPage() {
         if (prev <= 1) {
           clearInterval(interval);
           setTimerExpired(true);
+          handleQAComplete();
           return 0;
         }
         return prev - 1;
@@ -1079,7 +1121,7 @@ export default function CandidateSessionPage() {
     if (activeQIndex < questions.length - 1) {
       setActiveQIndex(prev => prev + 1);
     } else {
-      handleSubmit();
+      handleQAComplete();
     }
   };
 
@@ -1131,6 +1173,96 @@ export default function CandidateSessionPage() {
       setSubmitting(false);
     }
   };
+
+  const handleQAComplete = async () => {
+    if (session?.challenge) {
+      setActiveStage('challenge');
+      setChallengeActive(true);
+      await logProctoringEvent('challenge_stage_started', 'info', { message: 'Candidate started coding micro-challenge stage.' });
+      await saveChallengeDraft(challengeCode, challengeTimeLeft, true);
+    } else {
+      await handleSubmit();
+    }
+  };
+
+  const saveChallengeDraft = async (code: string, timeSecs: number, started = false) => {
+    if (!sessionId) return;
+    setIsSavingChallenge(true);
+    try {
+      await fetch('/api/candidate/challenge/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId,
+          submittedCode: code,
+          timeLeftSeconds: timeSecs,
+          started
+        })
+      });
+    } catch (err) {
+      console.warn('Failed to save challenge draft:', err);
+    } finally {
+      setIsSavingChallenge(false);
+    }
+  };
+
+  const handleChallengeSubmit = async () => {
+    if (submittingChallenge || !sessionId) return;
+    setSubmittingChallenge(true);
+    setChallengeActive(false);
+
+    try {
+      if (webcamStream) webcamStream.getTracks().forEach(t => t.stop());
+      if (screenStream) screenStream.getTracks().forEach(t => t.stop());
+
+      const res = await fetch('/api/candidate/challenge/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId,
+          submittedCode: challengeCode
+        })
+      });
+
+      if (res.ok) {
+        setValidationError('COMPLETED');
+      } else {
+        const data = await res.json();
+        alert(data.error || 'Failed to submit challenge.');
+      }
+    } catch (err) {
+      console.error('Challenge submission error:', err);
+      alert('Failed to submit challenge.');
+    } finally {
+      setSubmittingChallenge(false);
+    }
+  };
+
+  // Challenge Countdown Timer Hook
+  useEffect(() => {
+    if (!challengeActive || session?.is_paused || challengeTimeLeft <= 0 || showScreenShareWarning) return;
+    const interval = setInterval(() => {
+      setChallengeTimeLeft(prev => {
+        const nextVal = prev - 1;
+        if (nextVal <= 0) {
+          clearInterval(interval);
+          handleChallengeSubmit();
+          return 0;
+        }
+        return nextVal;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [challengeActive, challengeTimeLeft, session, showScreenShareWarning]);
+
+  // Challenge Autosave Hook
+  useEffect(() => {
+    if (!challengeActive) return;
+    const interval = setInterval(() => {
+      saveChallengeDraft(challengeCode, challengeTimeLeft, true);
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [challengeActive, challengeCode, challengeTimeLeft]);
 
   // Save notes to Supabase via candidate/answer API
   const saveCandidateAnswer = async (qId: string, text: string) => {
@@ -1201,7 +1333,7 @@ export default function CandidateSessionPage() {
     );
   }
 
-  if (validationError === 'COMPLETED' || timerExpired || session?.status === 'completed') {
+  if (validationError === 'COMPLETED' || (timerExpired && !session?.challenge) || session?.status === 'completed') {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-[#0d1515] text-white p-8">
         <div className="bg-[#151d1e] border border-[#3b494b] rounded-xl p-8 max-w-md text-center shadow-xl space-y-4">
@@ -1432,6 +1564,146 @@ export default function CandidateSessionPage() {
     );
   }
 
+  const renderChallengeWorkspace = () => {
+    const challenge = session?.challenge;
+    if (!challenge) return null;
+
+    return (
+      <>
+        {/* Top Proctoring Indicator Bar */}
+        <div className="bg-[#1e1b1b] border-b border-red-500/20 px-6 py-1 z-20 flex justify-between items-center text-[10px] font-mono text-[#CBD5E1]">
+          <div className="flex items-center gap-4">
+            <span className="flex items-center gap-1.5">
+              <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse"></span>
+              🔴 Screen Being Recorded
+            </span>
+            <span className="text-[#3b494b]">|</span>
+            <span className="flex items-center gap-1.5">
+              <span className="material-symbols-outlined text-xs text-cyan-400">videocam</span>
+              👁️ Webcam Active
+            </span>
+            <span className="text-[#3b494b]">|</span>
+            <span className="flex items-center gap-1.5">
+              <span className="material-symbols-outlined text-xs text-cyan-400">monitor</span>
+              🖥️ Screen Shared (Entire Monitor)
+            </span>
+          </div>
+          <span className="text-[#94A3B8] italic">
+            Stage 2 of 2: Micro-Challenge Coding Sandbox
+          </span>
+        </div>
+
+        {/* Challenge Header */}
+        <header className="flex justify-between items-center px-6 py-3.5 bg-[#151d1e] border-b border-[#3b494b] z-10">
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="font-bold text-sm tracking-tight text-[#06B6D4]">CodeWalk Challenge Workspace</h1>
+              <span className="h-1.5 w-1.5 rounded-full bg-[#06B6D4] animate-ping"></span>
+              <span className="text-[10px] text-cyan-400 font-semibold uppercase tracking-wider">Live coding</span>
+            </div>
+            <p className="text-[10px] text-[#94A3B8] mt-0.5 font-mono">
+              Editing File: {challenge.filePath} ({challenge.challengeType === 'bug' ? 'Bug Fix' : 'Feature Addition'})
+            </p>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setActiveStage('qa')}
+              className="px-3 py-1.5 border border-[#3b494b] hover:border-cyan-500/40 hover:bg-[#0d1515]/60 hover:text-cyan-400 bg-[#0d1515]/40 text-[#94A3B8] text-xs font-bold rounded-lg transition-all flex items-center gap-1 cursor-pointer mr-2"
+            >
+              <span className="material-symbols-outlined text-sm font-bold">arrow_back</span>
+              Return to Q&A
+            </button>
+            {isSavingChallenge && (
+              <span className="text-[10px] text-[#94A3B8] font-mono animate-pulse">Autosaving draft...</span>
+            )}
+            {/* Timer Box */}
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-[#0d1515] border border-[#3b494b] rounded-lg font-mono">
+              <span className="material-symbols-outlined text-sm text-[#06B6D4]">timer</span>
+              <span className="text-sm font-bold text-white">{formatTime(challengeTimeLeft)}</span>
+            </div>
+          </div>
+        </header>
+
+        {/* Main Workspace split panel */}
+        <div className="flex flex-1 overflow-hidden">
+          
+          {/* Left panel: Challenge description */}
+          <div className="w-[40%] border-r border-[#3b494b] bg-[#151d1e]/40 p-6 flex flex-col justify-between overflow-y-auto custom-scrollbar">
+            <div className="space-y-4">
+              <div className="bg-[#151d1e] border border-[#3b494b] rounded-xl p-5 shadow-xl space-y-4">
+                <span className="text-[10px] font-bold text-[#06B6D4] uppercase tracking-wider block">Task Description</span>
+                <div className="text-xs leading-relaxed text-white space-y-2 prose prose-invert font-sans">
+                  <div className="whitespace-pre-line leading-relaxed">{challenge.taskDescription}</div>
+                </div>
+              </div>
+
+              <div className="bg-[#0d1515]/40 border border-[#3b494b]/60 rounded-xl p-4 text-[10px] text-[#94A3B8] font-mono leading-relaxed space-y-1">
+                <p className="font-bold text-white uppercase tracking-wider mb-1">💡 Instructions</p>
+                <p>1. Edit the file on the right side of the screen.</p>
+                <p>2. Keep within the scope of the function/block specified.</p>
+                <p>3. Do not rewrite parts of the file unrelated to the task.</p>
+                <p>4. Autosaves every 30 seconds. Press Submit when finished.</p>
+              </div>
+            </div>
+
+            {/* Submit Button */}
+            <div className="pt-4 border-t border-[#3b494b]/60 mt-6">
+              <button
+                onClick={handleChallengeSubmit}
+                disabled={submittingChallenge}
+                className="w-full py-3 bg-[#06B6D4] hover:bg-[#06B6D4]/90 text-xs font-bold text-[#0d1515] uppercase tracking-wider rounded-xl transition-all disabled:opacity-40 cursor-pointer flex items-center justify-center gap-1.5"
+              >
+                {submittingChallenge ? 'Submitting Challenge...' : 'Submit Challenge Solution'}
+                <span className="material-symbols-outlined text-sm">rocket_launch</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Right panel: Custom Code Editor */}
+          <div className="w-[60%] flex flex-col bg-[#0b0f0f] relative font-mono">
+            {/* Editor Top Bar */}
+            <div className="bg-[#111718] px-4 py-2 border-b border-[#3b494b]/40 flex items-center justify-between">
+              <span className="text-[10px] text-[#94A3B8] uppercase tracking-wider font-bold">Code Sandbox</span>
+              <span className="text-[9px] text-[#06B6D4] px-1.5 py-0.5 bg-[#06B6D4]/10 rounded font-bold">Write code below</span>
+            </div>
+
+            {/* Custom textarea styled as a code editor */}
+            <div className="flex-1 flex overflow-hidden">
+              {/* Line numbers gutter */}
+              <div className="w-12 bg-[#090d0d] border-r border-[#3b494b]/30 py-4 flex flex-col items-end pr-2 text-[#475569] text-xs select-none font-mono">
+                {challengeCode.split('\n').map((_, idx) => (
+                  <div key={idx} className="h-5 leading-5 font-mono">{idx + 1}</div>
+                ))}
+              </div>
+              <textarea
+                value={challengeCode}
+                onChange={(e) => setChallengeCode(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Tab') {
+                    e.preventDefault();
+                    const start = e.currentTarget.selectionStart;
+                    const end = e.currentTarget.selectionEnd;
+                    const val = e.currentTarget.value;
+                    setChallengeCode(val.substring(0, start) + '  ' + val.substring(end));
+                    setTimeout(() => {
+                      e.currentTarget.selectionStart = e.currentTarget.selectionEnd = start + 2;
+                    }, 0);
+                  }
+                }}
+                className="flex-grow bg-[#0b0f0f] text-white p-4 font-mono text-xs focus:outline-none resize-none overflow-y-auto h-full leading-5 custom-scrollbar"
+                style={{ tabSize: 2, whiteSpace: 'pre', overflowWrap: 'normal' }}
+                placeholder="// Write your solution code here..."
+              />
+            </div>
+          </div>
+        </div>
+
+      </>
+    );
+  };
+
   // ==========================================
   // CANDIDATE MAIN INTERVIEW ROOM RENDER
   // ==========================================
@@ -1439,8 +1711,11 @@ export default function CandidateSessionPage() {
 
   return (
     <div className="flex flex-col h-screen bg-[#0d1515] text-[#F1F5F9] overflow-hidden select-none relative">
-      
-      {/* Top Proctoring Indicator Bar (Step 8) */}
+      {activeStage === 'challenge' ? (
+        renderChallengeWorkspace()
+      ) : (
+        <>
+          {/* Top Proctoring Indicator Bar (Step 8) */}
       <div className="bg-[#1e1b1b] border-b border-red-500/20 px-6 py-1 z-20 flex justify-between items-center text-[10px] font-mono text-[#CBD5E1]">
         <div className="flex items-center gap-4">
           <span className="flex items-center gap-1.5">
@@ -1514,6 +1789,19 @@ export default function CandidateSessionPage() {
                 </button>
               );
             })}
+
+            {session?.challenge && (
+              <button
+                onClick={handleQAComplete}
+                className="w-full text-left p-3 rounded-lg border border-amber-500/40 bg-amber-500/10 text-amber-400 text-xs font-bold transition-all hover:bg-amber-500/20 flex items-center justify-between mt-4 cursor-pointer"
+              >
+                <span className="flex items-center gap-1.5">
+                  <span className="material-symbols-outlined text-sm">rocket_launch</span>
+                  Proceed to Live Coding
+                </span>
+                <span className="material-symbols-outlined text-xs">play_arrow</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -1656,12 +1944,14 @@ export default function CandidateSessionPage() {
                 </span>
                 {activeQIndex === questions.length - 1 ? (
                   <button
-                    onClick={handleSubmit}
+                    onClick={handleQAComplete}
                     disabled={submitting}
-                    className="px-4 py-1.5 bg-[#06B6D4] text-xs font-bold rounded-lg text-[#0d1515] hover:bg-cyan-400 disabled:opacity-40 disabled:hover:bg-[#06B6D4] transition-all inline-flex items-center gap-1"
+                    className="px-4 py-1.5 bg-[#06B6D4] text-xs font-bold rounded-lg text-[#0d1515] hover:bg-cyan-400 disabled:opacity-40 disabled:hover:bg-[#06B6D4] transition-all inline-flex items-center gap-1 cursor-pointer"
                   >
-                    {submitting ? 'Submitting...' : 'Submit'}
-                    <span className="material-symbols-outlined text-sm">check_circle</span>
+                    {submitting ? 'Submitting...' : (session?.challenge ? 'Proceed to Coding Challenge' : 'Submit')}
+                    <span className="material-symbols-outlined text-sm">
+                      {session?.challenge ? 'play_arrow' : 'check_circle'}
+                    </span>
                   </button>
                 ) : (
                   <button
@@ -1682,8 +1972,9 @@ export default function CandidateSessionPage() {
             No screening questions loaded for this session.
           </div>
         )}
-
       </div>
+      </>
+    )}
 
       {/* ==========================================
           FLOATING BOTTOM CORNER PREVIEW (Part 3)
@@ -1732,16 +2023,19 @@ export default function CandidateSessionPage() {
       {showTabWarning && (
         <div className="fixed inset-0 bg-rose-950/95 z-50 flex flex-col items-center justify-center p-6 text-center animate-in fade-in duration-200">
           <div className="max-w-md space-y-4">
-            <span className="material-symbols-outlined text-6xl text-rose-500 animate-bounce">warning</span>
-            <h2 className="text-2xl font-black text-white uppercase tracking-wider">⚠️ Tab Switch Detected</h2>
+            <span className="material-symbols-outlined text-6xl text-rose-500 animate-bounce">smart_toy</span>
+            <h2 className="text-2xl font-black text-white uppercase tracking-wider">🤖 AI Proctor Alert</h2>
+            <h3 className="text-base font-bold text-rose-400">Tab Switch or Focus Loss Detected</h3>
             <p className="text-sm text-[#F1F5F9] leading-relaxed">
-              Leaving the interview tab or window is strictly prohibited. Your actions have been logged in the proctoring report.
+              Our AI Proctoring system detected that you left the interview window. 
+              Leaving the tab or application during the test is strictly prohibited. 
+              This incident has been logged. Continuing to do so will result in immediate disqualification.
             </p>
             <button
               onClick={() => setShowTabWarning(false)}
-              className="px-6 py-2 bg-white text-rose-950 font-bold text-xs uppercase tracking-wider rounded-lg hover:bg-[#CBD5E1] transition-colors cursor-pointer"
+              className="px-6 py-2 bg-rose-500 hover:bg-rose-600 text-white font-bold text-xs uppercase tracking-wider rounded-lg transition-colors cursor-pointer"
             >
-              Return to Interview
+              I Understand & Return to Interview
             </button>
           </div>
         </div>
@@ -1751,16 +2045,18 @@ export default function CandidateSessionPage() {
       {showDevtoolsWarning && (
         <div className="fixed inset-0 bg-rose-950/95 z-50 flex flex-col items-center justify-center p-6 text-center animate-in fade-in duration-200">
           <div className="max-w-md space-y-4">
-            <span className="material-symbols-outlined text-6xl text-rose-500 animate-bounce">warning</span>
-            <h2 className="text-2xl font-black text-white uppercase tracking-wider">⚠️ DevTools Attempt</h2>
+            <span className="material-symbols-outlined text-6xl text-rose-500 animate-bounce">smart_toy</span>
+            <h2 className="text-2xl font-black text-white uppercase tracking-wider">🤖 AI Proctor Alert</h2>
+            <h3 className="text-base font-bold text-rose-400">DevTools or Inspect Shortcut Attempt</h3>
             <p className="text-sm text-[#F1F5F9] leading-relaxed">
-              Opening Developer Tools or inspect shortcuts is disabled. This incident has been logged.
+              Opening Developer Tools, browser consoles, or inspect shortcuts is disabled. 
+              This attempt has been logged. Please focus exclusively on the coding/Q&A workspace.
             </p>
             <button
               onClick={() => setShowDevtoolsWarning(false)}
-              className="px-6 py-2 bg-white text-rose-950 font-bold text-xs uppercase tracking-wider rounded-lg hover:bg-[#CBD5E1] transition-colors cursor-pointer"
+              className="px-6 py-2 bg-rose-500 hover:bg-rose-600 text-white font-bold text-xs uppercase tracking-wider rounded-lg transition-colors cursor-pointer"
             >
-              Acknowledge
+              I Understand & Acknowledge
             </button>
           </div>
         </div>

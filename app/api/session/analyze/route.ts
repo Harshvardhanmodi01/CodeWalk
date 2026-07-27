@@ -25,7 +25,11 @@ export async function POST(req: Request) {
       files = await fetchRepoContents(owner, repo, '', undefined, token);
     } catch (e: any) {
       console.error('Repo contents fetch failed:', e);
-      return NextResponse.json({ error: 'Failed to fetch repository contents' }, { status: 400 });
+      const isRateLimit = e.message?.toLowerCase().includes('rate limit') || e.status === 403;
+      const errorMsg = isRateLimit 
+        ? "We're experiencing temporary connection limits with GitHub. Please try again in a few minutes."
+        : "Failed to load repository details. Please verify the GitHub URL is correct and public.";
+      return NextResponse.json({ error: errorMsg }, { status: 400 });
     }
 
     // Try to fetch README

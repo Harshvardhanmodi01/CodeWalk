@@ -36,6 +36,7 @@ function isValidQuestion(q: any): boolean {
   if (!q.answer || typeof q.answer !== 'string') return false;
   if (q.answer.length < 10 || q.answer.length > 500) return false;
   if (isLowQualityQuestion(q.text)) return false;
+  if (q.category === 'evolution') return true;
   const hasLineRef = /\bline\s+\d+\b/i.test(q.text);
   const hasBlockRef = /\blines?\s+\d+\s*[-–]\s*\d+\b/i.test(q.text);
   if (!hasLineRef && !hasBlockRef) return false;
@@ -57,12 +58,12 @@ async function adversarialCritique(
 
 ### Evaluation criteria:
 1. **Can this be guessed without the code?** For each question, ask: "Could a competent engineer who has NEVER seen this code guess this answer correctly just from common patterns and best practices, without reading the actual implementation?" If YES, mark as "GUESSABLE" and reject.
-2. **Does the question contain a concrete observation about the code?** It must state what the code does at that line before asking why. Example: "Line 34 uses a fixed retry limit of 3 instead of exponential backoff — what's the tradeoff?" vs. "Why was this approach used?" — the latter is weak.
+2. **Does the question contain a concrete observation about the code?** It must state what the code does at that line before asking why. Example: "Line 34 uses a fixed retry limit of 3 instead of exponential backoff — what's the tradeoff?" vs. "Why was this approach used?" — the latter is weak. For "evolution" category questions, they do not need line references, but they must refer to specific commits, authors, dates, or historical growth patterns shown in the timeline (e.g. "You changed X in commit Y — walk me through why").
 3. **Does the answer read like a textbook?** Penalise answers that are generic (e.g., "improves performance," "increases security," "follows best practices") rather than specific to THIS code.
 4. **Is the difficulty label correct?** ★ (Junior) = single‑fact recall, ★★ (Mid) = requires reasoning, ★★★ (Senior) = multi‑step reasoning or architectural tradeoff.
 5. **Is the question phrased with variety?** Not all design questions should start with "Why was X chosen over Y." Mix phrasing: "What would break if...", "What problem does this solve...", "Walk through what happens when...".
 6. **Does the question align with the project's purpose (README)?** If README says "real‑time recommendation engine," questions about unrelated utilities may be low quality.
-7. **Is the line reference actually relevant?** Does the question genuinely require reading that specific line, or could it be answered by looking elsewhere?
+7. **Is the line reference actually relevant?** For non-evolution questions, does it genuinely require reading that specific line? For evolution questions, is it anchored to the commit history?
 
 ### Questions to review:
 ${JSON.stringify(questionsArray, null, 2)}
@@ -238,7 +239,8 @@ function buildFilePrompt(
   filename: string,
   readmeContext?: string,
   projectName?: string,
-  astAnalysis?: any
+  astAnalysis?: any,
+  commitTimeline?: string
 ): string {
   const lines = code.split('\n');
   const totalLines = lines.length;
@@ -302,14 +304,23 @@ function buildFilePrompt(
     prompt += `## Structural hints (use these to guide your questions):\n${astHints}\n`;
   }
 
+  if (commitTimeline) {
+    prompt += `\n### COMMIT HISTORY & FILE EVOLUTION TIMELINE:\n${commitTimeline}\n\n`;
+  }
+
   // Repeat taxonomy reminder briefly at the end
-  prompt += `REMINDER: Generate EXACTLY 5 questions in this order:\n`;
+  const count = commitTimeline ? 7 : 5;
+  prompt += `REMINDER: Generate EXACTLY ${count} questions in this order:\n`;
   prompt += `1. SURFACE (★, C) — return value or execution path\n`;
   prompt += `2. DESIGN #1 (★★, A) — why this approach (with concrete observation)\n`;
   prompt += `3. DESIGN #2 (★★, A) — tradeoff or data structure choice\n`;
   prompt += `4. EDGE CASE (★★, C) — boundary behaviour\n`;
-  prompt += `5. ADVERSARIAL (★★★, B/S/P) — real bug or vulnerability\n\n`;
-  prompt += `Output ONLY the JSON object. No markdown. No explanation.`;
+  prompt += `5. ADVERSARIAL (★★★, B/S/P) — real bug or vulnerability\n`;
+  if (commitTimeline) {
+    prompt += `6. EVOLUTION #1 (★★, evolution) — ask why a specific change in history was made, referencing the commit timeline (e.g. "You changed X in commit Y — walk me through why")\n`;
+    prompt += `7. EVOLUTION #2 (★★★, evolution) — ask about code growth, tradeoffs over time, or structural evolution across commits\n`;
+  }
+  prompt += `\nOutput ONLY the JSON object. No markdown. No explanation.`;
 
   return prompt;
 }
@@ -349,7 +360,7 @@ NO code line references here. Focus on documentation and domain knowledge.`;
 }
 
 // ---------- Groq caller ----------
-async function callGroq(systemPrompt: string, userPrompt: string, customModel?: string): Promise<string> {
+export async function callGroq(systemPrompt: string, userPrompt: string, customModel?: string): Promise<string> {
   const groq = getClient();
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
@@ -445,11 +456,12 @@ export async function generateQuestionsForFile(
   filename: string,
   readmeContext?: string,
   projectName?: string,
-  astAnalysis?: any
+  astAnalysis?: any,
+  commitTimeline?: string
 ): Promise<any[]> {
   if (!code || !filename) throw new Error('Code and filename required');
 
-  const userPrompt = buildFilePrompt(code, filename, readmeContext, projectName, astAnalysis);
+  const userPrompt = buildFilePrompt(code, filename, readmeContext, projectName, astAnalysis, commitTimeline);
   let bestQuestions: any[] = [];
   let bestScore = 0;
 
@@ -461,7 +473,8 @@ export async function generateQuestionsForFile(
     } catch (err) {
       if (attempt < 2) {
         console.warn(`Retrying generation for ${filename} (attempt ${attempt + 1})`);
-        const retryPrompt = userPrompt + '\n\nIMPORTANT: Output ONLY valid JSON. Follow the schema exactly. Generate EXACTLY 5 questions in the taxonomy order.';
+        const targetCount = commitTimeline ? 7 : 5;
+        const retryPrompt = userPrompt + `\n\nIMPORTANT: Output ONLY valid JSON. Follow the schema exactly. Generate EXACTLY ${targetCount} questions in the taxonomy order.`;
         response = await callGroq(SYSTEM_PROMPT, retryPrompt);
         questions = await parseAndValidateResponse(response, 1);
       } else {
@@ -473,9 +486,11 @@ export async function generateQuestionsForFile(
     const { score, validQuestions, reasons } = await adversarialCritique(questions, code, readmeContext);
 
     // If any question was rejected or score is too low, regenerate
-    if (validQuestions.length >= 4 && score >= 6) {
+    const targetValidCount = commitTimeline ? 5 : 4;
+    const targetSliceCount = commitTimeline ? 7 : 5;
+    if (validQuestions.length >= targetValidCount && score >= 6) {
       // good enough
-      bestQuestions = validQuestions.slice(0, 5); // keep top 5
+      bestQuestions = validQuestions.slice(0, targetSliceCount);
       bestScore = score;
       break;
     } else {
