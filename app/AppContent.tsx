@@ -278,7 +278,7 @@ export default function AppContent({ children }: { children: React.ReactNode }) 
 
   if (!mounted) {
     return (
-      <div className="min-h-screen bg-[#0d1515] text-[#F1F5F9]" style={{ backgroundColor: '#0d1515' }}>
+      <div className="min-h-screen bg-white text-slate-900" style={{ backgroundColor: '#ffffff' }}>
         {children}
       </div>
     );
@@ -296,14 +296,14 @@ export default function AppContent({ children }: { children: React.ReactNode }) 
   return (
     <div className="flex flex-col min-h-screen glean-grid">
       {/* HEADER */}
-      <header className="sticky top-0 z-50 w-full border-b border-outline-variant bg-surface/80 backdrop-blur-md">
+      <header className="sticky top-0 z-50 w-full border-b border-outline-variant bg-background/80 backdrop-blur-md transition-colors duration-300">
         <div className="w-full px-margin-desktop py-3 flex items-center justify-between">
           {/* Brand Logo with CW Icon */}
           <Link href="/" className="flex items-center gap-2 hover:opacity-90 transition-opacity">
             <span className="h-9 w-9 rounded-xl bg-gradient-to-tr from-cyan-500 to-indigo-400 flex items-center justify-center text-white font-extrabold text-lg shadow-md shadow-cyan-500/20">
               CW
             </span>
-            <span className="font-bold text-xl tracking-tight text-white select-none">
+            <span className="font-bold text-xl tracking-tight text-foreground select-none">
               CodeWalk
             </span>
           </Link>
@@ -331,6 +331,36 @@ export default function AppContent({ children }: { children: React.ReactNode }) 
           </nav>
 
           <div className="flex items-center gap-4">
+            {/* Theme Toggle Button */}
+            {mounted && (
+              <button
+                onClick={toggleTheme}
+                aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+                className="relative w-14 h-7 rounded-full border border-outline-variant transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-primary/50 flex-shrink-0 overflow-hidden"
+                style={{
+                  background: theme === 'dark'
+                    ? 'linear-gradient(135deg, #0d1515 0%, #192122 100%)'
+                    : 'linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%)'
+                }}
+              >
+                {/* Track icons */}
+                <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-[11px] select-none transition-opacity duration-300"
+                  style={{ opacity: theme === 'dark' ? 1 : 0 }}>🌙</span>
+                <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[11px] select-none transition-opacity duration-300"
+                  style={{ opacity: theme === 'light' ? 1 : 0 }}>☀️</span>
+                {/* Thumb */}
+                <span
+                  className="absolute top-0.5 w-6 h-6 rounded-full shadow-md transition-all duration-300 flex items-center justify-center"
+                  style={{
+                    left: theme === 'dark' ? 'calc(100% - 1.625rem)' : '0.125rem',
+                    background: theme === 'dark'
+                      ? 'linear-gradient(135deg, #00dbe9, #6366f1)'
+                      : 'linear-gradient(135deg, #f59e0b, #fbbf24)'
+                  }}
+                />
+              </button>
+            )}
+
             {/* User Profile / Auth buttons */}
             {mounted && user ? (
               <div className="relative">
@@ -354,48 +384,48 @@ export default function AppContent({ children }: { children: React.ReactNode }) 
                   )}
                 </button>
                 {profileDropdownOpen && (
-                  <div className="absolute right-0 mt-2 w-56 rounded-xl border border-outline-variant bg-[#151d1e] text-white shadow-xl py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
-                    <div className="px-4 py-2 border-b border-outline-variant/60">
-                      <p className="text-[10px] text-[#94A3B8]">Signed in as</p>
-                      <p className="text-sm font-semibold truncate">{user.name}</p>
+                  <div className="absolute right-0 mt-2 w-56 rounded-xl border border-border-main bg-card-main text-foreground shadow-xl py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+                    <div className="px-4 py-2 border-b border-border-main/60">
+                      <p className="text-[10px] text-muted-text">Signed in as</p>
+                      <p className="text-sm font-semibold truncate text-foreground">{user.name}</p>
                       <p className="text-[10px] font-mono text-[#06B6D4] mt-1 px-2 py-0.5 bg-[#06B6D4]/10 rounded-full inline-block">
                         {subscription} Plan
                       </p>
                     </div>
                     <Link
                       href="/dashboard"
-                      className="block px-4 py-2 text-xs hover:bg-[#0d1515]/55 transition-colors"
+                      className="block px-4 py-2 text-xs text-foreground hover:bg-muted-background transition-colors"
                     >
                       Recruiter Dashboard
                     </Link>
                     <Link
                       href="/history"
-                      className="block px-4 py-2 text-xs hover:bg-[#0d1515]/55 transition-colors"
+                      className="block px-4 py-2 text-xs text-foreground hover:bg-muted-background transition-colors"
                     >
                       Interview History
                     </Link>
                     <Link
                       href="/tokens"
-                      className="block px-4 py-2 text-xs hover:bg-[#0d1515]/55 transition-colors"
+                      className="block px-4 py-2 text-xs text-foreground hover:bg-muted-background transition-colors"
                     >
                       Token Logs & Quotas
                     </Link>
                     <Link
                       href="/profile"
-                      className="block px-4 py-2 text-xs hover:bg-[#0d1515]/55 transition-colors"
+                      className="block px-4 py-2 text-xs text-foreground hover:bg-muted-background transition-colors"
                     >
                       Profile Settings
                     </Link>
                     <Link
                       href="/pricing"
-                      className="block px-4 py-2 text-xs hover:bg-[#0d1515]/55 transition-colors"
+                      className="block px-4 py-2 text-xs text-foreground hover:bg-muted-background transition-colors"
                     >
                       Pricing Plans
                     </Link>
-                    <hr className="border-outline-variant/60 my-1" />
+                    <hr className="border-border-main/60 my-1" />
                     <button
                       onClick={() => signOut()}
-                      className="w-full text-left px-4 py-2 text-xs text-red-400 hover:bg-[#0d1515]/55 transition-colors"
+                      className="w-full text-left px-4 py-2 text-xs text-red-500 hover:bg-muted-background transition-colors"
                     >
                       Sign Out
                     </button>
@@ -406,7 +436,7 @@ export default function AppContent({ children }: { children: React.ReactNode }) 
               <div className="flex items-center gap-3">
                 <Link
                   href="/login"
-                  className="px-4 py-2 font-label-sm text-label-sm text-on-surface hover:text-[#06B6D4] transition-colors"
+                  className="px-4 py-2 font-label-sm text-label-sm text-foreground hover:text-[#06B6D4] transition-colors"
                 >
                   Login
                 </Link>
@@ -437,31 +467,59 @@ export default function AppContent({ children }: { children: React.ReactNode }) 
 
         {/* Mobile Navigation */}
         {mobileMenuOpen && (
-          <div className="md:hidden px-4 pt-2 pb-4 border-b border-outline-variant bg-[#151d1e] text-white shadow-xl animate-in slide-in-from-top duration-300">
+          <div className="md:hidden px-4 pt-2 pb-4 border-b border-outline-variant bg-background text-foreground shadow-xl animate-in slide-in-from-top duration-300">
             <nav className="flex flex-col gap-3">
-              <Link href="/workspace" className="py-2 text-sm font-medium hover:text-[#06B6D4]">
+              <Link href="/workspace" className="py-2 text-sm font-medium text-foreground hover:text-[#06B6D4] transition-colors">
                 Workspace
               </Link>
-              <Link href="/how-it-works" className="py-2 text-sm font-medium hover:text-[#06B6D4]">
+              <Link href="/how-it-works" className="py-2 text-sm font-medium text-foreground hover:text-[#06B6D4] transition-colors">
                 How It Works
               </Link>
-              <Link href="/pricing" className="py-2 text-sm font-medium hover:text-[#06B6D4]">
+              <Link href="/pricing" className="py-2 text-sm font-medium text-foreground hover:text-[#06B6D4] transition-colors">
                 Pricing
               </Link>
-              <Link href="/about" className="py-2 text-sm font-medium hover:text-[#06B6D4]">
+              <Link href="/about" className="py-2 text-sm font-medium text-foreground hover:text-[#06B6D4] transition-colors">
                 About Us
               </Link>
-              <Link href="/blog" className="py-2 text-sm font-medium hover:text-[#06B6D4]">
+              <Link href="/blog" className="py-2 text-sm font-medium text-foreground hover:text-[#06B6D4] transition-colors">
                 Blog
               </Link>
-              <Link href="/support" className="py-2 text-sm font-medium hover:text-[#06B6D4]">
+              <Link href="/support" className="py-2 text-sm font-medium text-foreground hover:text-[#06B6D4] transition-colors">
                 Support
               </Link>
+              {/* Mobile theme toggle */}
+              <div className="flex items-center gap-3 py-2 border-t border-outline-variant/60">
+                <span className="text-sm font-medium text-foreground">{theme === 'dark' ? 'Dark Mode' : 'Light Mode'}</span>
+                <button
+                  onClick={toggleTheme}
+                  aria-label="Toggle theme"
+                  className="relative w-14 h-7 rounded-full border border-outline-variant transition-all duration-300 focus:outline-none overflow-hidden flex-shrink-0"
+                  style={{
+                    background: theme === 'dark'
+                      ? 'linear-gradient(135deg, #0d1515 0%, #192122 100%)'
+                      : 'linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%)'
+                  }}
+                >
+                  <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-[11px] select-none transition-opacity duration-300"
+                    style={{ opacity: theme === 'dark' ? 1 : 0 }}>🌙</span>
+                  <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[11px] select-none transition-opacity duration-300"
+                    style={{ opacity: theme === 'light' ? 1 : 0 }}>☀️</span>
+                  <span
+                    className="absolute top-0.5 w-6 h-6 rounded-full shadow-md transition-all duration-300"
+                    style={{
+                      left: theme === 'dark' ? 'calc(100% - 1.625rem)' : '0.125rem',
+                      background: theme === 'dark'
+                        ? 'linear-gradient(135deg, #00dbe9, #6366f1)'
+                        : 'linear-gradient(135deg, #f59e0b, #fbbf24)'
+                    }}
+                  />
+                </button>
+              </div>
               {(!mounted || !user) ? (
-                <div className="flex flex-col gap-2 pt-2 border-t border-outline-variant/60">
+                <div className="flex flex-col gap-2 border-t border-outline-variant/60 pt-2">
                   <Link
                     href="/login"
-                    className="w-full text-center py-2 text-on-surface hover:text-[#06B6D4] font-label-sm text-label-sm transition-colors"
+                    className="w-full text-center py-2 text-foreground hover:text-[#06B6D4] font-label-sm text-label-sm transition-colors"
                   >
                     Login
                   </Link>
@@ -473,26 +531,26 @@ export default function AppContent({ children }: { children: React.ReactNode }) 
                   </Link>
                 </div>
               ) : (
-                <div className="flex flex-col gap-2 pt-2 border-t border-outline-variant/60">
+                <div className="flex flex-col gap-2 border-t border-outline-variant/60">
                   <p className="text-xs text-muted-text px-2">Dashboard Functions</p>
-                  <Link href="/dashboard" className="py-2 px-2 text-sm font-medium hover:text-[#06B6D4]">
+                  <Link href="/dashboard" className="py-2 px-2 text-sm font-medium text-foreground hover:text-[#06B6D4] transition-colors">
                     Recruiter Dashboard
                   </Link>
-                  <Link href="/history" className="py-2 px-2 text-sm font-medium hover:text-[#06B6D4]">
+                  <Link href="/history" className="py-2 px-2 text-sm font-medium text-foreground hover:text-[#06B6D4] transition-colors">
                     Interview History
                   </Link>
-                  <Link href="/tokens" className="py-2 px-2 text-sm font-medium hover:text-[#06B6D4]">
+                  <Link href="/tokens" className="py-2 px-2 text-sm font-medium text-foreground hover:text-[#06B6D4] transition-colors">
                     Token Logs & Quotas
                   </Link>
-                  <Link href="/profile" className="py-2 px-2 text-sm font-medium hover:text-[#06B6D4]">
+                  <Link href="/profile" className="py-2 px-2 text-sm font-medium text-foreground hover:text-[#06B6D4] transition-colors">
                     Profile Settings
                   </Link>
-                  <Link href="/pricing" className="py-2 px-2 text-sm font-medium hover:text-[#06B6D4]">
+                  <Link href="/pricing" className="py-2 px-2 text-sm font-medium text-foreground hover:text-[#06B6D4] transition-colors">
                     Pricing Plans
                   </Link>
                   <button
                     onClick={() => signOut()}
-                    className="w-full text-left py-2 px-2 text-sm font-medium text-red-400 hover:text-red-300"
+                    className="w-full text-left py-2 px-2 text-sm font-medium text-red-500 hover:text-red-400 transition-colors"
                   >
                     Sign Out
                   </button>

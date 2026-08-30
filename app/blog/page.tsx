@@ -45,18 +45,18 @@ export default function BlogPage() {
       {/* HEADER */}
       <div className="border-b border-border-main pb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-extrabold text-text-main">CodeWalk Blog</h1>
+          <h1 className="text-3xl font-extrabold text-foreground">CodeWalk Blog</h1>
           <p className="text-xs text-muted-text mt-1">Read features articles, technical guides, and customer reviews/case studies.</p>
         </div>
 
         {/* Filter */}
-        <div className="flex bg-muted-bg border border-border-main p-1 rounded-xl flex-wrap gap-1">
+        <div className="flex bg-muted-background border border-border-main p-1 rounded-xl flex-wrap gap-1">
           {['all', 'announcements', 'engineering', 'reviews'].map((cat) => (
             <button
               key={cat}
               onClick={() => setFilterCategory(cat as any)}
               className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg capitalize transition-all ${
-                filterCategory === cat ? 'bg-primary text-white' : 'text-muted-text hover:text-text-main'
+                filterCategory === cat ? 'bg-primary text-white' : 'text-muted-text hover:text-foreground'
               }`}
             >
               {cat}
@@ -70,7 +70,7 @@ export default function BlogPage() {
         <span className="px-2.5 py-0.5 bg-primary/10 border border-primary/20 text-primary text-[10px] font-extrabold rounded-full w-max uppercase tracking-wider">
           Featured Post
         </span>
-        <h2 className="text-2xl font-black text-text-main">
+        <h2 className="text-2xl font-black text-foreground">
           Why Active-Recall Code Walks are Replacing LeetCode Assessments
         </h2>
         <p className="text-sm text-muted-text leading-relaxed">
@@ -97,7 +97,7 @@ export default function BlogPage() {
                 <span className="text-primary">{art.category}</span>
                 <span className="text-muted-text">{art.readTime}</span>
               </div>
-              <h3 className="text-base font-bold text-text-main leading-snug">
+              <h3 className="text-base font-bold text-foreground leading-snug">
                 {art.title}
               </h3>
               <p className="text-xs text-muted-text leading-relaxed mt-1">

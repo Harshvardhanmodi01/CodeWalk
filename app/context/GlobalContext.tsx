@@ -91,7 +91,7 @@ const GlobalContext = createContext<GlobalContextType | undefined>(undefined);
 
 export function GlobalProvider({ children }: { children: React.ReactNode }) {
   // Theme state
-  const [theme, setTheme] = useState<'light' | 'dark'>('dark');
+  const [theme, setTheme] = useState<'light' | 'dark'>('light');
 
   // 2FA Challenge states
   const [twoFactorChallenged, setTwoFactorChallenged] = useState(false);
@@ -134,8 +134,8 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
         setTheme(storedTheme);
         document.documentElement.classList.toggle('dark', storedTheme === 'dark');
       } else {
-        setTheme('dark');
-        document.documentElement.classList.toggle('dark', true);
+        setTheme('light');
+        document.documentElement.classList.toggle('dark', false);
       }
     } catch {}
 

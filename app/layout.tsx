@@ -28,7 +28,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${inter.variable} ${inter.className} h-full antialiased dark`}
+      className={`${inter.variable} ${inter.className} h-full antialiased`}
       suppressHydrationWarning
     >
       <head>

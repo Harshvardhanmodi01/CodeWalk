@@ -22,13 +22,13 @@ export default function Navbar() {
   }, []);
 
   return (
-    <nav className="fixed top-0 w-full z-50 flex justify-between items-center px-margin-desktop py-3 bg-surface/80 backdrop-blur-md border-b border-outline-variant">
+    <nav className="fixed top-0 w-full z-50 flex justify-between items-center px-margin-desktop py-3 bg-background/80 backdrop-blur-md border-b border-outline-variant transition-colors duration-300">
       {/* Brand Logo with CW Icon */}
       <Link href="/" className="flex items-center gap-2 hover:opacity-90 transition-opacity">
         <span className="h-9 w-9 rounded-xl bg-gradient-to-tr from-cyan-500 to-indigo-400 flex items-center justify-center text-white font-extrabold text-lg shadow-md shadow-cyan-500/20">
           CW
         </span>
-        <span className="font-bold text-xl tracking-tight text-white select-none">
+        <span className="font-bold text-xl tracking-tight text-foreground select-none">
           CodeWalk
         </span>
       </Link>
@@ -45,6 +45,33 @@ export default function Navbar() {
 
       {/* Right Controls / Auth state */}
       <div className="flex items-center gap-4">
+        {/* Theme Toggle */}
+        {mounted && (
+          <button
+            onClick={toggleTheme}
+            aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+            className="relative w-14 h-7 rounded-full border border-outline-variant transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-primary/50 flex-shrink-0 overflow-hidden"
+            style={{
+              background: theme === 'dark'
+                ? 'linear-gradient(135deg, #0d1515 0%, #192122 100%)'
+                : 'linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%)'
+            }}
+          >
+            <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-[11px] select-none transition-opacity duration-300"
+              style={{ opacity: theme === 'dark' ? 1 : 0 }}>🌙</span>
+            <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[11px] select-none transition-opacity duration-300"
+              style={{ opacity: theme === 'light' ? 1 : 0 }}>☀️</span>
+            <span
+              className="absolute top-0.5 w-6 h-6 rounded-full shadow-md transition-all duration-300"
+              style={{
+                left: theme === 'dark' ? 'calc(100% - 1.625rem)' : '0.125rem',
+                background: theme === 'dark'
+                  ? 'linear-gradient(135deg, #00dbe9, #6366f1)'
+                  : 'linear-gradient(135deg, #f59e0b, #fbbf24)'
+              }}
+            />
+          </button>
+        )}
         {mounted && user ? (
           <div className="relative">
             <button

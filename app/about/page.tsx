@@ -11,14 +11,14 @@ export default function AboutPage() {
     <div className="max-w-4xl mx-auto flex flex-col gap-12 glow-effect">
       {/* HEADER */}
       <div className="border-b border-border-main pb-4">
-        <h1 className="text-3xl font-extrabold text-text-main">About CodeWalk</h1>
+        <h1 className="text-3xl font-extrabold text-foreground">About CodeWalk</h1>
         <p className="text-xs text-muted-text mt-1">Our mission is to make codebase comprehension fast, interactive, and seamless.</p>
       </div>
 
       {/* VISION & MISSION */}
       <section className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
         <div className="flex flex-col gap-4">
-          <h2 className="text-xl font-bold text-text-main">The Code Comprehension Challenge</h2>
+          <h2 className="text-xl font-bold text-foreground">The Code Comprehension Challenge</h2>
           <p className="text-sm text-muted-text leading-relaxed">
             Modern software engineering spends more time reading and understanding code than writing it. Whether it is onboarding new hires, reviewing pull requests, or evaluating technical candidates, understanding the files and architectural intent is a massive manual effort.
           </p>
@@ -29,7 +29,7 @@ export default function AboutPage() {
         <div className="p-8 bg-primary/5 border border-primary/10 rounded-3xl relative overflow-hidden">
           <div className="absolute -top-10 -right-10 w-40 h-40 bg-primary/10 rounded-full blur-3xl" />
           <h3 className="text-primary font-bold uppercase tracking-wider text-xs mb-2">Our Vision</h3>
-          <p className="text-base text-text-main font-bold leading-relaxed">
+          <p className="text-base text-foreground font-bold leading-relaxed">
             &ldquo;To democratize software architecture comprehension, transforming codebases into living, teaching narratives that anyone can navigate in seconds.&rdquo;
           </p>
         </div>
@@ -37,7 +37,7 @@ export default function AboutPage() {
 
       {/* TIMELINE / VALUES */}
       <section className="flex flex-col gap-6">
-        <h2 className="text-xl font-bold text-text-main text-center">Core Pillars</h2>
+        <h2 className="text-xl font-bold text-foreground text-center">Core Pillars</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="p-5 bg-card-main border border-border-main rounded-2xl flex flex-col gap-2">
             <span className="text-lg font-bold text-primary">01. Precision</span>
@@ -62,7 +62,7 @@ export default function AboutPage() {
 
       {/* TEAM SECTION */}
       <section className="flex flex-col gap-6">
-        <h2 className="text-xl font-bold text-text-main text-center">Our Leadership</h2>
+        <h2 className="text-xl font-bold text-foreground text-center">Our Leadership</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {team.map((member) => (
             <div key={member.name} className="p-5 bg-card-main border border-border-main rounded-2xl flex flex-col items-center text-center gap-3">
@@ -70,7 +70,7 @@ export default function AboutPage() {
                 {member.initials}
               </span>
               <div>
-                <h4 className="text-sm font-bold text-text-main">{member.name}</h4>
+                <h4 className="text-sm font-bold text-foreground">{member.name}</h4>
                 <p className="text-[10px] text-primary font-semibold mt-0.5">{member.role}</p>
               </div>
               <p className="text-xs text-muted-text leading-relaxed mt-2">{member.bio}</p>
