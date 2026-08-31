@@ -55,6 +55,8 @@ const astAnalyzerCpp_1 = require("./app/lib/astAnalyzerCpp");
 const fileExclusion_1 = require("./app/lib/fileExclusion");
 const importGraph_1 = require("./app/lib/importGraph");
 const fileScoring_1 = require("./app/lib/fileScoring");
+const authenticity_1 = require("./app/lib/authenticity");
+const challengeGenerator_1 = require("./app/lib/challengeGenerator");
 const REDIS_URL = process.env.REDIS_URL;
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -119,16 +121,16 @@ async function collectCodeFiles(owner, repo) {
         (gitignoreText ? ' (+ .gitignore applied)' : ''));
     return filtered;
 }
-async function analyzeRepo(repoUrl, jobId) {
+async function analyzeRepo(repoUrl, jobId, sessionId) {
     const { owner, repo } = (0, github_1.extractRepoInfo)(repoUrl);
     const readme = await (0, github_1.getReadme)(owner, repo);
     const allFiles = await collectCodeFiles(owner, repo);
     if (allFiles.length === 0)
         throw new Error('No supported code files found');
-    // Supported extensions: JS/TS, Python, C/C++
-    const supportedFiles = allFiles.filter(f => /\.(js|jsx|ts|tsx|py|c|cpp|cc|cxx)$/i.test(f.path));
+    // Supported extensions
+    const supportedFiles = allFiles;
     if (supportedFiles.length === 0) {
-        throw new Error('No JavaScript/TypeScript, Python, or C/C++ files found');
+        throw new Error('No supported code files found in repository');
     }
     // ── Phase 1: fetch all content + run AST on every supported file ──────────
     // We need content for the import graph regardless, so fetch eagerly.
@@ -184,6 +186,25 @@ async function analyzeRepo(repoUrl, jobId) {
     const scored = (0, fileScoring_1.scoreFiles)(supportedFiles, astMap, centralityMap);
     const topFiles = (0, fileScoring_1.topFilesFromScored)(scored);
     console.log(`[analyzeRepo] ${supportedFiles.length} candidates → top ${topFiles.length} selected by scoring`);
+    // Check if evolution questions and coding challenge are enabled in mode_config
+    let enableEvolution = false;
+    let enableChallenge = false;
+    let challengeTypePref = 'any';
+    if (sessionId) {
+        try {
+            const { data: sessData } = await supabase
+                .from('sessions')
+                .select('mode_config')
+                .eq('id', sessionId)
+                .maybeSingle();
+            enableEvolution = sessData?.mode_config?.enableEvolutionQuestions ?? false;
+            enableChallenge = sessData?.mode_config?.enableChallenge ?? false;
+            challengeTypePref = sessData?.mode_config?.challengeType ?? 'any';
+        }
+        catch (err) {
+            console.warn('[analyzeRepo] Failed to check mode_config for evolution/challenge settings:', err);
+        }
+    }
     const fileResults = [];
     let totalQuestions = 0;
     const warnings = [];
@@ -194,9 +215,19 @@ async function analyzeRepo(repoUrl, jobId) {
             continue;
         const { truncatedCode } = (0, utils_1.smartTruncate)(content);
         const astAnalysis = astMap[file.path] ?? null;
+        let commitTimeline = null;
+        if (enableEvolution) {
+            try {
+                const githubToken = process.env.GITHUB_TOKEN;
+                commitTimeline = await (0, authenticity_1.fetchFileCommitTimeline)(owner, repo, file.path, githubToken);
+            }
+            catch (err) {
+                console.warn(`[analyzeRepo] Failed to fetch commit timeline for ${file.path}:`, err);
+            }
+        }
         let questionsArray = [];
         try {
-            questionsArray = await (0, gemini_1.generateQuestionsForFile)(truncatedCode, file.path, readme || undefined, repo, astAnalysis);
+            questionsArray = await (0, gemini_1.generateQuestionsForFile)(truncatedCode, file.path, readme || undefined, repo, astAnalysis, commitTimeline || undefined);
         }
         catch (err) {
             const msg = err instanceof Error ? err.message : 'Unknown error';
@@ -212,9 +243,18 @@ async function analyzeRepo(repoUrl, jobId) {
             }
         }
         let questionsText = '';
-        let cCounter = 1, pCounter = 1;
+        let cCounter = 1, pCounter = 1, eCounter = 1;
         for (const q of questionsArray) {
-            const tag = q.category === 'C' ? `C${cCounter++}` : `P${pCounter++}`;
+            let tag = '';
+            if (q.category === 'evolution') {
+                tag = `E${eCounter++}`;
+            }
+            else if (q.category === 'C') {
+                tag = `C${cCounter++}`;
+            }
+            else {
+                tag = `P${pCounter++}`;
+            }
             const lineRef = q.lineStart ? ` Line ${q.lineStart}:` : '';
             const cleanText = q.text.replace(/^\[[^\]]+\]\s*/, '');
             questionsText += `[${tag}]${lineRef} ${cleanText}\nA: ${q.answer}\n\n`;
@@ -241,6 +281,36 @@ async function analyzeRepo(repoUrl, jobId) {
             }).join('\n\n');
         }
     }
+    // ── Run Repo Authenticity Check ──────────────────────────────────────────
+    let combinedCodeSample = '';
+    for (const file of topFiles.slice(0, 3)) {
+        const content = contentMap[file.path];
+        if (content) {
+            combinedCodeSample += `\n\n--- File: ${file.path} ---\n${content.slice(0, 1500)}`;
+        }
+    }
+    let repoAuthenticity = null;
+    try {
+        const githubToken = process.env.GITHUB_TOKEN;
+        repoAuthenticity = await (0, authenticity_1.runRepoAuthenticityCheck)(owner, repo, githubToken, combinedCodeSample);
+    }
+    catch (err) {
+        console.warn('[analyzeRepo] Failed to execute repo authenticity check:', err);
+    }
+    let challenge = null;
+    if (enableChallenge && topFiles.length > 0) {
+        const primaryFile = topFiles[0];
+        const fileContent = contentMap[primaryFile.path];
+        if (fileContent) {
+            try {
+                console.log(`[Worker] Generating micro-challenge for ${primaryFile.path}`);
+                challenge = await (0, challengeGenerator_1.generateMicroChallenge)(fileContent, primaryFile.path, 'All', challengeTypePref);
+            }
+            catch (err) {
+                console.warn(`[Worker] Failed to generate micro-challenge:`, err.message);
+            }
+        }
+    }
     return {
         success: true,
         repo: `${owner}/${repo}`,
@@ -250,6 +320,8 @@ async function analyzeRepo(repoUrl, jobId) {
         warnings,
         summary: { successfulFiles: fileResults.length, totalFiles: topFiles.length, totalQuestions },
         timing: { totalMs: 0 },
+        repoAuthenticity,
+        challenge,
     };
 }
 const worker = new bullmq_1.Worker('code-analysis', async (job) => {
@@ -258,13 +330,13 @@ const worker = new bullmq_1.Worker('code-analysis', async (job) => {
     const startTime = Date.now();
     try {
         await supabase.from('jobs').update({ status: 'processing', updated_at: new Date().toISOString() }).eq('id', jobId);
-        const result = await analyzeRepo(repoUrl, jobId);
+        const result = await analyzeRepo(repoUrl, jobId, sessionId);
         await supabase.from('jobs').update({ status: 'completed', result, updated_at: new Date().toISOString() }).eq('id', jobId);
         // ── NEW: Store result in sessions table (JSONB) ──────────────────────
         if (sessionId) {
             const { error: updateSessionError } = await supabase
                 .from('sessions')
-                .update({ status: 'completed', result })
+                .update({ result })
                 .eq('id', sessionId);
             if (updateSessionError) {
                 console.error(`[Worker] Failed to update session ${sessionId}:`, updateSessionError);

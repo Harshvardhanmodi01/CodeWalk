@@ -1,4 +1,9 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800;1,9..40,400&display=swap');
 @import "tailwindcss";
+
+html {
+  scroll-behavior: smooth;
+}
 
 /* ── highlight.js: VS Code Dark+ theme ───────────────────────────────────────
    Maps hljs token classes to VS Code Dark+ palette colors.
@@ -338,4 +343,254 @@ body {
 @keyframes slideDown {
   from { opacity: 0; transform: translateY(-10px); }
   to { opacity: 1; transform: translateY(0); }
-}
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   PREMIUM UI/UX — CodeWalk Design System
+   All theme colors via CSS variables — zero hardcoded theme hex
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* DM Sans as the premium heading font */
+:root {
+  --font-dm-sans: 'DM Sans', var(--font-inter, ui-sans-serif), sans-serif;
+}
+
+/* ── Gradient text ─────────────────────────────────────────────────────────── */
+.gradient-text {
+  background: linear-gradient(135deg, #00DBE9 0%, #6366f1 60%, #a855f7 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.gradient-text-warm {
+  background: linear-gradient(135deg, #007A87 0%, #6366f1 60%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Light mode uses a darker gradient for contrast */
+:root .gradient-text,
+:not(.dark) .gradient-text {
+  background: linear-gradient(135deg, #007A87 0%, #6366f1 60%, #a855f7 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ── Premium glass card ────────────────────────────────────────────────────── */
+.premium-glass {
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  box-shadow: 0 4px 24px rgba(0, 122, 135, 0.06), 0 1px 0 rgba(255,255,255,0.8) inset;
+}
+
+.dark .premium-glass {
+  background: rgba(21, 29, 30, 0.72);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(46, 54, 55, 0.8);
+  box-shadow: 0 4px 24px rgba(0, 219, 233, 0.04), 0 1px 0 rgba(255,255,255,0.03) inset;
+}
+
+/* ── Premium hover card ────────────────────────────────────────────────────── */
+.premium-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 1.25rem;
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1),
+              box-shadow 0.3s ease,
+              border-color 0.3s ease;
+}
+
+.premium-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 16px 48px rgba(0, 122, 135, 0.12);
+  border-color: rgba(0, 122, 135, 0.3);
+}
+
+.dark .premium-card:hover {
+  box-shadow: 0 16px 48px rgba(0, 219, 233, 0.08);
+  border-color: rgba(0, 219, 233, 0.25);
+}
+
+/* ── Mesh gradient background for page heroes ──────────────────────────────── */
+.mesh-bg {
+  background-color: var(--background);
+  background-image:
+    radial-gradient(ellipse 80% 50% at 20% -20%, rgba(0, 219, 233, 0.12) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 60% at 80% 120%, rgba(99, 102, 241, 0.10) 0%, transparent 60%);
+}
+
+:not(.dark) .mesh-bg {
+  background-image:
+    radial-gradient(ellipse 80% 50% at 20% -20%, rgba(0, 122, 135, 0.10) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 60% at 80% 120%, rgba(99, 102, 241, 0.08) 0%, transparent 60%);
+}
+
+/* ── Glow orb decoration ───────────────────────────────────────────────────── */
+.glow-orb {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+  filter: blur(60px);
+  opacity: 0.35;
+}
+
+.dark .glow-orb { opacity: 0.25; }
+
+/* ── Gradient border for cards ─────────────────────────────────────────────── */
+.gradient-border {
+  position: relative;
+}
+.gradient-border::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(135deg, #00DBE9, #6366f1, #a855f7);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* ── Scroll reveal animations ───────────────────────────────────────────────── */
+.scroll-reveal {
+  opacity: 0;
+  transform: translateY(24px);
+  transition: opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1),
+              transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.scroll-reveal.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.scroll-reveal.stagger-1 { transition-delay: 0.05s; }
+.scroll-reveal.stagger-2 { transition-delay: 0.12s; }
+.scroll-reveal.stagger-3 { transition-delay: 0.19s; }
+.scroll-reveal.stagger-4 { transition-delay: 0.26s; }
+.scroll-reveal.stagger-5 { transition-delay: 0.33s; }
+.scroll-reveal.stagger-6 { transition-delay: 0.40s; }
+
+/* ── Shimmer badge animation ────────────────────────────────────────────────── */
+@keyframes shimmer-slide {
+  0% { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+
+.shimmer-badge {
+  background: linear-gradient(
+    90deg,
+    rgba(0,219,233,0.15) 0%,
+    rgba(0,219,233,0.35) 40%,
+    rgba(99,102,241,0.35) 60%,
+    rgba(0,219,233,0.15) 100%
+  );
+  background-size: 200% auto;
+  animation: shimmer-slide 3s linear infinite;
+}
+
+:not(.dark) .shimmer-badge {
+  background: linear-gradient(
+    90deg,
+    rgba(0,122,135,0.10) 0%,
+    rgba(0,122,135,0.25) 40%,
+    rgba(99,102,241,0.20) 60%,
+    rgba(0,122,135,0.10) 100%
+  );
+  background-size: 200% auto;
+  animation: shimmer-slide 3s linear infinite;
+}
+
+/* ── FAQ accordion smooth transition ────────────────────────────────────────── */
+.faq-content {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.faq-content.open {
+  grid-template-rows: 1fr;
+}
+
+.faq-inner {
+  overflow: hidden;
+}
+
+/* ── Floating glow badge ─────────────────────────────────────────────────────── */
+.page-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.25rem 0.875rem;
+  border-radius: 9999px;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  border: 1px solid rgba(0, 219, 233, 0.25);
+  color: var(--primary);
+  backdrop-filter: blur(8px);
+}
+
+:not(.dark) .page-badge {
+  border-color: rgba(0, 122, 135, 0.25);
+  background: rgba(0, 122, 135, 0.07);
+}
+
+.dark .page-badge {
+  border-color: rgba(0, 219, 233, 0.25);
+  background: rgba(0, 219, 233, 0.07);
+}
+
+/* ── Premium input focus ────────────────────────────────────────────────────── */
+.premium-input {
+  background: var(--muted-background);
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  color: var(--foreground);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.premium-input:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(0, 122, 135, 0.15);
+}
+
+.dark .premium-input:focus {
+  box-shadow: 0 0 0 3px rgba(0, 219, 233, 0.15);
+}
+
+.premium-input::placeholder {
+  color: var(--muted);
+  opacity: 0.7;
+}
+
+/* ── Reduced-motion safety ──────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .scroll-reveal,
+  .scroll-reveal.visible {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+  .shimmer-badge {
+    animation: none;
+  }
+  .premium-card:hover {
+    transform: none;
+  }
+  .faq-content {
+    transition: none;
+  }
+}
+

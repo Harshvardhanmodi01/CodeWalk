@@ -6,7 +6,7 @@ exports.fetchRepoContents = fetchRepoContents;
 exports.fetchFileContent = fetchFileContent;
 exports.isCodeFile = isCodeFile;
 exports.getReadme = getReadme;
-const github_token_pool_1 = require("@/app/lib/github-token-pool");
+const github_token_pool_1 = require("./github-token-pool");
 const GITHUB_API_BASE = 'https://api.github.com';
 const FETCH_TIMEOUT_MS = 30000;
 const MAX_RETRIES = 2;
@@ -213,12 +213,45 @@ async function fetchFileContent(url, token) {
  */
 function isCodeFile(filename) {
     const codeExtensions = [
-        '.js', '.ts', '.jsx', '.tsx', '.py', '.java', '.go', '.rs',
-        '.c', '.cpp', '.h', '.hpp', '.rb', '.php', '.swift', '.kt',
-        '.scala', '.cs', '.vue', '.svelte',
+        // JavaScript, TypeScript, Node.js, and frontend frameworks
+        '.js', '.ts', '.jsx', '.tsx', '.mjs', '.cjs', '.es6', '.vue', '.svelte', '.astro', '.marko', '.liquid', '.xhtml',
+        // Python & Data Science
+        '.py', '.ipynb', '.pyi',
+        // Java, JVM languages (Kotlin, Scala, Groovy, Gradle)
+        '.java', '.kt', '.kts', '.scala', '.sc', '.groovy', '.gvy', '.gy', '.gsh', '.gradle',
+        // Go
+        '.go',
+        // Rust
+        '.rs',
+        // C, C++, Assembly, Objective-C, Zig, Nim, Crystal, Fortran, Cobol
+        '.c', '.cpp', '.cc', '.cxx', '.c++', '.h', '.hpp', '.hxx', '.hh', '.h++', '.m', '.mm', '.zig', '.nim', '.cr', '.asm', '.s', '.f', '.f90', '.cbl', '.cob',
+        // C# & F# (.NET)
+        '.cs', '.cshtml', '.razor', '.fs', '.fsi', '.fsx',
+        // PHP
+        '.php', '.phtml',
+        // Ruby & Rails
+        '.rb', '.erb', '.gemspec',
+        // Swift (iOS/macOS)
+        '.swift',
+        // Dart (Flutter)
+        '.dart',
+        // Elixir & Erlang
+        '.ex', '.exs', '.erl', '.hrl',
+        // Functional/Logic/Other languages
+        '.hs', '.lhs', '.clj', '.cljs', '.cljc', '.edn', '.ml', '.mli', '.elm', '.rkt', '.lisp', '.lsp', '.scm', '.sol', '.sql', '.jl',
+        // Shell scripting
+        '.sh', '.bash', '.zsh', '.fish', '.bat', '.ps1',
+        // Markup & Styling
+        '.html', '.htm', '.xml', '.css', '.scss', '.sass', '.less', '.styl',
+        // Common configuration files
+        '.json', '.json5', '.toml', '.yaml', '.yml', '.ini', '.conf', '.config',
+    ];
+    const exactNames = [
+        'gemfile', 'rakefile', 'dockerfile', 'cmakelists.txt', 'makefile', 'procfile', 'jenkinsfile', 'vagrantfile'
     ];
     const lower = filename.toLowerCase();
-    return codeExtensions.some((ext) => lower.endsWith(ext));
+    return (codeExtensions.some((ext) => lower.endsWith(ext)) ||
+        exactNames.includes(lower));
 }
 /**
  * Fetch and decode the README of a repository.
