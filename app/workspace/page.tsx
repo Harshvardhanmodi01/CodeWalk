@@ -306,16 +306,16 @@ function QuestionCard({
   isSample?: boolean;
 }) {
   const difficultyColors = {
-    easy: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
-    medium: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
-    hard: 'bg-rose-500/10 text-rose-400 border-rose-500/20',
+    easy: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    medium: 'bg-amber-50 text-amber-700 border-amber-200',
+    hard: 'bg-rose-50 text-rose-700 border-rose-200',
   };
 
   const categoryColors = {
-    frontend: 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20',
-    backend: 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20',
-    dsa: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
-    'system-design': 'bg-pink-500/10 text-pink-400 border-pink-500/20',
+    frontend: 'bg-cyan-50 text-cyan-700 border-cyan-200',
+    backend: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+    dsa: 'bg-violet-50 text-violet-700 border-violet-200',
+    'system-design': 'bg-pink-50 text-pink-700 border-pink-200',
   };
 
   const difficultyLabels = {
@@ -335,29 +335,29 @@ function QuestionCard({
   const currentCat = category.toLowerCase() as 'frontend' | 'backend' | 'dsa' | 'system-design';
 
   return (
-    <div className="bg-[#151d1e] border border-outline-variant/60 rounded-2xl p-6 relative shadow-lg hover:shadow-cyan-500/5 transition-all duration-300">
+    <div className="bg-white border border-gray-100 rounded-2xl p-6 relative shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300">
       {/* Header Info */}
       <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
         <div className="flex items-center gap-2">
           {qIdx !== undefined && (
             <span className="text-xs font-bold text-slate-400">Question {qIdx + 1}:</span>
           )}
-          <span className="text-xs font-mono text-cyan-400/80 truncate max-w-[200px] sm:max-w-xs" title={fileName}>
+          <span className="text-xs font-mono text-violet-600/80 truncate max-w-[200px] sm:max-w-xs" title={fileName}>
             {fileName}
           </span>
         </div>
         <div className="flex items-center gap-2">
-          <span className={`px-2.5 py-0.5 text-xs font-semibold rounded-full border ${difficultyColors[currentDiff] || 'bg-slate-500/10 text-slate-400 border-slate-500/20'}`}>
+          <span className={`px-2.5 py-0.5 text-xs font-semibold rounded-full border ${difficultyColors[currentDiff] || 'bg-slate-100 text-slate-600 border-slate-200'}`}>
             {difficultyLabels[currentDiff] || difficulty}
           </span>
-          <span className={`px-2.5 py-0.5 text-xs font-semibold rounded-full border ${categoryColors[currentCat] || 'bg-slate-500/10 text-slate-400 border-slate-500/20'}`}>
+          <span className={`px-2.5 py-0.5 text-xs font-semibold rounded-full border ${categoryColors[currentCat] || 'bg-slate-100 text-slate-600 border-slate-200'}`}>
             {categoryLabels[currentCat] || category}
           </span>
         </div>
       </div>
 
       {/* Question Text */}
-      <h3 className="text-white text-lg font-bold leading-relaxed mb-4">
+      <h3 className="text-slate-900 text-lg font-bold leading-relaxed mb-4">
         {question}
       </h3>
 
@@ -374,8 +374,8 @@ function QuestionCard({
 
       {/* Answer Key */}
       {showAnswer && (
-        <div className="mt-4 p-4 bg-cyan-500/5 border-l-2 border-cyan-500 rounded-xl text-sm text-slate-200 leading-relaxed animate-in fade-in duration-200">
-          <span className="font-bold text-cyan-400 block mb-1">AI Answer Key:</span>
+        <div className="mt-4 p-4 bg-violet-50 border-l-2 border-violet-500 rounded-xl text-sm text-slate-700 leading-relaxed animate-in fade-in duration-200">
+          <span className="font-bold text-violet-600 block mb-1">AI Answer Key:</span>
           {answer}
         </div>
       )}
@@ -387,17 +387,17 @@ function QuestionCard({
           onChange={(e) => setNote(e.target.value)}
           placeholder="Type notes or candidate feedback here..."
           rows={3}
-          className="w-full mt-3 px-3 py-2 bg-slate-900 border border-outline-variant/60 rounded-xl text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500/50"
+          className="w-full mt-3 px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm text-slate-700 placeholder-slate-400 focus:outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100"
         />
       )}
 
       {/* Action Footer */}
       {!isSample && (
-        <div className="flex flex-wrap items-center gap-3 mt-5 pt-5 border-t border-outline-variant/60">
+        <div className="flex flex-wrap items-center gap-3 mt-5 pt-5 border-t border-gray-100">
           {toggleAnswer && (
             <button
               onClick={toggleAnswer}
-              className="px-3.5 py-2 bg-slate-800 border border-outline-variant/60 hover:border-cyan-500/40 text-slate-200 text-xs font-semibold rounded-xl transition-all flex items-center gap-2"
+              className="px-3.5 py-2 bg-gray-50 border border-gray-200 hover:border-violet-300 text-slate-700 text-xs font-semibold rounded-xl transition-all flex items-center gap-2"
             >
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
               {showAnswer ? 'Hide Answer' : 'Show Answer'}
@@ -406,7 +406,7 @@ function QuestionCard({
           {toggleNote && (
             <button
               onClick={toggleNote}
-              className="px-3.5 py-2 bg-slate-800 border border-outline-variant/60 hover:border-cyan-500/40 text-slate-200 text-xs font-semibold rounded-xl transition-all"
+              className="px-3.5 py-2 bg-gray-50 border border-gray-200 hover:border-violet-300 text-slate-700 text-xs font-semibold rounded-xl transition-all"
             >
               ✎ Notes
             </button>
@@ -424,8 +424,8 @@ function QuestionCard({
                     onClick={() => setRating(r)}
                     className={`px-2.5 py-1.5 text-xs font-semibold rounded-lg transition-all border ${
                       active
-                        ? 'bg-cyan-500/10 border-cyan-500 text-cyan-400'
-                        : 'bg-slate-800 border-outline-variant/60 text-slate-400 hover:text-slate-200'
+                        ? 'bg-violet-50 border-violet-400 text-violet-700'
+                        : 'bg-gray-50 border-gray-200 text-slate-500 hover:text-slate-800'
                     }`}
                   >
                     {r}
@@ -591,33 +591,40 @@ export default function WorkspacePage() {
   if (!mounted) return null;
 
   return (
-    <div className="min-h-screen bg-[#0d1515] text-slate-100 pb-16 font-sans">
-      <div className="max-w-4xl mx-auto px-4 flex flex-col gap-8 glow-effect pt-8">
+    <div className="min-h-screen bg-gradient-to-br from-white via-violet-50/40 to-pink-50/30 text-slate-900 pb-16 font-sans">
+      {/* Decorative blobs */}
+      <div aria-hidden="true" className="pointer-events-none fixed inset-0 overflow-hidden opacity-40">
+        <div className="absolute -top-32 -left-32 w-[500px] h-[500px] rounded-full"
+          style={{ background: 'radial-gradient(circle, rgba(124,58,237,0.12) 0%, transparent 70%)', filter: 'blur(60px)' }} />
+        <div className="absolute -bottom-24 -right-24 w-[400px] h-[400px] rounded-full"
+          style={{ background: 'radial-gradient(circle, rgba(236,72,153,0.10) 0%, transparent 70%)', filter: 'blur(60px)' }} />
+      </div>
+      <div className="relative z-10 max-w-4xl mx-auto px-4 flex flex-col gap-8 pt-8">
         
         {/* HEADER GUEST MODE WARNING */}
-        <div className="p-3 bg-amber-500/5 border border-amber-500/20 text-amber-300 text-xs rounded-xl flex items-center justify-between gap-2 shadow-sm">
+        <div className="p-3 bg-amber-50 border border-amber-200 text-amber-700 text-xs rounded-xl flex items-center justify-between gap-2 shadow-sm">
           <div className="flex items-center gap-2">
             <span>⚠️</span>
             <span>You are in <strong>Guest Mode</strong>. Connect repositories for instant interview walkthrough prep.</span>
           </div>
-          <Link href="/register" className="px-3 py-1 bg-amber-500/10 border border-amber-500/20 text-amber-300 hover:bg-amber-500/20 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap">
+          <Link href="/register" className="px-3 py-1 bg-amber-100 border border-amber-200 text-amber-700 hover:bg-amber-200 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap">
             Sign Up Free
           </Link>
         </div>
 
         {/* PAGE TITLE */}
         <div className="text-center md:text-left">
-          <h1 className="text-4xl font-extrabold text-white tracking-tight">CodeWalk Guest Workspace</h1>
-          <p className="text-sm text-slate-400 mt-2">Generate realistic technical interview questions from your codebase in seconds.</p>
+          <h1 className="text-4xl font-extrabold text-slate-900 tracking-tight" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>CodeWalk Guest Workspace</h1>
+          <p className="text-sm text-slate-600 font-medium mt-2">Generate realistic technical interview questions from your codebase in seconds.</p>
         </div>
 
         {/* INPUT CONTROLLER CARD */}
-        <section className="bg-[#151d1e] border border-outline-variant/60 rounded-2xl p-6 shadow-xl">
-          <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">
+        <section className="bg-white border border-gray-100 rounded-2xl p-6 shadow-lg">
+          <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
             GitHub Repository URL
           </label>
           <div className="flex flex-col sm:flex-row gap-3">
-            <div className="flex-1 flex items-center gap-2 bg-[#0d1515] border border-outline-variant/60 rounded-xl px-4 py-2.5 focus-within:border-cyan-500/50 transition-colors">
+            <div className="flex-1 flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 focus-within:border-violet-400 focus-within:ring-2 focus-within:ring-violet-100 transition-all">
               <svg className="w-4 h-4 text-slate-400 shrink-0" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.56v-2.17c-3.2.7-3.87-1.36-3.87-1.36-.52-1.33-1.27-1.69-1.27-1.69-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.18 1.76 1.18 1.02 1.75 2.68 1.25 3.34.96.1-.74.4-1.25.72-1.54-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.28 1.18-3.09-.12-.29-.51-1.46.11-3.04 0 0 .97-.31 3.17 1.18.92-.26 1.91-.39 2.89-.39.98 0 1.97.13 2.89.39 2.2-1.49 3.17-1.18 3.17-1.18.62 1.58.23 2.75.11 3.04.74.81 1.18 1.83 1.18 3.09 0 4.42-2.69 5.39-5.25 5.68.41.36.78 1.06.78 2.14v3.17c0 .31.21.68.8.56C20.21 21.39 23.5 17.08 23.5 12 23.5 5.65 18.35.5 12 .5z" />
               </svg>
@@ -626,17 +633,18 @@ export default function WorkspacePage() {
                 value={repoUrl}
                 onChange={(e) => setRepoUrl(e.target.value)}
                 placeholder="https://github.com/owner/repo"
-                className="flex-1 bg-transparent text-sm text-white placeholder-slate-500 focus:outline-none"
+                className="flex-1 bg-transparent text-sm text-slate-900 placeholder-slate-400 focus:outline-none font-medium"
               />
             </div>
             <button
               onClick={handleAnalyze}
               disabled={loading}
-              className="px-6 py-2.5 bg-[#06B6D4] hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl text-sm font-bold text-[#0d1515] transition-all shadow-md shadow-[#06B6D4]/20 flex items-center justify-center gap-2"
+              className="px-6 py-2.5 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl text-sm font-bold text-white transition-all shadow-md flex items-center justify-center gap-2 hover:opacity-90 active:scale-95"
+              style={{ background: 'linear-gradient(135deg, #7c3aed, #ec4899)', boxShadow: '0 4px 14px rgba(124,58,237,0.30)' }}
             >
               {loading ? (
                 <>
-                  <svg className="animate-spin h-4 w-4 text-[#0d1515]" fill="none" viewBox="0 0 24 24">
+                  <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                   </svg>
@@ -648,26 +656,26 @@ export default function WorkspacePage() {
             </button>
           </div>
 
-          <div className="flex flex-wrap items-center justify-between mt-4 gap-3 border-t border-outline-variant/60 pt-4">
+          <div className="flex flex-wrap items-center justify-between mt-4 gap-3 border-t border-gray-100 pt-4">
             <div className="flex flex-wrap gap-2 items-center">
-              <span className="text-xs text-slate-400">Example repositories:</span>
+              <span className="text-xs text-slate-500 font-medium">Example repositories:</span>
               {EXAMPLE_REPOS.map((ex) => (
                 <button
                   key={ex.label}
                   onClick={() => setRepoUrl(ex.url)}
-                  className="px-2.5 py-1 bg-[#0d1515] hover:border-cyan-500/40 border border-outline-variant/60 rounded-lg text-xs text-slate-300 transition-colors font-mono"
+                  className="px-2.5 py-1 bg-violet-50 hover:bg-violet-100 border border-violet-200 rounded-lg text-xs text-violet-700 transition-colors font-mono"
                 >
                   {ex.label}
                 </button>
               ))}
             </div>
-            <div className="text-xs text-slate-400 font-semibold font-mono">
-              Limits: <span className="text-cyan-400">{remainingWalkthroughs} free walkthrough{remainingWalkthroughs !== 1 ? 's' : ''} remaining</span>
+            <div className="text-xs text-slate-500 font-semibold font-mono">
+              Limits: <span className="text-violet-600">{remainingWalkthroughs} free walkthrough{remainingWalkthroughs !== 1 ? 's' : ''} remaining</span>
             </div>
           </div>
 
           {error && (
-            <div className="mt-4 px-4 py-2.5 bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs rounded-xl flex items-center gap-2">
+            <div className="mt-4 px-4 py-2.5 bg-rose-50 border border-rose-200 text-rose-600 text-xs rounded-xl flex items-center gap-2">
               <span>❌</span>
               <span>{error}</span>
             </div>
@@ -676,13 +684,13 @@ export default function WorkspacePage() {
 
         {/* LOADING ANNOUNCEMENT CONTAINER */}
         {loading && (
-          <div className="bg-[#151d1e] border border-outline-variant/60 rounded-2xl p-8 text-center shadow-lg space-y-4 animate-pulse">
+          <div className="bg-white border border-violet-100 rounded-2xl p-8 text-center shadow-lg space-y-4">
             <div className="inline-block relative w-12 h-12">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-20" />
-              <div className="w-12 h-12 rounded-full border-4 border-cyan-500 border-t-transparent animate-spin" />
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-violet-400 opacity-20" />
+              <div className="w-12 h-12 rounded-full border-4 border-violet-500 border-t-transparent animate-spin" />
             </div>
-            <h3 className="text-lg font-bold text-white">Analyzing Repository Structure...</h3>
-            <p className="text-xs text-slate-400 max-w-md mx-auto">
+            <h3 className="text-lg font-bold text-slate-900" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>Analyzing Repository Structure...</h3>
+            <p className="text-xs text-slate-500 font-medium max-w-md mx-auto">
               Our AI is parsing the file tree, reading key code blocks, and preparing targeted questions. This takes about 15-30 seconds.
             </p>
           </div>
@@ -691,23 +699,23 @@ export default function WorkspacePage() {
         {/* REAL WALKTHROUGH RESULTS SECTION */}
         {data && data.isGuest && guestQuestions.length > 0 && (
           <section id="workspace-results" className="space-y-6 scroll-mt-6">
-            <div className="bg-[#151d1e] border border-outline-variant/60 rounded-2xl p-6 shadow-xl">
+            <div className="bg-white border border-gray-100 rounded-2xl p-6 shadow-lg">
               
               {/* STRENGTHENED OUTPUT HEADER */}
-              <div className="flex items-center justify-between mb-6 flex-wrap gap-4 pb-4 border-b border-outline-variant/60">
+              <div className="flex items-center justify-between mb-6 flex-wrap gap-4 pb-4 border-b border-gray-100">
                 <div>
-                  <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs text-cyan-400 font-semibold mb-1">
-                    <span className="px-2.5 py-0.5 bg-cyan-500/10 border border-cyan-500/20 rounded-full">
+                  <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs text-violet-600 font-semibold mb-1">
+                    <span className="px-2.5 py-0.5 bg-violet-50 border border-violet-200 rounded-full">
                       5 Questions Generated
                     </span>
-                    <span className="px-2.5 py-0.5 bg-cyan-500/10 border border-cyan-500/20 rounded-full font-mono">
+                    <span className="px-2.5 py-0.5 bg-violet-50 border border-violet-200 rounded-full font-mono">
                       {detectRepoLanguage(guestQuestions)}
                     </span>
-                    <span className="px-2.5 py-0.5 bg-cyan-500/10 border border-cyan-500/20 rounded-full">
+                    <span className="px-2.5 py-0.5 bg-violet-50 border border-violet-200 rounded-full">
                       Generated in {((data?.timing?.totalMs || 3200) / 1000).toFixed(1)}s
                     </span>
                   </div>
-                  <h2 className="text-2xl font-extrabold text-white tracking-tight mt-1.5 break-all">
+                  <h2 className="text-2xl font-extrabold text-slate-900 tracking-tight mt-1.5 break-all" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
                     AI Interview Walkthrough: {data.repo}
                   </h2>
                 </div>
@@ -715,7 +723,7 @@ export default function WorkspacePage() {
                   href={`https://github.com/${data.repo}`}
                   target="_blank"
                   rel="noreferrer"
-                  className="px-3.5 py-1 bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-xs rounded-full hover:bg-cyan-500/20 transition-all font-semibold font-mono"
+                  className="px-3.5 py-1 bg-violet-50 border border-violet-200 text-violet-600 text-xs rounded-full hover:bg-violet-100 transition-all font-semibold font-mono"
                 >
                   {data.repo} ↗
                 </a>
@@ -746,21 +754,23 @@ export default function WorkspacePage() {
               </div>
 
               {/* AFTER QUESTIONS UPSELL BANNER */}
-              <div className="bg-[#06B6D4]/10 border border-[#06B6D4]/30 rounded-xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-md mb-6 animate-in fade-in duration-300">
+              <div className="rounded-xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-md mb-6 animate-in fade-in duration-300"
+                style={{ background: 'linear-gradient(135deg, rgba(124,58,237,0.06) 0%, rgba(236,72,153,0.06) 100%)', border: '1px solid rgba(124,58,237,0.15)' }}>
                 <div className="flex items-center gap-3">
                   <span className="text-xl">🔒</span>
-                  <p className="text-xs sm:text-sm text-slate-200">
+                  <p className="text-xs sm:text-sm text-slate-700 font-medium">
                     Want to <strong>save this session</strong>? Get <strong>Code Story brief</strong>? Export <strong>PDF report</strong>?
                   </p>
                 </div>
-                <Link href="/register" className="px-4 py-2 bg-[#06B6D4] hover:opacity-90 text-[#0d1515] font-extrabold text-xs rounded-xl shadow-lg transition-all active:scale-95 whitespace-nowrap">
+                <Link href="/register" className="px-4 py-2 font-extrabold text-xs rounded-xl shadow-lg transition-all active:scale-95 whitespace-nowrap text-white hover:opacity-90"
+                  style={{ background: 'linear-gradient(135deg, #7c3aed, #ec4899)' }}>
                   Sign Up Free — It takes 30s
                 </Link>
               </div>
 
               {/* WHAT YOU'RE MISSING LOCKED CARD */}
-              <div className="bg-[#0d1515] border border-outline-variant/40 rounded-xl p-5 mb-8 shadow-inner">
-                <h3 className="text-sm font-bold text-white mb-3 flex items-center gap-2">
+              <div className="bg-gray-50 border border-gray-100 rounded-xl p-5 mb-8">
+                <h3 className="text-sm font-bold text-slate-900 mb-3 flex items-center gap-2" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
                   <span>🔒</span> What You're Missing (Pro Plan Features)
                 </h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
@@ -770,11 +780,11 @@ export default function WorkspacePage() {
                     { label: 'PDF Export', tooltip: 'Generate beautiful, recruiter-ready PDF reports with candidate scores.' },
                     { label: 'Recruiter Copilot', tooltip: 'Real-time follow-ups and AI evaluation scoring based on candidate answers.' }
                   ].map((feat) => (
-                    <div key={feat.label} className="flex items-center justify-between p-3 bg-[#151d1e] border border-outline-variant/30 rounded-xl">
-                      <span className="text-xs font-semibold text-slate-300 flex items-center gap-2">
+                    <div key={feat.label} className="flex items-center justify-between p-3 bg-white border border-gray-100 rounded-xl">
+                      <span className="text-xs font-semibold text-slate-600 flex items-center gap-2">
                         <span>🔒</span> {feat.label}
                       </span>
-                      <Link href="/register" className="text-[10px] text-cyan-400 font-bold hover:underline whitespace-nowrap">
+                      <Link href="/register" className="text-[10px] text-violet-600 font-bold hover:underline whitespace-nowrap">
                         [SIGN UP TO UNLOCK]
                       </Link>
                     </div>
@@ -783,11 +793,11 @@ export default function WorkspacePage() {
               </div>
 
               {/* Performance / Aggregate Score Card Panel */}
-              <div className="mt-8 pt-6 border-t border-outline-variant/60 flex flex-col md:flex-row items-center justify-between gap-4">
+              <div className="mt-8 pt-6 border-t border-gray-100 flex flex-col md:flex-row items-center justify-between gap-4">
                 <div>
-                  <p className="text-xs text-slate-400">Aggregated Rating Score</p>
+                  <p className="text-xs text-slate-500 font-medium">Aggregated Rating Score</p>
                   <div className="flex items-baseline gap-2 mt-1">
-                    <span className="text-3xl font-extrabold text-[#06B6D4]">
+                    <span className="text-3xl font-extrabold text-violet-600">
                       {computeGuestOverallScore().percent}%
                     </span>
                     <span className="text-xs text-slate-400">
@@ -799,7 +809,7 @@ export default function WorkspacePage() {
                 <div className="flex flex-wrap gap-2">
                   <button
                     onClick={handleShare}
-                    className="px-4 py-2 border border-outline-variant/60 hover:bg-slate-800 rounded-xl text-xs font-semibold text-slate-300 transition-colors flex items-center gap-1.5"
+                    className="px-4 py-2 border border-gray-200 hover:bg-gray-50 rounded-xl text-xs font-semibold text-slate-600 transition-colors flex items-center gap-1.5"
                   >
                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 10.742l-2.777 2.777m0 0l-2.777-2.777m2.777 2.777V3m9 10a9 9 0 11-18 0" />
@@ -812,13 +822,14 @@ export default function WorkspacePage() {
                         setScores({});
                       }
                     }}
-                    className="px-4 py-2 border border-outline-variant/60 text-slate-300 hover:bg-slate-800 rounded-xl text-xs font-semibold transition-colors"
+                    className="px-4 py-2 border border-gray-200 text-slate-600 hover:bg-gray-50 rounded-xl text-xs font-semibold transition-colors"
                   >
                     Clear Ratings
                   </button>
                   <button
                     onClick={() => setShowProModal(true)}
-                    className="px-4 py-2 bg-[#06B6D4] hover:opacity-90 text-[#0d1515] rounded-xl text-xs font-bold transition-all shadow-md shadow-[#06B6D4]/20 flex items-center gap-1.5"
+                    className="px-4 py-2 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-1.5 hover:opacity-90 active:scale-95"
+                    style={{ background: 'linear-gradient(135deg, #7c3aed, #ec4899)', boxShadow: '0 4px 14px rgba(124,58,237,0.30)' }}
                   >
                     <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
@@ -835,60 +846,60 @@ export default function WorkspacePage() {
         <ScrollFadeIn>
           <section className="space-y-6">
             <div className="text-center">
-              <h2 className="text-2xl font-bold text-white">How It Works</h2>
-              <p className="text-xs text-slate-400 mt-1">Generate dynamic coding interview walkthroughs in 3 simple steps.</p>
+              <h2 className="text-2xl font-bold text-slate-900" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>How It Works</h2>
+              <p className="text-xs text-slate-500 font-medium mt-1">Generate dynamic coding interview walkthroughs in 3 simple steps.</p>
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {/* Step 1 */}
-              <div className="bg-[#151d1e] border border-outline-variant/40 rounded-2xl p-6 flex flex-col gap-4 hover:scale-[1.02] transition-transform duration-300">
+              <div className="bg-white border border-gray-100 rounded-2xl p-6 flex flex-col gap-4 hover:shadow-md hover:-translate-y-1 transition-all duration-300 shadow-sm">
                 <div className="flex items-center justify-between">
-                  <span className="text-4xl font-extrabold text-cyan-400/20">01</span>
-                  <div className="p-2.5 bg-cyan-500/10 rounded-xl text-cyan-400 border border-cyan-500/20">
+                  <span className="text-4xl font-extrabold" style={{ color: 'rgba(124,58,237,0.15)' }}>01</span>
+                  <div className="p-2.5 icon-bg-violet rounded-xl">
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
                     </svg>
                   </div>
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-white">Paste Repository URL</h3>
-                  <p className="text-xs text-slate-400 mt-1.5 leading-relaxed font-body-md">
+                  <h3 className="text-base font-bold text-slate-900" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>Paste Repository URL</h3>
+                  <p className="text-xs text-slate-500 font-medium mt-1.5 leading-relaxed">
                     Paste any public GitHub repository link in the field above. Our scanner supports JavaScript, TypeScript, Python, Go, Java, and more.
                   </p>
                 </div>
               </div>
 
               {/* Step 2 */}
-              <div className="bg-[#151d1e] border border-outline-variant/40 rounded-2xl p-6 flex flex-col gap-4 hover:scale-[1.02] transition-transform duration-300">
+              <div className="bg-white border border-gray-100 rounded-2xl p-6 flex flex-col gap-4 hover:shadow-md hover:-translate-y-1 transition-all duration-300 shadow-sm">
                 <div className="flex items-center justify-between">
-                  <span className="text-4xl font-extrabold text-cyan-400/20">02</span>
-                  <div className="p-2.5 bg-cyan-500/10 rounded-xl text-cyan-400 border border-cyan-500/20">
+                  <span className="text-4xl font-extrabold" style={{ color: 'rgba(236,72,153,0.15)' }}>02</span>
+                  <div className="p-2.5 icon-bg-pink rounded-xl">
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
                     </svg>
                   </div>
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-white">AI Code Analysis</h3>
-                  <p className="text-xs text-slate-400 mt-1.5 leading-relaxed font-body-md">
+                  <h3 className="text-base font-bold text-slate-900" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>AI Code Analysis</h3>
+                  <p className="text-xs text-slate-500 font-medium mt-1.5 leading-relaxed">
                     Our server fetches the file tree recursively, filters out dependency files/noise, and reads the 3-5 most relevant source files.
                   </p>
                 </div>
               </div>
 
               {/* Step 3 */}
-              <div className="bg-[#151d1e] border border-outline-variant/40 rounded-2xl p-6 flex flex-col gap-4 hover:scale-[1.02] transition-transform duration-300">
+              <div className="bg-white border border-gray-100 rounded-2xl p-6 flex flex-col gap-4 hover:shadow-md hover:-translate-y-1 transition-all duration-300 shadow-sm">
                 <div className="flex items-center justify-between">
-                  <span className="text-4xl font-extrabold text-cyan-400/20">03</span>
-                  <div className="p-2.5 bg-cyan-500/10 rounded-xl text-cyan-400 border border-cyan-500/20">
+                  <span className="text-4xl font-extrabold" style={{ color: 'rgba(249,112,102,0.15)' }}>03</span>
+                  <div className="p-2.5 icon-bg-coral rounded-xl">
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                   </div>
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-white">Get Interview Questions</h3>
-                  <p className="text-xs text-slate-400 mt-1.5 leading-relaxed font-body-md">
+                  <h3 className="text-base font-bold text-slate-900" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>Get Interview Questions</h3>
+                  <p className="text-xs text-slate-500 font-medium mt-1.5 leading-relaxed">
                     AI generates exactly 5 questions complete with difficulty levels, category classifications, and reference code snippets.
                   </p>
                 </div>
@@ -901,46 +912,46 @@ export default function WorkspacePage() {
         <ScrollFadeIn>
           <section className="space-y-6">
             <div className="text-center">
-              <h2 className="text-2xl font-bold text-white">Why CodeWalk is Different</h2>
-              <p className="text-xs text-slate-400 mt-1">Transform codebase exploration into deep engineering verification.</p>
+              <h2 className="text-2xl font-bold text-slate-900" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>Why CodeWalk is Different</h2>
+              <p className="text-xs text-slate-500 font-medium mt-1">Transform codebase exploration into deep engineering verification.</p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {/* Card 1 */}
-              <div className="bg-[#151d1e] border border-outline-variant/40 rounded-2xl p-6 space-y-3 hover:border-cyan-500/30 transition-all duration-300 shadow-md">
-                <div className="text-cyan-400">
+              <div className="bg-white border border-gray-100 rounded-2xl p-6 space-y-3 hover:border-violet-200 hover:shadow-md transition-all duration-300 shadow-sm">
+                <div className="icon-bg-violet w-10 h-10 rounded-xl flex items-center justify-center">
                   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
                   </svg>
                 </div>
-                <h3 className="text-base font-bold text-white">Your Code, Not Generic Questions</h3>
-                <p className="text-xs text-slate-400 leading-relaxed font-body-md">
+                <h3 className="text-base font-bold text-slate-900" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>Your Code, Not Generic Questions</h3>
+                <p className="text-xs text-slate-500 font-medium leading-relaxed">
                   We generate questions directly from the candidate's actual repository submissions, not from a pre-built question bank. Spot unique design decisions instantly.
                 </p>
               </div>
 
               {/* Card 2 */}
-              <div className="bg-[#151d1e] border border-outline-variant/40 rounded-2xl p-6 space-y-3 hover:border-cyan-500/30 transition-all duration-300 shadow-md">
-                <div className="text-cyan-400">
+              <div className="bg-white border border-gray-100 rounded-2xl p-6 space-y-3 hover:border-violet-200 hover:shadow-md transition-all duration-300 shadow-sm">
+                <div className="icon-bg-pink w-10 h-10 rounded-xl flex items-center justify-center">
                   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                   </svg>
                 </div>
-                <h3 className="text-base font-bold text-white">Code Story Brief</h3>
-                <p className="text-xs text-slate-400 leading-relaxed font-body-md">
+                <h3 className="text-base font-bold text-slate-900" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>Code Story Brief</h3>
+                <p className="text-xs text-slate-500 font-medium leading-relaxed">
                   AI reads the entire repository structure and generates a comprehensive one-page summary highlighting language stats, complexity metrics, and capability briefs.
                 </p>
               </div>
 
               {/* Card 3 */}
-              <div className="bg-[#151d1e] border border-outline-variant/40 rounded-2xl p-6 space-y-3 hover:border-cyan-500/30 transition-all duration-300 shadow-md">
-                <div className="text-cyan-400">
+              <div className="bg-white border border-gray-100 rounded-2xl p-6 space-y-3 hover:border-violet-200 hover:shadow-md transition-all duration-300 shadow-sm">
+                <div className="icon-bg-coral w-10 h-10 rounded-xl flex items-center justify-center">
                   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                   </svg>
                 </div>
-                <h3 className="text-base font-bold text-white">Recruiter Copilot</h3>
-                <p className="text-xs text-slate-400 leading-relaxed font-body-md">
+                <h3 className="text-base font-bold text-slate-900" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>Recruiter Copilot</h3>
+                <p className="text-xs text-slate-500 font-medium leading-relaxed">
                   Our interview copilot reads candidate answers in real-time, providing technical depth verification scorecards and suggesting contextual follow-ups.
                 </p>
               </div>
@@ -950,7 +961,7 @@ export default function WorkspacePage() {
 
         {/* SECTION 3 — GUEST VS PRO COMPARISON BANNER */}
         <ScrollFadeIn>
-          <section className="bg-gradient-to-r from-slate-950 via-[#151d1e] to-slate-950 border border-outline-variant/60 rounded-2xl p-6 md:p-8 shadow-xl">
+          <section className="bg-white border border-gray-100 rounded-2xl p-6 md:p-8 shadow-lg">
             <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-center">
               
               {/* Columns */}
@@ -958,10 +969,10 @@ export default function WorkspacePage() {
                 
                 {/* Guest Column */}
                 <div className="space-y-3">
-                  <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-400">Guest Mode</h3>
+                  <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500">Guest Mode</h3>
                   <ul className="space-y-2">
                     {['3 free walkthroughs', '5 questions per repo', 'No session saved', 'No PDF report'].map((item) => (
-                      <li key={item} className="flex items-center gap-2 text-xs text-slate-300">
+                      <li key={item} className="flex items-center gap-2 text-xs text-slate-600 font-medium">
                         <span className="text-rose-500 font-bold">✕</span>
                         <span>{item}</span>
                       </li>
@@ -970,15 +981,15 @@ export default function WorkspacePage() {
                 </div>
 
                 {/* Pro Column */}
-                <div className="space-y-3 border-t sm:border-t-0 sm:border-l border-outline-variant/40 pt-4 sm:pt-0 sm:pl-6">
-                  <h3 className="text-sm font-semibold uppercase tracking-wider text-cyan-400 flex items-center gap-1.5">
+                <div className="space-y-3 border-t sm:border-t-0 sm:border-l border-gray-100 pt-4 sm:pt-0 sm:pl-6">
+                  <h3 className="text-sm font-bold uppercase tracking-wider text-violet-600 flex items-center gap-1.5">
                     Pro Plan
-                    <span className="px-2 py-0.5 text-[9px] bg-cyan-500/10 text-cyan-400 rounded border border-cyan-500/20 font-bold uppercase font-sans">Popular</span>
+                    <span className="px-2 py-0.5 text-[9px] bg-violet-50 text-violet-600 rounded border border-violet-200 font-bold uppercase">Popular</span>
                   </h3>
                   <ul className="space-y-2">
                     {['50 sessions per month', 'Unlimited questions', 'Session history saved', 'PDF report export', 'Code Story feature'].map((item) => (
-                      <li key={item} className="flex items-center gap-2 text-xs text-slate-300">
-                        <span className="text-cyan-400 font-bold">✓</span>
+                      <li key={item} className="flex items-center gap-2 text-xs text-slate-600 font-medium">
+                        <span className="text-violet-600 font-bold">✓</span>
                         <span>{item}</span>
                       </li>
                     ))}
@@ -990,7 +1001,8 @@ export default function WorkspacePage() {
               <div className="md:col-span-4 flex justify-center md:justify-end">
                 <Link
                   href="/register"
-                  className="w-full sm:w-auto px-6 py-3 bg-[#06B6D4] hover:opacity-90 text-[#0d1515] text-center font-bold text-sm rounded-xl shadow-lg shadow-[#06B6D4]/20 transition-all hover:scale-[1.02] flex items-center justify-center gap-2"
+                  className="w-full sm:w-auto px-6 py-3 text-white text-center font-bold text-sm rounded-xl shadow-lg transition-all hover:scale-[1.02] flex items-center justify-center gap-2 hover:opacity-90"
+                  style={{ background: 'linear-gradient(135deg, #7c3aed, #ec4899)', boxShadow: '0 4px 14px rgba(124,58,237,0.30)' }}
                 >
                   Upgrade to Pro
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1008,10 +1020,10 @@ export default function WorkspacePage() {
           <section className="space-y-4">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-xl font-bold text-white">Sample Output Preview</h2>
-                <p className="text-xs text-slate-400 mt-0.5">Below is a sample question card showing the exact layout and options generated for repos.</p>
+                <h2 className="text-xl font-bold text-slate-900" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>Sample Output Preview</h2>
+                <p className="text-xs text-slate-500 font-medium mt-0.5">Below is a sample question card showing the exact layout and options generated for repos.</p>
               </div>
-              <span className="px-2.5 py-1 bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 text-xs font-semibold rounded-full uppercase tracking-wider font-sans">Example</span>
+              <span className="px-2.5 py-1 bg-violet-50 text-violet-600 border border-violet-200 text-xs font-semibold rounded-full uppercase tracking-wider">Example</span>
             </div>
 
             <QuestionCard
@@ -1040,35 +1052,37 @@ export default function WorkspacePage() {
 
       {/* PRO UPGRADE MODAL */}
       {showProModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <div className="bg-[#151d1e] border border-outline-variant/60 w-full max-w-md rounded-2xl shadow-2xl p-6 relative overflow-hidden animate-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white border border-gray-100 w-full max-w-md rounded-2xl shadow-2xl p-6 relative overflow-hidden animate-in zoom-in-95 duration-200">
             {/* Background glows */}
-            <div className="absolute -top-16 -right-16 w-32 h-32 bg-cyan-500/20 rounded-full blur-2xl pointer-events-none" />
-            <div className="absolute -bottom-16 -left-16 w-32 h-32 bg-cyan-500/10 rounded-full blur-2xl pointer-events-none" />
+            <div className="absolute -top-16 -right-16 w-32 h-32 rounded-full blur-2xl pointer-events-none" style={{ background: 'rgba(124,58,237,0.10)' }} />
+            <div className="absolute -bottom-16 -left-16 w-32 h-32 rounded-full blur-2xl pointer-events-none" style={{ background: 'rgba(236,72,153,0.08)' }} />
             
             <div className="text-center relative">
-              <div className="w-12 h-12 rounded-full bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center mx-auto mb-4">
-                <svg className="w-6 h-6 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-4"
+                style={{ background: 'linear-gradient(135deg, rgba(124,58,237,0.10), rgba(236,72,153,0.10))', border: '1px solid rgba(124,58,237,0.20)' }}>
+                <svg className="w-6 h-6" fill="none" stroke="url(#grad1)" viewBox="0 0 24 24">
+                  <defs><linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stopColor="#7c3aed" /><stop offset="100%" stopColor="#ec4899" /></linearGradient></defs>
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
                 </svg>
               </div>
               
-              <h3 className="text-lg font-bold text-white mb-2">Unlock PDF Exports & Pro Features</h3>
-              <p className="text-xs text-slate-400 mb-6 leading-relaxed">
+              <h3 className="text-lg font-bold text-slate-900 mb-2" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>Unlock PDF Exports &amp; Pro Features</h3>
+              <p className="text-xs text-slate-500 font-medium mb-6 leading-relaxed">
                 PDF report generation, unlimited questions, candidate Code Story summaries, and Recruiter Copilot are exclusive to our Pro Plan.
               </p>
               
-              <div className="bg-slate-900/60 border border-outline-variant/40 rounded-xl p-4 mb-6 text-left space-y-2.5">
-                <div className="flex items-center gap-2 text-xs text-slate-300">
-                  <span className="text-cyan-400 font-bold">✓</span>
+              <div className="bg-gray-50 border border-gray-100 rounded-xl p-4 mb-6 text-left space-y-2.5">
+                <div className="flex items-center gap-2 text-xs text-slate-700 font-medium">
+                  <span className="text-violet-600 font-bold">✓</span>
                   <span>Professional PDF Report Exports</span>
                 </div>
-                <div className="flex items-center gap-2 text-xs text-slate-300">
-                  <span className="text-cyan-400 font-bold">✓</span>
+                <div className="flex items-center gap-2 text-xs text-slate-700 font-medium">
+                  <span className="text-violet-600 font-bold">✓</span>
                   <span>50 Full Sessions per Month (Unlimited Questions)</span>
                 </div>
-                <div className="flex items-center gap-2 text-xs text-slate-300">
-                  <span className="text-cyan-400 font-bold">✓</span>
+                <div className="flex items-center gap-2 text-xs text-slate-700 font-medium">
+                  <span className="text-violet-600 font-bold">✓</span>
                   <span>Save Candidate Interview History</span>
                 </div>
               </div>
@@ -1076,13 +1090,14 @@ export default function WorkspacePage() {
               <div className="flex gap-3">
                 <button
                   onClick={() => setShowProModal(false)}
-                  className="flex-1 px-4 py-2.5 border border-outline-variant/60 hover:bg-slate-800 rounded-xl text-xs font-semibold text-slate-400 hover:text-slate-200 transition-colors"
+                  className="flex-1 px-4 py-2.5 border border-gray-200 hover:bg-gray-50 rounded-xl text-xs font-semibold text-slate-500 hover:text-slate-700 transition-colors"
                 >
                   Close
                 </button>
                 <Link
                   href="/register"
-                  className="flex-1 px-4 py-2.5 bg-[#06B6D4] hover:opacity-90 text-[#0d1515] font-bold text-xs rounded-xl text-center shadow-lg shadow-[#06B6D4]/20 transition-colors"
+                  className="flex-1 px-4 py-2.5 font-bold text-xs rounded-xl text-center text-white shadow-lg transition-colors hover:opacity-90"
+                  style={{ background: 'linear-gradient(135deg, #7c3aed, #ec4899)', boxShadow: '0 4px 14px rgba(124,58,237,0.30)' }}
                 >
                   Upgrade to Pro
                 </Link>

@@ -1,5 +1,13 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Inter, Plus_Jakarta_Sans } from "next/font/google";
+
+const plusJakarta = Plus_Jakarta_Sans({
+  subsets: ["latin"],
+  weight: ["400","500","600","700","800"],
+  display: "swap",
+  variable: "--font-plus-jakarta",
+  preload: false,
+});
 import "./globals.css";
 import { GlobalProvider } from "@/app/context/GlobalContext";
 import AppContent from "@/app/AppContent";
@@ -29,7 +37,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${inter.variable} ${inter.className} h-full antialiased`}
+      className={`${inter.variable} ${plusJakarta.variable} ${inter.className} h-full antialiased`}
       suppressHydrationWarning
     >
       <head>
@@ -46,9 +54,13 @@ export default function RootLayout({
             position="top-right"
             toastOptions={{
               style: {
-                background: '#151d1e',
-                color: '#F1F5F9',
-                border: '1px solid #3b494b',
+                background: '#ffffff',
+                color: '#1e293b',
+                border: '1px solid #e5e7eb',
+                boxShadow: '0 4px 16px rgba(0,0,0,0.08)',
+                borderRadius: '12px',
+                fontFamily: 'Inter, sans-serif',
+                fontSize: '14px',
               },
             }}
           />

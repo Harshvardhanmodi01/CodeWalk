@@ -119,13 +119,15 @@ export async function proxy(req: NextRequest) {
           }));
         },
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) => {
+          cookiesToSet.forEach(({ name, value }) => {
             req.cookies.set(name, value);
-            response = NextResponse.next({
-              request: {
-                headers: requestHeaders,
-              },
-            });
+          });
+          response = NextResponse.next({
+            request: {
+              headers: requestHeaders,
+            },
+          });
+          cookiesToSet.forEach(({ name, value, options }) => {
             response.cookies.set(name, value, options);
           });
         },

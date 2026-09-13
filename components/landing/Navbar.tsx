@@ -1,164 +1,264 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useGlobal } from '@/app/context/GlobalContext';
 
 export default function Navbar() {
-  const { user, signOut, theme, toggleTheme, subscription } = useGlobal();
+  const { user, signOut, subscription } = useGlobal();
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
+
   const getAvatarUrl = () => {
     if (user?.avatarUrl) return user.avatarUrl;
     if (user?.githubConnected && user?.githubAvatar) return user.githubAvatar;
     return null;
   };
-
   const avatarUrlToDisplay = getAvatarUrl();
 
   useEffect(() => {
     setMounted(true);
+    const onScroll = () => setScrolled(window.scrollY > 12);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
   return (
-    <nav className="fixed top-0 w-full z-50 flex justify-between items-center px-margin-desktop py-3 bg-background/80 backdrop-blur-md border-b border-outline-variant transition-colors duration-300">
-      {/* Brand Logo with CW Icon */}
-      <Link href="/" className="flex items-center gap-2 hover:opacity-90 transition-opacity">
-        <span className="h-9 w-9 rounded-xl bg-gradient-to-tr from-cyan-500 to-indigo-400 flex items-center justify-center text-white font-extrabold text-lg shadow-md shadow-cyan-500/20">
+    <nav
+      className={`fixed top-0 w-full z-50 flex justify-between items-center px-6 md:px-12 py-3.5 transition-all duration-300 ${
+        scrolled
+          ? 'bg-white/95 backdrop-blur-md shadow-sm border-b border-gray-100'
+          : 'bg-white/80 backdrop-blur-sm'
+      }`}
+    >
+      {/* Brand */}
+      <Link href="/" className="flex items-center gap-2.5 hover:opacity-90 transition-opacity">
+        <span className="h-8 w-8 rounded-xl flex items-center justify-center text-white font-extrabold text-sm shadow-md"
+          style={{ background: 'linear-gradient(135deg, #7c3aed, #ec4899)' }}>
           CW
         </span>
-        <span className="font-bold text-xl tracking-tight text-foreground select-none">
+        <span className="font-bold text-lg tracking-tight text-slate-800 select-none" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
           CodeWalk
         </span>
       </Link>
 
-      {/* Navigation Links */}
-      <div className="hidden md:flex items-center gap-8">
-        <Link className="font-body-md text-body-md text-on-surface-variant hover:text-primary-fixed transition-colors" href={user ? "/dashboard" : "/workspace"}>Workspace</Link>
-        <Link className="font-body-md text-body-md text-on-surface-variant hover:text-primary-fixed transition-colors" href="/how-it-works">How It Works</Link>
-        <Link className="font-body-md text-body-md text-on-surface-variant hover:text-primary-fixed transition-colors" href="/pricing">Pricing</Link>
-        <Link className="font-body-md text-body-md text-on-surface-variant hover:text-primary-fixed transition-colors" href="/about">About Us</Link>
-        <Link className="font-body-md text-body-md text-on-surface-variant hover:text-primary-fixed transition-colors" href="/blog">Blog</Link>
-        <Link className="font-body-md text-body-md text-on-surface-variant hover:text-primary-fixed transition-colors" href="/support">Support</Link>
+      {/* Desktop Nav */}
+      <div className="hidden md:flex items-center gap-7 select-none">
+        <Link className="text-sm font-medium text-slate-600 hover:text-violet-600 transition-colors"
+          href={user ? '/dashboard' : '/workspace'}>
+          Workspace
+        </Link>
+        <FunctionsMenu />
+        <Link className="text-sm font-medium text-slate-600 hover:text-violet-600 transition-colors" href="/pricing">
+          Pricing
+        </Link>
+        <ResourcesMenu />
       </div>
 
-      {/* Right Controls / Auth state */}
-      <div className="flex items-center gap-4">
-        {/* Theme Toggle */}
-        {mounted && (
-          <button
-            onClick={toggleTheme}
-            aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-            className="relative w-14 h-7 rounded-full border border-outline-variant transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-primary/50 flex-shrink-0 overflow-hidden"
-            style={{
-              background: theme === 'dark'
-                ? 'linear-gradient(135deg, #0d1515 0%, #192122 100%)'
-                : 'linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%)'
-            }}
-          >
-            <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-[11px] select-none transition-opacity duration-300"
-              style={{ opacity: theme === 'dark' ? 1 : 0 }}>🌙</span>
-            <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[11px] select-none transition-opacity duration-300"
-              style={{ opacity: theme === 'light' ? 1 : 0 }}>☀️</span>
-            <span
-              className="absolute top-0.5 w-6 h-6 rounded-full shadow-md transition-all duration-300"
-              style={{
-                left: theme === 'dark' ? 'calc(100% - 1.625rem)' : '0.125rem',
-                background: theme === 'dark'
-                  ? 'linear-gradient(135deg, #00dbe9, #6366f1)'
-                  : 'linear-gradient(135deg, #f59e0b, #fbbf24)'
-              }}
-            />
-          </button>
-        )}
+      {/* Right controls */}
+      <div className="flex items-center gap-3">
         {mounted && user ? (
           <div className="relative">
-            <button
-              onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
-              className="flex items-center gap-2 focus:outline-none"
-            >
+            <button onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
+              className="flex items-center gap-2 focus:outline-none">
               {avatarUrlToDisplay ? (
-                <Image 
-                  src={avatarUrlToDisplay} 
-                  alt="Profile Avatar" 
-                  width={40}
-                  height={40}
-                  unoptimized
-                  className="h-10 w-10 rounded-full object-cover hover:scale-105 transition-all border-2 border-[#06B6D4]"
-                />
+                <Image src={avatarUrlToDisplay} alt="Profile Avatar" width={36} height={36} unoptimized
+                  className="h-9 w-9 rounded-full object-cover hover:scale-105 transition-all ring-2 ring-violet-200" />
               ) : (
-                <span className="h-10 w-10 rounded-full bg-[#06B6D4] flex items-center justify-center text-[#0d1515] font-bold text-sm hover:scale-105 transition-all">
+                <span className="h-9 w-9 rounded-full flex items-center justify-center text-white font-bold text-sm hover:scale-105 transition-all"
+                  style={{ background: 'linear-gradient(135deg, #7c3aed, #ec4899)' }}>
                   {user.name ? user.name.slice(0, 1).toUpperCase() : 'U'}
                 </span>
               )}
             </button>
             {profileDropdownOpen && (
-              <div className="absolute right-0 mt-2 w-56 rounded-xl border border-outline-variant bg-[#151d1e] text-white shadow-xl py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
-                <div className="px-4 py-2 border-b border-outline-variant/60">
-                  <p className="text-[10px] text-[#94A3B8]">Signed in as</p>
-                  <p className="text-sm font-semibold truncate">{user.name}</p>
-                  <p className="text-[10px] font-mono text-[#06B6D4] mt-1 px-2 py-0.5 bg-[#06B6D4]/10 rounded-full inline-block">
-                    {subscription} Plan
-                  </p>
+              <div className="absolute right-0 mt-2 w-56 rounded-2xl border border-gray-100 bg-white text-slate-800 shadow-xl py-2 z-50"
+                style={{ boxShadow: '0 8px 32px rgba(0,0,0,0.10)' }}>
+                <div className="px-4 py-2.5 border-b border-gray-100">
+                  <p className="text-[10px] text-slate-400">Signed in as</p>
+                  <p className="text-sm font-semibold truncate text-slate-800">{user.name}</p>
+                  <p className="text-[10px] font-medium text-violet-600 mt-0.5 px-2 py-0.5 bg-violet-50 rounded-full inline-block">{subscription} Plan</p>
                 </div>
-                <Link
-                  href="/dashboard"
-                  className="block px-4 py-2 text-xs hover:bg-[#0d1515]/55 transition-colors"
-                >
-                  Recruiter Dashboard
-                </Link>
-                <Link
-                  href="/history"
-                  className="block px-4 py-2 text-xs hover:bg-[#0d1515]/55 transition-colors"
-                >
-                  Interview History
-                </Link>
-                <Link
-                  href="/tokens"
-                  className="block px-4 py-2 text-xs hover:bg-[#0d1515]/55 transition-colors"
-                >
-                  Token Logs & Quotas
-                </Link>
-                <Link
-                  href="/profile"
-                  className="block px-4 py-2 text-xs hover:bg-[#0d1515]/55 transition-colors"
-                >
-                  Profile Settings
-                </Link>
-                <Link
-                  href="/pricing"
-                  className="block px-4 py-2 text-xs hover:bg-[#0d1515]/55 transition-colors"
-                >
-                  Pricing Plans
-                </Link>
-                <hr className="border-outline-variant/60 my-1" />
-                <button
-                  onClick={() => signOut()}
-                  className="w-full text-left px-4 py-2 text-xs text-red-400 hover:bg-[#0d1515]/55 transition-colors"
-                >
+                <Link href="/dashboard" className="block px-4 py-2 text-xs text-slate-600 hover:bg-slate-50 hover:text-violet-600 transition-colors">Recruiter Dashboard</Link>
+                <Link href="/history" className="block px-4 py-2 text-xs text-slate-600 hover:bg-slate-50 hover:text-violet-600 transition-colors">Interview History</Link>
+                <Link href="/tokens" className="block px-4 py-2 text-xs text-slate-600 hover:bg-slate-50 hover:text-violet-600 transition-colors">Token Logs &amp; Quotas</Link>
+                <Link href="/profile" className="block px-4 py-2 text-xs text-slate-600 hover:bg-slate-50 hover:text-violet-600 transition-colors">Profile Settings</Link>
+                <Link href="/pricing" className="block px-4 py-2 text-xs text-slate-600 hover:bg-slate-50 hover:text-violet-600 transition-colors">Pricing Plans</Link>
+                <hr className="border-gray-100 my-1" />
+                <button onClick={() => signOut()}
+                  className="w-full text-left px-4 py-2 text-xs text-red-500 hover:bg-red-50 transition-colors">
                   Sign Out
                 </button>
               </div>
             )}
           </div>
         ) : (
-          <div className="flex items-center gap-3">
-            <Link 
-              href="/login" 
-              className="px-4 py-2 font-label-sm text-label-sm text-on-surface hover:text-[#06B6D4] transition-colors"
-            >
+          <div className="flex items-center gap-2">
+            <Link href="/login" className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-violet-600 transition-colors">
               Login
             </Link>
-            <Link 
-              href="/register" 
-              className="px-6 py-2 bg-[#06B6D4] text-white font-label-sm text-label-sm font-bold glow-cyan hover:opacity-90 transition-all active:scale-95"
-            >
+            <Link href="/register"
+              className="px-5 py-2 text-sm font-bold text-white rounded-xl transition-all hover:opacity-90 active:scale-95 shadow-md"
+              style={{ background: 'linear-gradient(135deg, #7c3aed, #6d28d9)', boxShadow: '0 4px 14px rgba(124,58,237,0.3)' }}>
               Try Free
             </Link>
           </div>
         )}
       </div>
     </nav>
+  );
+}
+
+/* ─── useHoverMenu helper ─── */
+function useHoverMenu() {
+  const [open, setOpen] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const onEnter = () => { if (timer.current) clearTimeout(timer.current); setOpen(true); };
+  const onLeave = () => { timer.current = setTimeout(() => setOpen(false), 120); };
+  return { open, onEnter, onLeave };
+}
+
+/* ─── Functions Mega-Dropdown ─── */
+function FunctionsMenu() {
+  const { open, onEnter, onLeave } = useHoverMenu();
+
+  const coreFeatures = [
+    { label: 'Repo-Based Questioning', href: '/features/repo-based-questioning', color: 'text-violet-600' },
+    { label: 'JD-Based Assessment',    href: '/features/jd-based-assessment',    color: 'text-coral-600' },
+    { label: 'Live AI Interview',       href: '/features/live-ai-interview',       color: 'text-pink-600' },
+    { label: 'Technical Assessment',    href: '/features/technical-assessment',    color: 'text-violet-600' },
+    { label: 'Behavioral Assessment',  href: '/features/behavioral-assessment',  color: 'text-green-600' },
+    { label: 'AI Proctoring',          href: '/features/ai-proctoring',          color: 'text-yellow-600' },
+  ];
+  const hiringSolutions = [
+    { label: 'High-Volume Hiring', href: '/features/high-volume-hiring' },
+    { label: 'Campus Recruiting',  href: '/features/campus-recruiting' },
+  ];
+  const builtFor = [
+    { label: 'Software Engineering', href: '/features/software-engineering' },
+    { label: 'Data Science',          href: '/features/data-science' },
+    { label: 'Machine Learning',      href: '/features/machine-learning' },
+  ];
+
+  return (
+    <div className="relative" onMouseEnter={onEnter} onMouseLeave={onLeave}>
+      <button id="nav-functions-btn" aria-haspopup="true" aria-expanded={open}
+        className={`flex items-center gap-1 text-sm font-medium transition-colors focus:outline-none cursor-pointer ${open ? 'text-violet-600' : 'text-slate-600 hover:text-violet-600'}`}>
+        Functions
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+          className={`transition-transform duration-200 ${open ? 'rotate-180' : ''}`}>
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
+      </button>
+
+      {open && (
+        <div className="absolute top-full left-1/2 -translate-x-1/2 pt-2 z-50 w-[620px]"
+          onMouseEnter={onEnter} onMouseLeave={onLeave}>
+          <div role="menu" aria-labelledby="nav-functions-btn"
+            className="bg-white rounded-2xl overflow-hidden"
+            style={{ boxShadow: '0 16px 48px rgba(0,0,0,0.10), 0 2px 8px rgba(0,0,0,0.04)', border: '1px solid #f0f0f5' }}>
+            <div className="grid grid-cols-3">
+              {/* Core Features */}
+              <div className="p-5 border-r border-gray-100">
+                <p className="text-[10px] font-black uppercase tracking-widest mb-3 text-violet-500">Core Features</p>
+                <div className="flex flex-col gap-0.5">
+                  {coreFeatures.map(({ label, href }) => (
+                    <Link key={label} href={href} role="menuitem"
+                      className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs text-slate-600 hover:text-violet-600 hover:bg-violet-50 transition-all duration-150">
+                      <span className="w-1 h-1 rounded-full bg-violet-400 flex-shrink-0" />
+                      {label}
+                    </Link>
+                  ))}
+                </div>
+              </div>
+              {/* Hiring + Built For */}
+              <div className="p-5 border-r border-gray-100">
+                <p className="text-[10px] font-black uppercase tracking-widest mb-3 text-violet-500">Hiring Solutions</p>
+                <div className="flex flex-col gap-0.5 mb-4">
+                  {hiringSolutions.map(({ label, href }) => (
+                    <Link key={label} href={href} role="menuitem"
+                      className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs text-slate-600 hover:text-violet-600 hover:bg-violet-50 transition-all duration-150">
+                      <span className="w-1 h-1 rounded-full bg-pink-400 flex-shrink-0" />
+                      {label}
+                    </Link>
+                  ))}
+                </div>
+                <p className="text-[10px] font-black uppercase tracking-widest mb-3 text-violet-500">Built For</p>
+                <div className="flex flex-col gap-0.5">
+                  {builtFor.map(({ label, href }) => (
+                    <Link key={label} href={href} role="menuitem"
+                      className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs text-slate-600 hover:text-violet-600 hover:bg-violet-50 transition-all duration-150">
+                      <span className="w-1 h-1 rounded-full bg-green-400 flex-shrink-0" />
+                      {label}
+                    </Link>
+                  ))}
+                </div>
+              </div>
+              {/* CTA */}
+              <div className="p-5 flex flex-col justify-between bg-gradient-to-br from-violet-50 to-pink-50">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest mb-2 text-violet-500">Get Started</p>
+                  <p className="text-xs text-slate-500 leading-relaxed">Walk through any codebase in under 60 seconds.</p>
+                </div>
+                <div className="flex flex-col gap-2 mt-4">
+                  <Link href="/workspace" role="menuitem"
+                    className="px-4 py-2 text-xs font-bold text-white rounded-xl text-center transition-all hover:opacity-90"
+                    style={{ background: 'linear-gradient(135deg, #7c3aed, #ec4899)' }}>
+                    Try Free
+                  </Link>
+                  <Link href="/how-it-works" role="menuitem"
+                    className="px-4 py-2 text-xs font-bold rounded-xl text-center border border-gray-200 text-slate-600 hover:bg-white transition-all">
+                    See How It Works
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─── Resources Dropdown ─── */
+function ResourcesMenu() {
+  const { open, onEnter, onLeave } = useHoverMenu();
+
+  return (
+    <div className="relative" onMouseEnter={onEnter} onMouseLeave={onLeave}>
+      <button id="nav-resources-btn" aria-haspopup="true" aria-expanded={open}
+        className={`flex items-center gap-1 text-sm font-medium transition-colors focus:outline-none cursor-pointer ${open ? 'text-violet-600' : 'text-slate-600 hover:text-violet-600'}`}>
+        Resources
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+          className={`transition-transform duration-200 ${open ? 'rotate-180' : ''}`}>
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
+      </button>
+
+      {open && (
+        <div className="absolute top-full right-0 pt-2 z-50 w-52"
+          onMouseEnter={onEnter} onMouseLeave={onLeave}>
+          <div role="menu" aria-labelledby="nav-resources-btn"
+            className="bg-white rounded-2xl overflow-hidden"
+            style={{ boxShadow: '0 16px 48px rgba(0,0,0,0.10), 0 2px 8px rgba(0,0,0,0.04)', border: '1px solid #f0f0f5' }}>
+            <div className="p-2">
+              {[
+                { label: 'Blog',     href: '/blog',    desc: 'Articles & case studies' },
+                { label: 'Support',  href: '/support', desc: 'Help center & FAQs' },
+                { label: 'About Us', href: '/about',   desc: 'Our mission & team' },
+              ].map((item) => (
+                <Link key={item.label} href={item.href} role="menuitem"
+                  className="flex flex-col gap-0.5 px-3 py-2.5 rounded-xl hover:bg-violet-50 transition-all duration-150">
+                  <span className="text-sm font-semibold text-slate-700">{item.label}</span>
+                  <span className="text-[10px] text-slate-400">{item.desc}</span>
+                </Link>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
